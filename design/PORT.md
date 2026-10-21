@@ -38,7 +38,7 @@ Investigation reports that back these decisions are listed at the end.
 ```
 library.properties        name=prosdk, depends=probot, precompiled=full, includes=prosdk.h
 NOTICE                    attribution (WPILib BSD-3, Eigen MPL-2.0, gcem Apache-2.0, Sleipnir BSD-3, nanopb zlib,
-                          LLVM Apache-2.0 w/ LLVM exception, double-conversion BSD-3, json (jtjson) ISC/MIT, htrie MIT)
+                          LLVM Apache-2.0 w/ LLVM exception, double-conversion BSD-3, JSON for Classic C++ Apache-2.0, htrie MIT)
 LICENSE, LICENSE-commercial  unchanged
 src/
   prosdk.h                umbrella header (hand-written)
@@ -58,7 +58,8 @@ examples/                 Arduino sketches
 design/                   this file and the probot-core contract
 ```
 
-Thirdparty headers live under `src/prosdk/thirdparty/<lib>/` so they cannot collide with other Arduino
+Upstream code that already lives under `wpi/` (llvm, json, htrie, sigslot, double-conversion) follows the
+normal rename into `src/prosdk/`. Thirdparty headers with their own include root live under `src/prosdk/thirdparty/<lib>/` so they cannot collide with other Arduino
 libraries (for example ArduinoEigen). The script rewrites their angle includes, for example
 `<Eigen/Core>` becomes `<prosdk/thirdparty/eigen/Eigen/Core>`; quoted relative includes are left alone.
 
@@ -131,6 +132,16 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
 - `<random>`: one shared engine seeded from `esp_random()`; no per-call `random_device` + `mt19937` on the stack.
 - Eigen: `EIGEN_STACK_ALLOCATION_LIMIT=4096`, `EIGEN_NO_IO`, `EIGEN_MPL2_ONLY`.
 - Memory-heavy defaults are scaled for the MCU and configurable by macro (DataLog buffers, and so on).
+
+### 7.1 Sketch and archive must agree
+
+- Public headers never depend on a `-D` flag that only the archive build gets. Configuration a header needs
+  (Eigen limits, Sleipnir switches, prosdk options) lives in a hand-written config header
+  (`prosdk/platform/config.hpp`) that vendored headers include (inserted by the script or a patch) before
+  Eigen or Sleipnir. The header check compiles every public header exactly as a sketch TU does.
+- Flash: probot-core alone is about 1.08 MB, so prosdk sketches need the Huge APP partition scheme
+  (3 MB app). Wave 1 measured prosdk's share at about 565 KB for wpiutil + telemetry + tunables, mostly
+  libstdc++ (`std::format`) and header templates. Size is measured after every wave.
 
 ## 8. probot-core integration
 
