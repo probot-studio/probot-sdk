@@ -121,3 +121,61 @@ DS lists and downloads files that prosdk writes to LittleFS/SD (WPILib DataLog `
 - `battery::currentAmps()` declared in every configuration (NaN when there is no sensor); brownout or
   low-battery flag.
 - Optional persistence of DS-written tunables in NVS (robust tunables), separate namespace.
+
+## Status
+
+### P0 delivered (2026-10-22): probot-core branch `feat/framework-api`, draft PR #26 to `dev`
+
+Not merged until 0.4.0 reaches stable; prosdk builds against that branch (a read-only clone, never the
+core agent's working tree). Final names:
+
+- R1 `<probot/framework.hpp>`: `probot::framework::Hooks{boot, preCycle, postCycle, emergencyStop}`,
+  `bool install(const Hooks&)` (once, before runtime start; static init OK), `bool installed()`.
+  `PROBOT_FRAMEWORK` defined before `<probot.h>` makes all OpMode hooks optional.
+  Difference from the request: `emergencyStop` runs AFTER the user task is deleted, on a fresh task on
+  core 1, before the stop hook; together with that hook it must finish within `PROBOT_ESTOP_END_MS`
+  (500 ms) or the chip reboots (PB-E305). No stall detection in STOPPED/TRANSITION.
+  The registration must be referenced from the sketch (prosdk does it in header code compiled in the
+  sketch TU, so the archive cannot drop it).
+- R2 `<probot/ds.hpp>` `probot::ds`: `phase()` (STOPPED after e-stop), `selectedMode()`,
+  `outputsEnabled()`, `isEStopped()`, `isAttached()`, `matchTimeSeconds()` (AUTO_RUN only, otherwise -1),
+  `packetSeq()` (joystick frames and accepted mode/INIT/START/STOP), `rawGamepad(int port,
+  io::GamepadSnapshot&)` (port 0 only; false if no frame). Also `probot::io::rawGamepad()`. The raw
+  frame is cleared on timeout and owner release.
+- R3 `PROBOT_USER_STACK` (default 8192; below 4096 is compile error PB-E107).
+- R4 `<probot/api.hpp>` config-free (version, state, lifecycle, gamepad, joystick_api, telemetry, ds,
+  framework). `<probot/version.hpp>`: `PROBOT_VERSION_MAJOR/MINOR/PATCH/STRING`, `PROBOT_VERSION`,
+  `PROBOT_VERSION_OF(a,b,c)` (= a*10000+b*100+c). Gate in prosdk:
+  `#if defined(PROBOT_VERSION) && PROBOT_VERSION >= PROBOT_VERSION_OF(0,5,0)`; until the release number is
+  fixed, `#ifdef PROBOT_VERSION` identifies the branch.
+- Details: core `API.md`, sections "Tipli durum" and "Framework katmani".
+
+### P1 R5 delivered (2026-10-22): draft PR #27 (robot side) and #28 (DS page), stacked on #26
+
+Header `<probot/dashboard/dashboard.hpp>` (also in `<probot/api.hpp>`), namespace `probot::dashboard`:
+- `TopicId = uint16_t`, `kInvalid = 0xFFFF`; id = slot | gen<<8; removed ids are not reused before their 'R' is sent.
+- `ValueType` 1..11 as requested (StringArray element = u16 LE len + bytes); `Flags` TELEMETRY=1, TUNABLE=2,
+  MUTABLE=4, ROBUST=8, KEEP_DUPLICATES=16, PERSISTENT=32 (stored only, nothing persists yet).
+- `publish(path, vt, typeString, propsJson, flags)` idempotent for same path+vt+type; `kInvalid` on type
+  conflict, name/type > 255 bytes, full table/pool, or before `runtime_setup()`.
+- `unpublish`, `bool setProperties`, `bool setFlags`, `bool set(id, data, len)` (raw LE bytes, len <= max value,
+  equal bytes deduped unless KEEP_DUPLICATES), `bool hasSchema(name)`, `bool addSchema(name, type, data, len)`.
+- `struct Write{id, vt, len, data}`; `size_t drainWrites(fn, ctx)` from our own task (preCycle); last-writer-wins
+  per topic; every drained topic re-sends its current value; payloads already validated. Accept = `set()`
+  the new value; refuse = `rejectWrite(id, reason)` with `WriteStatus` Ok=0, UnknownId=1, Immutable=2,
+  TypeMismatch=3, DecodeError=4, QueueFull=5 (own codes from 16 up).
+- `Stats stats()` {topics, maxTopics, bytesUsed, bytesMax, dropped}.
+- Limit macros (sketch TU, PB-E108 on bad values): PROBOT_DASH_MAX_TOPICS 128, PROBOT_DASH_MAX_SCHEMAS 32,
+  PROBOT_DASH_MAX_VALUE 1024, PROBOT_DASH_POOL_BYTES 32768, PROBOT_DASH_WRITE_QUEUE 2048, PROBOT_DASH_PERIOD_MS 50,
+  PROBOT_DASH_MAX_BYTES_PER_TICK 8192. Tables allocated on first publish.
+- Wire and DS page ("Veri" tab): as specified; widgets Selectable and Command done; PIDController, Alerts,
+  Field2d, Mechanism2d pending.
+
+Widget layouts sent to probot-core (2026-10-22):
+- PIDController (upstream `PIDController.cpp`): tunable table `.type`="PIDController" with mutable doubles
+  `p`, `i`, `d`, `izone`, `setpoint`; telemetry table `.type`="PIDController" with doubles `p`, `i`, `d`, `izone`,
+  `setpoint`, `measurement`, `error`, `error derivative`, `previous error`, `total error`. Same relative name
+  under `/Tunables/...` and `/Telemetry/...`.
+- Alerts (prosdk-defined; WPILib 2027 has no telemetry layout, this is the WPILib 2025/2026 NT layout that
+  AdvantageScope and Elastic know): telemetry table `/Telemetry/Alerts/<group>` with `.type`="Alerts" and
+  string[] `errors` (level HIGH), `warnings` (MEDIUM), `infos` (LOW), active alerts only, newest first.
