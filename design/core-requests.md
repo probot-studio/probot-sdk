@@ -179,3 +179,10 @@ Widget layouts sent to probot-core (2026-10-22):
 - Alerts (prosdk-defined; WPILib 2027 has no telemetry layout, this is the WPILib 2025/2026 NT layout that
   AdvantageScope and Elastic know): telemetry table `/Telemetry/Alerts/<group>` with `.type`="Alerts" and
   string[] `errors` (level HIGH), `warnings` (MEDIUM), `infos` (LOW), active alerts only, newest first.
+
+Widget child layout confirmed by probot-core (2026-10-22), matches upstream `Selectable.cpp` and `Command.cpp`:
+- `X/.type`="Selectable": required `X/options` (string[]) and `X/selected` (string, TUNABLE|MUTABLE);
+  optional `X/default`, `X/active` (strings, info). Missing or mistyped children fall back to the plain tree.
+- `X/.type`="Command": required `X/running` (bool, TUNABLE|MUTABLE); optional `X/name`.
+- Consequence for `ProbotTunableBackend`: a robust tunable (upstream `selected` is robust) is published as ONE
+  topic at its own path (flag ROBUST), never split into `value`/`tune` sub-topics as the NT backend does.
