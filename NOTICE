@@ -1,0 +1,44 @@
+prosdk
+Copyright (c) Probot Studio.
+
+prosdk contains code from WPILib and from third-party projects that WPILib distributes. That
+code is vendored (copied and mechanically transformed) by tools/upstream/wpilib.py from
+
+  https://github.com/wpilibsuite/allwpilib
+  commit b68effca4ddc9742ac208daa7dd1d11816137882 (tools/upstream/wpilib.lock)
+
+Changes to upstream code are the mechanical renames described in design/PORT.md sections 4-6
+and the patch files in tools/upstream/patches/. The list of vendored files is
+tools/upstream/generated.txt. The license texts are in licenses/:
+
+  licenses/wpilib/LICENSE.md              WPILib license (BSD 3-Clause)
+  licenses/wpilib/ThirdPartyNotices.txt   WPILib third-party notices with the full license text
+                                          of every component listed below except Catch2
+  licenses/Catch2-LICENSE.txt             Boost Software License 1.0
+
+Component                 License                              Location in prosdk
+---------                 -------                              ------------------
+WPILib wpiutil            BSD 3-Clause (WPILib)                src/prosdk/util, src/prosdk/impl/wpiutil,
+                                                               test/wpiutil
+WPILib telemetry          BSD 3-Clause (WPILib)                src/prosdk/telemetry,
+                                                               src/prosdk/impl/telemetry, test/telemetry
+WPILib tunables           BSD 3-Clause (WPILib)                src/prosdk/tunables,
+                                                               src/prosdk/impl/tunables, test/tunables
+LLVM (subset)             Apache 2.0 with LLVM Exceptions      src/prosdk/util (llvm headers),
+                                                               src/prosdk/impl/wpiutil/thirdparty/llvm,
+                                                               test/wpiutil/cpp/llvm
+JSON for Classic C++      Apache 2.0 (Mozilla Foundation)      src/prosdk/util/json.hpp,
+                                                               src/prosdk/impl/wpiutil/thirdparty/json
+sigslot                   MIT (Pierre-Antoine Lacaze)          src/prosdk/util/Signal.h,
+                                                               test/wpiutil/cpp/sigslot
+double-conversion         BSD 3-Clause (V8 project authors)    src/prosdk/double-conversion,
+                                                               src/prosdk/impl/wpiutil/thirdparty/double-conversion
+hat-trie                  MIT (Thibaut Goetghebuer-Planchon)   src/prosdk/util/array-hash,
+                                                               src/prosdk/util/htrie_*.hpp
+nanopb (modified)         zlib (Petteri Aimonen)               src/prosdk/thirdparty/nanopb,
+                                                               src/prosdk/impl/wpiutil/thirdparty/nanopb
+V8 export-template        BSD 3-Clause (V8 project authors)    src/prosdk/util/SymbolExports.hpp
+Catch2 (tests only)       Boost Software License 1.0           test/thirdparty/catch2
+
+Hand-written prosdk code (src/prosdk.h, src/prosdk/cxx, src/prosdk/platform, tools/, test/prosdk)
+is under the prosdk license (LICENSE, LICENSE-commercial).

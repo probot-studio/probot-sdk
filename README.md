@@ -18,6 +18,7 @@ the include root `<prosdk/...>` instead of `<wpi/...>`. It runs on top of the pr
 python3 tools/upstream/wpilib.py              # regenerate vendored sources (pinned upstream)
 python3 tools/upstream/wpilib.py --check      # verify the tree matches the script output
 tools/build/build.sh esp32s3                  # build src/esp32s3/libprosdk.a
+tools/build/build.sh esp32s3 header_check     # compile every public header after <Arduino.h>
 tools/build/build.sh host --test              # build and run host unit tests
 ```
 
