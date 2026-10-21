@@ -1,0 +1,13 @@
+diff --git a/src/prosdk/impl/wpiutil/unix/Demangle.cpp b/src/prosdk/impl/wpiutil/unix/Demangle.cpp
+index 3c00642..2c6d184 100644
+--- a/src/prosdk/impl/wpiutil/unix/Demangle.cpp
++++ b/src/prosdk/impl/wpiutil/unix/Demangle.cpp
+@@ -15,7 +15,7 @@ namespace prosdk::util {
+ std::string Demangle(std::string_view mangledSymbol) {
+   SmallString<128> buf{mangledSymbol};
+   size_t length;
+-  int32_t status;
++  int status;  // prosdk: int32_t is long on Xtensa; __cxa_demangle takes int*
+ 
+   char* symbol = abi::__cxa_demangle(buf.c_str(), nullptr, &length, &status);
+   if (status == 0) {

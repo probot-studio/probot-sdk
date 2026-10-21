@@ -1,0 +1,42 @@
+diff --git a/src/prosdk/impl/wpiutil/cpp/StackTrace.cpp b/src/prosdk/impl/wpiutil/cpp/StackTrace.cpp
+index 3ae15ec..f9ebe40 100644
+--- a/src/prosdk/impl/wpiutil/cpp/StackTrace.cpp
++++ b/src/prosdk/impl/wpiutil/cpp/StackTrace.cpp
+@@ -4,7 +4,14 @@
+ 
+ #include "prosdk/util/StackTrace.hpp"
+ 
+-#ifdef __cpp_lib_stacktrace
++#include "prosdk/platform/config.hpp"
++
++#if PROSDK_TARGET_HW
++#include <cinttypes>
++#include <cstdio>
++
++#include "prosdk/platform/Backtrace.hpp"
++#elif defined(__cpp_lib_stacktrace)
+ #include <stacktrace>
+ #elif !defined(_WIN32) && !defined(__EMSCRIPTEN__)
+ #include <execinfo.h>
+@@ -23,7 +30,20 @@ std::string GetStackTraceDefault(int offset) {
+   prosdk::util::SmallString<1024> buf;
+   prosdk::util::raw_svector_ostream trace(buf);
+ 
+-#ifdef __cpp_lib_stacktrace
++#if PROSDK_TARGET_HW
++  // ESP32: return addresses only; decode with xtensa-esp32s3-elf-addr2line -pfiaC -e <sketch.elf>
++  std::uintptr_t pcs[32];
++  size_t n = prosdk::platform::CaptureBacktrace(pcs, 32);
++  for (size_t i = offset; i < n; ++i) {
++    if (i == 0 || pcs[i] != pcs[i - 1]) {
++      char addr[24];
++      std::snprintf(addr, sizeof(addr), "0x%08" PRIxPTR, pcs[i]);
++      trace << "\tat " << addr << '\n';
++    }
++  }
++
++  return std::string{trace.str()};
++#elif defined(__cpp_lib_stacktrace)
+   auto stackTrace = std::stacktrace::current();
+ 
+   for (size_t i = offset; i < stackTrace.size(); ++i) {

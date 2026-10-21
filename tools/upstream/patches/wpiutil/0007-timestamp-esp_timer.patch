@@ -1,0 +1,27 @@
+diff --git a/src/prosdk/impl/wpiutil/cpp/timestamp.cpp b/src/prosdk/impl/wpiutil/cpp/timestamp.cpp
+index b43faa8..5cf42ef 100644
+--- a/src/prosdk/impl/wpiutil/cpp/timestamp.cpp
++++ b/src/prosdk/impl/wpiutil/cpp/timestamp.cpp
+@@ -8,12 +8,22 @@
+ #include <chrono>
+ 
+ #include "prosdk/util/timestamp.h"
++#include "prosdk/platform/config.hpp"
++
++#if PROSDK_TARGET_HW
++#include <esp_timer.h>
++#endif
+ 
+ static int64_t timestamp() noexcept {
++#if PROSDK_TARGET_HW
++  // esp_timer: monotonic microseconds since boot; 1-ns intervals like upstream
++  return esp_timer_get_time() * 1000;
++#else
+   // 1-ns intervals
+   return std::chrono::duration_cast<std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now().time_since_epoch())
+       .count();
++#endif
+ }
+ 
+ static const int64_t original_program_start_time = timestamp();

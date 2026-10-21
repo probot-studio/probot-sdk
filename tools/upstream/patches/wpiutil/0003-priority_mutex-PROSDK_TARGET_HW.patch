@@ -1,0 +1,17 @@
+diff --git a/src/prosdk/util/priority_mutex.hpp b/src/prosdk/util/priority_mutex.hpp
+index bf54c37..7579a0c 100644
+--- a/src/prosdk/util/priority_mutex.hpp
++++ b/src/prosdk/util/priority_mutex.hpp
+@@ -11,9 +11,11 @@
+ 
+ #include <mutex>
+ 
++#include "prosdk/platform/config.hpp"
++
+ namespace prosdk::util {
+ 
+-#if defined(__FIRST_SYSTEMCORE__) && !defined(WPI_USE_PRIORITY_MUTEX)
++#if PROSDK_TARGET_HW && !defined(WPI_USE_PRIORITY_MUTEX)
+ #define WPI_USE_PRIORITY_MUTEX
+ #endif
+ 

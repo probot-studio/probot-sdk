@@ -1,0 +1,34 @@
+diff --git a/src/prosdk/impl/telemetry/cpp/TelemetryRegistry.cpp b/src/prosdk/impl/telemetry/cpp/TelemetryRegistry.cpp
+index 72850db..47daca2 100644
+--- a/src/prosdk/impl/telemetry/cpp/TelemetryRegistry.cpp
++++ b/src/prosdk/impl/telemetry/cpp/TelemetryRegistry.cpp
+@@ -4,8 +4,8 @@
+ 
+ #include "prosdk/telemetry/TelemetryRegistry.hpp"
+ 
++#include <format>
+ #include <memory>
+-#include <prosdk/cxx/print.hpp>
+ #include <string>
+ #include <string_view>
+ #include <utility>
+@@ -14,6 +14,7 @@
+ #include "prosdk/telemetry/DiscardTelemetryBackend.hpp"
+ #include "prosdk/telemetry/TelemetryBackend.hpp"
+ #include "prosdk/telemetry/TelemetryTable.hpp"
++#include "prosdk/platform/Console.hpp"
+ #include "prosdk/telemetry/detail/PathUtil.hpp"
+ #include "prosdk/util/StringMap.hpp"
+ #include "prosdk/util/htrie_map.hpp"
+@@ -89,8 +90,9 @@ static std::shared_ptr<TelemetryBackend> GetBackendForNormalizedPath(
+ }
+ 
+ static void DefaultReportWarning(std::string_view path, std::string_view msg) {
+-  // TODO: do something smarter here
+-  prosdk::cxx::print(stderr, "Telemetry '{}': warning: {}\n", path, msg);
++  // prosdk: platform console (DS console on the robot), never throws
++  prosdk::platform::ConsoleWrite(
++      std::format("Telemetry '{}': warning: {}\n", path, msg));
+ }
+ 
+ void TelemetryRegistry::SetReportWarning(

@@ -1,0 +1,31 @@
+diff --git a/src/prosdk/util/spinlock.hpp b/src/prosdk/util/spinlock.hpp
+index e5b0025..7539a11 100644
+--- a/src/prosdk/util/spinlock.hpp
++++ b/src/prosdk/util/spinlock.hpp
+@@ -10,9 +10,19 @@
+ #include <thread>
+ 
+ #include "prosdk/util/Compiler.hpp"
++#include "prosdk/platform/config.hpp"
+ 
+ namespace prosdk::util {
+ 
++#if PROSDK_TARGET_HW
++// prosdk: FreeRTOS tasks are not time-sliced against higher priorities, so a task spinning on a
++// lock held by a lower-priority task never lets it run. Spinlocks are plain mutexes on ESP32.
++using spinlock = std::mutex;
++using recursive_spinlock1 = std::recursive_mutex;
++using recursive_spinlock2 = std::recursive_mutex;
++using recursive_spinlock = std::recursive_mutex;
++#else
++
+ /**
+  * A spinlock mutex.  Wraps std::atomic_flag in a std::mutex compatible way.
+  */
+@@ -141,4 +151,6 @@ using recursive_spinlock = recursive_spinlock2;
+ using recursive_spinlock = recursive_spinlock1;
+ #endif
+ 
++#endif  // PROSDK_TARGET_HW
++
+ }  // namespace prosdk::util

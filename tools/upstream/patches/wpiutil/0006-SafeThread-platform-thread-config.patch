@@ -1,0 +1,22 @@
+diff --git a/src/prosdk/impl/wpiutil/cpp/SafeThread.cpp b/src/prosdk/impl/wpiutil/cpp/SafeThread.cpp
+index c78cdbe..84ae6b6 100644
+--- a/src/prosdk/impl/wpiutil/cpp/SafeThread.cpp
++++ b/src/prosdk/impl/wpiutil/cpp/SafeThread.cpp
+@@ -8,6 +8,8 @@
+ #include <memory>
+ #include <utility>
+ 
++#include "prosdk/platform/Thread.hpp"
++
+ using namespace prosdk::util;
+ 
+ // thread start/stop notifications for bindings that need to set up
+@@ -76,6 +78,8 @@ void detail::SafeThreadOwnerBase::Start(std::shared_ptr<SafeThreadBase> thr) {
+   if (auto thr = m_thread.lock()) {
+     return;
+   }
++  // prosdk: never the ESP-IDF pthread defaults (design/PORT.md section 7)
++  prosdk::platform::ScopedThreadConfig threadConfig{{.name = "prosdk"}};
+   m_stdThread = std::thread([=] {
+     gSafeThreadRefcount++;
+     void* opaque = (gOnSafeThreadStart.load())();
