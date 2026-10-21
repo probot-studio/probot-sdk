@@ -190,3 +190,26 @@ Widget child layout confirmed by probot-core (2026-10-22), matches upstream `Sel
   the C++ API only, so this does not affect the backends.
 - PIDController and Alerts widgets are in #28 with the layouts above. R5 remaining: Field2d, Mechanism2d.
   probot-core continues with R7.
+
+### P1 R7 delivered (2026-10-22): draft PR #29 (branch `feat/opmode-list`, stacked on #28)
+
+Held until core 0.4.0 is on stable, like #26-#28. Final C++ API (`<probot/api.hpp>`, `probot::ds`):
+- `struct OpModeOption { uint64_t id; OpMode mode; const char* name; const char* group; const char* description; }`:
+  id non-zero and unique; mode AUTO|TELEOP|UTILITY; name non-empty, <=63; group optional, <=63; description
+  optional, <=255.
+- `bool setOpModeOptions(const OpModeOption*, size_t count)`: <=64 options, strings copied, false keeps the
+  old list, callable any time.
+- `uint64_t selectedOpModeId()`: DS choice, 0 = none; changes at auto expiry when TeleOp is preselected.
+- `uint64_t activeOpModeId()`: latched at INIT; dispatch on this in hooks/preCycle.
+- `bool utilityAvailable()`, `OpMode selectedMode()`.
+- `OpMode::UTILITY = 2`; phases `UTILITY_INIT = 6`, `UTILITY_RUN = 7` (0-5 unchanged). Optional weak hooks
+  utilityInit/InitLoop/Start/Loop/Stop. UTILITY is offered when utilityLoop() is defined or a UTILITY option is
+  listed. No match timer; inputs on in UTILITY_RUN; e-stop calls utilityStop and the framework emergencyStop.
+- Selection: a mode change picks the last-picked option of that mode if still listed, else the first. Changes
+  only while idle. A selection dropped from the list is corrected while idle or at the next INIT. If UTILITY
+  disappears while selected, the selection falls back to TeleOp.
+- Wire (for reference): GET /opmodes; cmd=opmode&id=N; cmd=mode&val=utility; S frame and /getState add
+  "opMode", "omv" (bumps on every set), "util".
+- prosdk use (wave 3): `OpModeRobot` maps its registered opmodes to `OpModeOption` (id = WPILib opmode id),
+  dispatches on `activeOpModeId()`, and maps UTILITY to WPILib's utility mode. The read-only core clone moves to
+  #29 after wave 2 finishes (not mid-build).
