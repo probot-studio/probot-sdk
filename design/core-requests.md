@@ -186,3 +186,7 @@ Widget child layout confirmed by probot-core (2026-10-22), matches upstream `Sel
 - `X/.type`="Command": required `X/running` (bool, TUNABLE|MUTABLE); optional `X/name`.
 - Consequence for `ProbotTunableBackend`: a robust tunable (upstream `selected` is robust) is published as ONE
   topic at its own path (flag ROBUST), never split into `value`/`tune` sub-topics as the NT backend does.
+- Wire correction (2026-10-22): 'V' = {u32 LE robot millis} then repeated {u16 id, u16 len, bytes}. prosdk uses
+  the C++ API only, so this does not affect the backends.
+- PIDController and Alerts widgets are in #28 with the layouts above. R5 remaining: Field2d, Mechanism2d.
+  probot-core continues with R7.
