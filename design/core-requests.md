@@ -213,3 +213,19 @@ Held until core 0.4.0 is on stable, like #26-#28. Final C++ API (`<probot/api.hp
 - prosdk use (wave 3): `OpModeRobot` maps its registered opmodes to `OpModeOption` (id = WPILib opmode id),
   dispatches on `activeOpModeId()`, and maps UTILITY to WPILib's utility mode. The read-only core clone moves to
   #29 after wave 2 finishes (not mid-build).
+
+### P1 R6 delivered (2026-10-22): draft PR #30 (branch `feat/loop-rate`, stacked on #29)
+
+Held like #26-#29. Final API (config-free, `<probot/api.hpp>`, namespace `probot`):
+- `bool setLoopPeriodMs(uint32_t ms)`: 1-1000, effective from the next pass; 0 restores USER_LOOP_PERIOD_MS;
+  false for anything else. Works from static init.
+- `uint32_t loopPeriodMs()`; `uint32_t loopOverruns()` (since boot).
+- Semantics: passes start on a fixed tick grid (vTaskDelayUntil style). A late pass yields 1 tick and restarts the
+  schedule (no catch-up bursts). Passes that ran a one-shot init/start/stop are not counted as overruns. The sleep
+  never counts toward the stall deadline, so periods longer than PROBOT_LOOP_DEADLINE_MS are fine.
+- Wire: /health and S gain "loopMs" and "overruns"; the DS Debug panel shows them.
+- Breaking: USER_LOOP_PERIOD_MS outside 1-1000 is now PB-E109 (0 used to be allowed).
+- prosdk use (wave 3): `TimedRobot(period)` calls `setLoopPeriodMs(round(period in ms))` and keeps upstream
+  `AddPeriodic` callbacks on its own schedule inside preCycle (they fire on the first pass at or after their due
+  time). Loop overruns feed the Watchdog/`loop time overrun` warning. Sub-millisecond periods are rejected with a
+  reported error.
