@@ -1,7 +1,8 @@
-# Local scripts
-liner.py
-TODO.md
-tests/control_tests
+# Build output and caches
 .build/
-review/
-tuna_test/
+.upstream/
+tools/bin/
+tools/venv/
+# Precompiled archive: release artifact, not tracked for now
+src/esp32s3/
+__pycache__/

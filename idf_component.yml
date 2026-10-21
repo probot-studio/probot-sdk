@@ -1,8 +1,0 @@
-version: 0.2.6
-description: ESP32-S3 robotics control library
-url: https://github.com/nfrproducts/probot-lib
-dependencies:
-  idf:
-    version: ">=5.0"
-  espressif/arduino-esp32:
-    version: ">=3.0.0"
