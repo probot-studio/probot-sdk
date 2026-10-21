@@ -5,6 +5,8 @@
 #if PROSDK_TARGET_HW
 #include <esp_err.h>
 #include <esp_pthread.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #endif
 
 namespace prosdk::platform {
@@ -29,7 +31,8 @@ ScopedThreadConfig::ScopedThreadConfig(const ThreadConfig& config)
   if (config.name != nullptr) {
     cfg.thread_name = config.name;
   }
-  cfg.pin_to_core = config.core;
+  // ThreadConfig uses -1 for "no affinity"; ESP-IDF expects tskNO_AFFINITY
+  cfg.pin_to_core = config.core < 0 ? static_cast<int>(tskNO_AFFINITY) : config.core;
   esp_pthread_set_cfg(&cfg);
 }
 

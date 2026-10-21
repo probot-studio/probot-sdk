@@ -1,0 +1,63 @@
+# prosdk CI (design/PORT.md sections 2, 5, 9):
+#   host:    vendoring drift check (tools/upstream/wpilib.py --check), host build, host header
+#            check and the upstream + prosdk unit tests
+#   esp32s3: the same drift check with the Arduino toolchain installed (also verifies
+#            tools/upstream/arduino-macros.txt), the precompiled archive and the header check
+#            (every public header after #include <Arduino.h>, exact Arduino flags)
+name: CI
+
+on:
+  push:
+    branches: [main, prosdk-2027]
+  pull_request:
+
+env:
+  ARDUINO_CLI_VERSION: "1.5.1"
+  ARDUINO_ESP32_VERSION: "3.3.10"
+
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Vendoring drift check
+        run: python3 tools/upstream/wpilib.py --check
+
+      - name: Host build, header check and tests
+        run: tools/build/build.sh host all header_check --test
+
+  esp32s3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install arduino-cli and Arduino-ESP32
+        run: |
+          set -euo pipefail
+          dl=$(mktemp -d)
+          archive=arduino-cli_${ARDUINO_CLI_VERSION}_Linux_64bit.tar.gz
+          curl -fsSL "https://downloads.arduino.cc/arduino-cli/${archive}" -o "$dl/$archive"
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$dl/$archive" -C "$HOME/.local/bin" arduino-cli
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          arduino-cli config init --overwrite
+          arduino-cli config set board_manager.additional_urls \
+            https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install "esp32:esp32@${ARDUINO_ESP32_VERSION}"
+
+      - name: Vendoring drift check (with the Arduino macro list)
+        run: python3 tools/upstream/wpilib.py --check
+
+      - name: Archive and Arduino header check
+        run: tools/build/build.sh esp32s3 prosdk header_check size

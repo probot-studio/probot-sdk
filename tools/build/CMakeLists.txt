@@ -28,21 +28,27 @@ if(PROSDK_CCACHE)
   set(CMAKE_CXX_COMPILER_LAUNCHER "${_launcher}")
 endif()
 
-# Usage requirements shared by every prosdk translation unit.
+# What a sketch translation unit gets: the include root (and, on the host, the target's language
+# mode). arduino-cli passes no prosdk -D flags to the sketch, so public headers must not depend on
+# them; the header check uses only this.
+add_library(prosdk_sketch_options INTERFACE)
+target_include_directories(prosdk_sketch_options INTERFACE "${PROSDK_ROOT}/src")
+if(NOT CMAKE_CROSSCOMPILING)
+  # host: same language mode as the target (gnu++20, no RTTI, exceptions)
+  target_compile_options(prosdk_sketch_options INTERFACE
+    $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++20 -fno-rtti -fexceptions>
+    -O1 -g -ffunction-sections -fdata-sections)
+endif()
+
+# Usage requirements shared by every prosdk translation unit of the archive and the host tests.
 add_library(prosdk_options INTERFACE)
-target_include_directories(prosdk_options INTERFACE "${PROSDK_ROOT}/src")
+target_link_libraries(prosdk_options INTERFACE prosdk_sketch_options)
 target_compile_definitions(prosdk_options INTERFACE
   PROSDK_TARGET_HW=${PROSDK_TARGET_HW}
   EIGEN_STACK_ALLOCATION_LIMIT=4096
   EIGEN_NO_IO
   EIGEN_MPL2_ONLY
   SLEIPNIR_DISABLE_DIAGNOSTICS)
-if(NOT CMAKE_CROSSCOMPILING)
-  # host: same language mode as the target (gnu++20, no RTTI, exceptions)
-  target_compile_options(prosdk_options INTERFACE
-    $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++20 -fno-rtti -fexceptions>
-    -O1 -g -ffunction-sections -fdata-sections)
-endif()
 
 # Generated (vendored) files of one module whose repo-relative path matches REGEX.
 file(STRINGS "${PROSDK_GENERATED}" _prosdk_generated REGEX "^[A-Za-z0-9_]+ ")
@@ -111,8 +117,10 @@ if(CMAKE_CROSSCOMPILING)
 endif()
 
 # header-check: every public header compiled on its own after #include <Arduino.h> (target) or
-# alone (host), with the exact flags. The TU list is generated from generated.txt plus the
-# hand-written headers, at configure time (re-runs when generated.txt changes).
+# alone (host), with exactly the flags a sketch TU gets (prosdk_sketch_options: no prosdk -D
+# flags, so PROSDK_TARGET_HW comes from prosdk/platform/config.hpp as in a sketch). The TU list is
+# generated from generated.txt plus the hand-written headers, at configure time (re-runs when
+# generated.txt changes).
 execute_process(
   COMMAND python3 "${CMAKE_CURRENT_LIST_DIR}/header_check.py"
           --out "${CMAKE_BINARY_DIR}/header-check" --target-hw ${PROSDK_TARGET_HW}
@@ -126,7 +134,7 @@ file(GLOB _hand_headers CONFIGURE_DEPENDS "${PROSDK_ROOT}/src/prosdk.h"
   "${PROSDK_ROOT}/src/prosdk/cxx/*.hpp" "${PROSDK_ROOT}/src/prosdk/platform/*.hpp")
 string(REPLACE "\n" ";" _hc_sources "${_hc_sources}")
 add_library(header_check OBJECT EXCLUDE_FROM_ALL ${_hc_sources})
-target_link_libraries(header_check PRIVATE prosdk_options)
+target_link_libraries(header_check PRIVATE prosdk_sketch_options)
 set_target_properties(header_check PROPERTIES UNITY_BUILD OFF)
 
 if(NOT CMAKE_CROSSCOMPILING)
