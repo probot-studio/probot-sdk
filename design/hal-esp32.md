@@ -65,8 +65,10 @@ Driver Station (design/PORT.md section 8).
 - **Emergency stop**: core deletes the user task and calls the framework e-stop hook on a fresh
   task. The backend's callback is lock-free: every HAL output pin (PWM, DIO outputs, LED data
   lines) is routed back to plain GPIO and driven low, then CAN periodic frames are stopped. After
-  that, new PWM/DIO-output/LED allocations fail with `HAL_INCOMPATIBLE_STATE` and DIO writes are
-  ignored until reboot. Deviation from the roboRIO: DIO outputs are also driven low (the roboRIO
+  that, new PWM/DIO-output/LED allocations and PWM period changes (they recreate the MCPWM
+  generator, which would reconnect the pin) fail with `HAL_INCOMPATIBLE_STATE`, PWM outputs stay
+  forced low whatever their pulse value, and DIO writes are ignored until reboot (a write racing
+  the e-stop is undone). Deviation from the roboRIO: DIO outputs are also driven low (the roboRIO
   keeps DIO values on disable); "every HAL output" stops on an e-stop.
 - **Not gated**: DIO outputs while merely disabled (as on the roboRIO), LED strips (they show
   robot state), I2C, serial and CAN. CAN TX is never forced low: a dominant TX line jams the bus;

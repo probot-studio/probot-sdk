@@ -126,12 +126,14 @@ int AcquireTimer(uint32_t periodUs) {
   return -1;
 }
 
-// Drives one output from its pulse and the gate. gMutex held.
+// Drives one output from its pulse and the gate. gMutex held. EStopped() is checked here, after
+// any generator (re)creation: a generator created after the e-stop handler rerouted the pin takes
+// the pin back from plain GPIO, and gGate may still hold the value from before the e-stop.
 void ApplyOutput(PwmOutput& out, bool enabled) {
   if (out.gen == nullptr) {
     return;
   }
-  if (!enabled || out.pulseUs == kPwmDisabled) {
+  if (!enabled || EStopped() || out.pulseUs == kPwmDisabled) {
     mcpwm_generator_set_force_level(out.gen, 0, true);
   } else if (out.pulseUs == kPwmAlwaysHigh) {
     mcpwm_generator_set_force_level(out.gen, 1, true);
@@ -376,6 +378,13 @@ void HAL_SetPWMOutputPeriod(HAL_DigitalHandle pwmPortHandle, int32_t period, int
       *status = HAL_PARAMETER_OUT_OF_RANGE;
       return;
   }
+  if (EStopped()) {
+    // a period change recreates the MCPWM generator, which would reconnect the pin
+    *status = MakeError(HAL_INCOMPATIBLE_STATE,
+                        "PWM: the robot is emergency stopped; outputs stay off until reboot");
+    return;
+  }
+  bool enabled = OutputsEnabled();
   std::scoped_lock lock(gMutex);
   PwmOutput* out = GetOutput(port);
   *status = HAL_SUCCESS;
@@ -390,6 +399,7 @@ void HAL_SetPWMOutputPeriod(HAL_DigitalHandle pwmPortHandle, int32_t period, int
     int32_t ignored = Attach(*out, oldPeriod);
     (void)ignored;
   }
+  ApplyGateLocked(enabled);
   ApplyOutput(*out, gGate);
 }
 

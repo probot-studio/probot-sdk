@@ -163,5 +163,6 @@ are checked through the module headers that include them.
 ## 6. Status of this file
 
 Wave 1 (foundation) covers wpiutil, telemetry and tunables. Wave 2 adds wpimath (wpi/math, wpi/units,
-struct, protobuf, json), Eigen, gcem and Sleipnir. Later waves (hal, wpilibc, commandsv2, datalog) add
-their renames and exclusions here.
+struct, protobuf, json), Eigen, gcem and Sleipnir, the HAL (common code, the host simulation backend
+and the hand-written ESP32-S3 backend, `design/hal-esp32.md`) and the DataLog writer. Later waves
+(wpilibc, commandsv2) add their renames and exclusions here.

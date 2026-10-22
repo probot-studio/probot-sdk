@@ -150,7 +150,13 @@ void HAL_SetDIO(HAL_DigitalHandle dioPortHandle, HAL_Bool value, int32_t* status
   if (EStopped()) {
     return;  // held low by the emergency stop
   }
-  gpio_set_level(static_cast<gpio_num_t>(port->channel), value ? 1 : 0);
+  auto pin = static_cast<gpio_num_t>(port->channel);
+  gpio_set_level(pin, value ? 1 : 0);
+  // the e-stop handler may have driven the pin low between the check and the write (it sets the
+  // flag before touching pins): undo a high write
+  if (value && EStopped()) {
+    gpio_set_level(pin, 0);
+  }
 }
 
 void HAL_SetDIODirection(HAL_DigitalHandle dioPortHandle, HAL_Bool input, int32_t* status) {

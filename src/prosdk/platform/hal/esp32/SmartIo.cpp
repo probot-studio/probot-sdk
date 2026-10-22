@@ -51,8 +51,9 @@ void OnEmergencyStop() {
   uint64_t pins = gOutputPins.load(std::memory_order_acquire);
   for (int gpio = 0; gpio < kNumSmartIo; ++gpio) {
     if ((pins & Bit(gpio)) != 0) {
-      esp_rom_gpio_connect_out_signal(gpio, SIG_GPIO_OUT_IDX, false, false);
+      // output register low first, then route: no glitch from a stale GPIO_OUT bit
       gpio_set_level(static_cast<gpio_num_t>(gpio), 0);
+      esp_rom_gpio_connect_out_signal(gpio, SIG_GPIO_OUT_IDX, false, false);
     }
   }
   can::OnEmergencyStop();
