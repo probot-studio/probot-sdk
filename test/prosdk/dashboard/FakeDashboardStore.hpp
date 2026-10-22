@@ -60,7 +60,11 @@ void SetMaxSchemaBytes(size_t maxSchemaBytes);
 /** The live topic at path, or nullptr. */
 const Topic* Find(std::string_view path);
 size_t LiveTopics();
+/** Copies of every live topic, sorted by path. */
+std::vector<Topic> AllTopics();
 const Schema* FindSchema(std::string_view name);
+/** Names of every stored schema, sorted. */
+std::vector<std::string> SchemaNames();
 
 /** Queues a Driver Station write to the live topic at path (like core's pushWrite, unchecked). */
 void PushWrite(std::string_view path, uint8_t valueType, std::span<const uint8_t> data);

@@ -251,13 +251,70 @@ Widget child layout confirmed by probot-core (2026-10-22), matches upstream `Sel
   topic at its own path (flag ROBUST), never split into `value`/`tune` sub-topics as the NT backend does.
 - Wire correction (2026-10-22): 'V' = {u32 LE robot millis} then repeated {u16 id, u16 len, bytes}. prosdk uses
   the C++ API only, so this does not affect the backends.
-- PIDController and Alerts widgets are in #28 with the layouts above. R5 remaining: Field2d, Mechanism2d,
-  Scheduler (layout below, added 2026-10-22 with commandsv2). probot-core continues with R7.
-- Scheduler (upstream `CommandScheduler.cpp` `LogTo`/`PublishTunable`): telemetry table `.type`="Scheduler"
-  with `Names` (string[], running command names) and `Ids` (int64[], same order); tunable table
-  `.type`="Scheduler" with `Names` and `Ids` (read-only, TUNABLE) and `Cancel` (int64[], TUNABLE|MUTABLE|ROBUST).
-  Widget: the running commands, each with a cancel button that writes `[id]` to `Cancel` (the robot cancels
-  those ids that are still scheduled and clears `Cancel`). Until it exists the DS shows the plain tree.
+- PIDController and Alerts widgets are in #28 with the layouts above. probot-core continues with R7; the
+  R5 remainder (Field2d, Mechanism2d, Scheduler widgets) follows with the layouts below.
+
+### Widget layouts for Field2d, Mechanism2d, Scheduler (captured from prosdk, 2026-10-22)
+
+Captured from the store by test/prosdk/commands2/WidgetLayoutTest.cpp (golden: path, value type, type
+string, properties, flags, value). `<X>` is the name the program logs/publishes the object under; the
+telemetry table is `/Telemetry/<X>/...`, the tunable table `/Tunables/<X>/...` (same relative layout).
+Telemetry topics have flags TELEMETRY and empty properties; tunable topics have flags TUNABLE (+MUTABLE,
+ROBUST as listed) and properties `{"mutable":true|false}` (+`"robust":true`). Every `.type` topic is
+value type string, type string "string". All numbers little-endian. These differ from the upstream WPILib
+2025 NetworkTables layouts (double[] [x, y, deg] Field2d objects; Mechanism2d roots with separate `x`/`y`):
+the DS must decode the layouts below, not the 2025 ones.
+
+Field2d (telemetry AND tunable; `Field2d.cpp`, `FieldObject2d.cpp`):
+- `<X>/.type` = "Field2d" (tunable side: TUNABLE, `{"mutable":false}`).
+- One topic per field object, named by the object: `<X>/Robot` always (the robot pose, first object), then
+  every `GetObject(name)` (e.g. `<X>/Targets`); new objects can appear at any time.
+- Object topic: value type raw (6), type string `struct:Pose2d[]`, value = n x 24 bytes, n >= 0 (0 = object
+  has no pose, draw nothing). Each Pose2d = {f64 x, f64 y, f64 rotation}: x, y in meters (field
+  coordinates, WPILib blue-origin), rotation in RADIANS (counter-clockwise positive). Telemetry: TELEMETRY.
+  Tunable: TUNABLE|MUTABLE, `{"mutable":true}` (not robust, not persistent).
+- Struct schemas published with it (addSchema, schema type "structschema", name => text):
+  `struct:Pose2d` => `Translation2d translation;Rotation2d rotation`,
+  `struct:Translation2d` => `double x;double y`, `struct:Rotation2d` => `double value`.
+  (Packed: Pose2d = Translation2d{x,y} then Rotation2d{value} = 3 doubles, 24 bytes.)
+- Example (golden): `/Telemetry/Field/Robot` = 24 bytes {(1.5, 2.25, 1.5707963267948966)};
+  `/Telemetry/Field/Targets` = 48 bytes {(4, 0.5, 3.141592653589793), (6.25, 3, -0.7853981633974483)}.
+- DS write-back (pose drag): write the WHOLE array to the tunable object topic (`/Tunables/<X>/<object>`,
+  raw, n x 24 bytes, radians). The robot replaces that object's poses (1 pose replaces 2; empty array clears
+  them), `GetRobotPose()`/`GetPoses()` return the written value and the topic echoes it. A length that is not a
+  multiple of 24 is refused with `rejectWrite(DecodeError=4)`. Telemetry topics are not writable.
+
+Mechanism2d (telemetry only, no `/Tunables` side, no schemas; `Mechanism2d.cpp`, `MechanismRoot2d.cpp`,
+`MechanismLigament2d.cpp`):
+- `<X>/.type` = "Mechanism2d".
+- `<X>/dims` = double[] (10) `[width, height]` (canvas size, user units; same units as root positions and
+  ligament lengths).
+- `<X>/backgroundColor` = string `"#RRGGBB"` (uppercase hex; default `"#000020"`).
+- Each root is a subtable `<X>/<root>` WITHOUT a `.type`; it is a root because it has `<X>/<root>/position` =
+  double[] `[x, y]` (canvas units, from the bottom-left corner, y up, as upstream Glass draws it). Upstream 2025 had `x` and `y` doubles.
+- Each ligament is a subtable under a root or under another ligament (any depth): `<parent>/<name>/.type` =
+  "line", `angle` (double, DEGREES, relative to the parent's direction; a root's direction is +x),
+  `length` (double, canvas units), `color` (string `"#RRGGBB"`, uppercase; default `"#EB8934"`), `weight`
+  (double, line width in px; default 6).
+- Children of a node are any subtables with `.type`="line"; names are free. All topics TELEMETRY, empty
+  properties; values change on the next log.
+- Example (golden, `Mechanism2d{3, 2, Color8Bit{0,0,32}}`):
+  `/Telemetry/Arm/.type`="Mechanism2d", `dims`=[3, 2], `backgroundColor`="#000020",
+  `shoulder/position`=[1, 0.5], `shoulder/arm/{.type="line", angle=45, length=1.25, color="#FF0000",
+  weight=4}`, `shoulder/arm/wrist/{.type="line", angle=-30, length=0.5, color="#0080FF", weight=2.5}`,
+  `base/position`=[2.5, 0], `base/post/{.type="line", angle=90, length=1.5, color="#EB8934", weight=6}`.
+
+Scheduler (telemetry AND tunable; commandsv2 `CommandScheduler::LogTo`/`PublishTunable`):
+- Telemetry: `<X>/.type`="Scheduler", `<X>/Names` string[] (11) (scheduled command names), `<X>/Ids` int[]
+  (8, i64) (same order; an id is an opaque per-command number, the Command's address). No `Cancel` here.
+- Tunable: `<X>/.type`="Scheduler" (`{"mutable":false}`), `<X>/Names` string[] and `<X>/Ids` int[] (TUNABLE,
+  `{"mutable":false}`, refreshed by every tunables update, i.e. each robot loop), `<X>/Cancel` int[] (TUNABLE|MUTABLE|ROBUST,
+  `{"mutable":true,"robust":true}`, normally `[]`, never persistent).
+- DS write-back (cancel button): write int[] `[id, ...]` to `/Tunables/<X>/Cancel`. The robot cancels the
+  ids that are still scheduled (unknown ids are ignored), then sets `Cancel` back to `[]`; `Names`/`Ids`
+  drop the command on the next loop. Writes to `Names`/`Ids` are refused with `Immutable=2`.
+- Example (golden): `Names`=["Drive", "Intake"], `Ids`=[<id Drive>, <id Intake>], `Cancel`=[]; after the DS
+  writes `[<id Intake>, 12345]`: Intake cancelled, Drive still scheduled, `Cancel`=[], `Names`=["Drive"].
 
 ### P1 R7 delivered (2026-10-22): draft PR #29 (branch `feat/opmode-list`, stacked on #28)
 

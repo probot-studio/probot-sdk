@@ -2,6 +2,7 @@
 
 #include "FakeDashboardStore.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <map>
 #include <mutex>
@@ -380,6 +381,30 @@ const Topic* Find(std::string_view path) {
 size_t LiveTopics() {
   std::scoped_lock lock{S().mutex};
   return CountLive();
+}
+
+std::vector<Topic> AllTopics() {
+  std::vector<Topic> out;
+  {
+    std::scoped_lock lock{S().mutex};
+    for (auto& t : S().topics) {
+      if (t.live) {
+        out.push_back(t);
+      }
+    }
+  }
+  std::sort(out.begin(), out.end(),
+            [](const Topic& a, const Topic& b) { return a.path < b.path; });
+  return out;
+}
+
+std::vector<std::string> SchemaNames() {
+  std::scoped_lock lock{S().mutex};
+  std::vector<std::string> out;
+  for (auto& [name, schema] : S().schemas) {
+    out.push_back(name);
+  }
+  return out;
 }
 
 const Schema* FindSchema(std::string_view name) {
