@@ -3,7 +3,9 @@
 // prosdk::Preferences on the platform store (prosdk/platform/PreferencesStore.hpp; upstream has
 // no C++ Preferences test) and the platform storage locations (prosdk/platform/Storage.hpp).
 
+#include <cmath>
 #include <cstdio>
+#include <limits>
 #include <string>
 
 #include <catch2/catch_test_macros.hpp>
@@ -98,6 +100,45 @@ TEST_CASE_METHOD(PreferencesFixture, "Preferences persist to the host JSON file"
   Preferences::Remove("kP");
   prosdk::platform::prefs::Reload();
   CHECK_FALSE(Preferences::ContainsKey("kP"));
+
+  std::remove(path.c_str());
+}
+
+TEST_CASE_METHOD(PreferencesFixture, "Preferences persist NaN, infinities and long keys",
+                 "[prosdk]") {
+  const std::string path = "prosdk_preferences_special_test.json";
+  std::remove(path.c_str());
+  prosdk::platform::prefs::SetPreferencesFile(path);
+  prosdk::platform::prefs::Reload();
+
+  // the ESP32 store is one NVS blob, so keys are not limited to NVS's 15 characters
+  const std::string longKey = "Drivetrain/a preference name much longer than fifteen characters";
+  Preferences::SetDouble("nan", std::numeric_limits<double>::quiet_NaN());
+  Preferences::SetFloat("nanf", std::numeric_limits<float>::quiet_NaN());
+  Preferences::SetDouble("inf", std::numeric_limits<double>::infinity());
+  Preferences::SetDouble("-inf", -std::numeric_limits<double>::infinity());
+  Preferences::SetDouble("tenth", 0.1);
+  Preferences::SetFloat("tenthf", 0.1f);
+  Preferences::SetInt(longKey, 3);
+
+  prosdk::platform::prefs::Reload();
+  CHECK(std::isnan(Preferences::GetDouble("nan", 0.0)));
+  CHECK(std::isnan(Preferences::GetFloat("nanf", 0.0f)));
+  CHECK(Preferences::GetDouble("inf", 0.0) == std::numeric_limits<double>::infinity());
+  CHECK(Preferences::GetDouble("-inf", 0.0) == -std::numeric_limits<double>::infinity());
+  CHECK(Preferences::GetDouble("tenth") == 0.1);
+  CHECK(Preferences::GetFloat("tenthf") == 0.1f);
+  CHECK(Preferences::GetInt(longKey) == 3);
+  CHECK(Preferences::GetKeys().size() == 7);
+
+  // setting NaN again is not a change (nothing rewritten)
+  std::remove(path.c_str());
+  Preferences::SetDouble("nan", std::numeric_limits<double>::quiet_NaN());
+  std::FILE* f = std::fopen(path.c_str(), "rb");
+  CHECK(f == nullptr);
+  if (f != nullptr) {
+    std::fclose(f);
+  }
 
   std::remove(path.c_str());
 }

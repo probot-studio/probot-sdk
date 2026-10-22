@@ -627,6 +627,9 @@ TEST_CASE("RobotHost never runs the robot after an e-stop", "[robothost]") {
   gCore.phase = pf::kCorePhaseStopped;
   pf::detail::EmergencyStop();
   CHECK(pf::EmergencyStopped());
+  // reported at once, before any pass (on the robot no pass runs again)
+  CHECK(pf::GetRobotProgramState() == pf::RobotProgramState::kEStopped);
+  CHECK_FALSE(pf::RobotProgramHalted());
   // on the robot core deleted the user task; even if a cycle ran, the robot is not touched
   Passes(6);
   CHECK(pf::GetRobotProgramState() == pf::RobotProgramState::kEStopped);

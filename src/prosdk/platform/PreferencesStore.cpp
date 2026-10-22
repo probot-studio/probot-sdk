@@ -3,6 +3,7 @@
 #include "prosdk/platform/PreferencesStore.hpp"
 
 #include <cstdio>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <string>
@@ -81,7 +82,11 @@ void Deserialize(std::string_view text, std::map<std::string, Value, std::less<>
       continue;
     }
     const std::string& t = type.get_string();
-    if (t == "boolean" && value.is_bool()) {
+    if ((t == "float" || t == "double") && value.is_null()) {
+      // NaN is written as null (JSON has no NaN); infinities as +-1e5000, which parse back
+      values[name.get_string()] = t == "float" ? Value{std::numeric_limits<float>::quiet_NaN()}
+                                               : Value{std::numeric_limits<double>::quiet_NaN()};
+    } else if (t == "boolean" && value.is_bool()) {
       values[name.get_string()] = value.get_bool();
     } else if (t == "int" && value.is_number()) {
       values[name.get_string()] = static_cast<int64_t>(
@@ -179,6 +184,22 @@ void SavePersisted(Store& store) {
 }
 #endif
 
+// equal values (NaN equals NaN here, so setting NaN again does not rewrite flash)
+bool SameValue(const Value& a, const Value& b) {
+  if (a.index() != b.index()) {
+    return false;
+  }
+  if (auto f = std::get_if<float>(&a)) {
+    float g = std::get<float>(b);
+    return *f == g || (*f != *f && g != g);
+  }
+  if (auto d = std::get_if<double>(&a)) {
+    double e = std::get<double>(b);
+    return *d == e || (*d != *d && e != e);
+  }
+  return a == b;
+}
+
 // returns the loaded store; the caller holds store.mutex
 Store& Loaded(Store& store) {
   if (!store.loaded) {
@@ -221,7 +242,7 @@ void Set(std::string_view key, Value value) {
   auto& values = Loaded(store).values;
   auto it = values.find(key);
   if (it != values.end()) {
-    if (it->second == value) {
+    if (SameValue(it->second, value)) {
       return;
     }
     it->second = std::move(value);

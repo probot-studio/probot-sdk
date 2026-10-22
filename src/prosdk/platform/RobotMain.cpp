@@ -84,8 +84,8 @@ void Halt(const char* why) {
 }
 
 // Runs fn like upstream StartRobot runs the robot: exceptions are reported, not propagated.
-template <typename F>
-bool Guard(F&& fn) {
+template <typename Fn>
+bool Guard(Fn&& fn) {
   try {
     fn();
     return true;
@@ -359,7 +359,13 @@ bool SetRobotMain(RobotFactory factory, const char* name) noexcept {
 }
 
 RobotProgramState GetRobotProgramState() noexcept {
-  return gState.load(std::memory_order_acquire);
+  const RobotProgramState state = gState.load(std::memory_order_acquire);
+  // on the robot core deletes the user task at an e-stop, so RobotPass never records it
+  if ((state == RobotProgramState::kRunning || state == RobotProgramState::kRegistered) &&
+      EmergencyStopped()) {
+    return RobotProgramState::kEStopped;
+  }
+  return state;
 }
 
 bool RobotProgramHalted() noexcept {

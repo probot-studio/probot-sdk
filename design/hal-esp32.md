@@ -203,6 +203,9 @@ Driver Station (design/PORT.md section 8).
   D-pad. Descriptor: gamepad, type "standard", name = the mapping profile's name. No touchpads,
   rumble or LEDs.
 - No alliance station, match info or game data. Match time from core (-1 when unknown).
+- `HAL_GetSystemTimeValid` (`RobotController::IsSystemTimeValid`) is true only once the wall clock
+  is past 2024-01-01: nothing sets it after boot yet (core-requests.md R10), so DataLogManager
+  keeps its random file name and writes no `systemTime` entries unless the sketch sets the time.
 - `HAL_SendError`/console lines go to the Driver Station console (`platform::ConsoleWrite`).
 
 ### Power (Power.cpp)

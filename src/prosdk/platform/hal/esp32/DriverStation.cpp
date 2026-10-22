@@ -29,6 +29,7 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <format>
 #include <mutex>
 #include <string>
@@ -617,8 +618,13 @@ int32_t ProbotCoreDs::observeUserProgram(HAL_ControlWord) {
   return 0;
 }
 
+// "System time" is the wall clock (std::chrono::system_clock, DataLogManager file names and its
+// systemTime entry), not the HAL's monotonic clock. The ESP32's wall clock starts at 1970 after
+// boot and nothing sets it yet (core-requests.md R10: set it from the browser), so it is valid
+// only once something (the sketch's SNTP or settimeofday) moved it past 2024-01-01.
 int32_t ProbotCoreDs::getSystemTimeValid(bool* systemTimeValid) {
-  *systemTimeValid = true;  // the HAL clock is monotonic time since boot
+  constexpr std::time_t k20240101 = 1704067200;
+  *systemTimeValid = std::time(nullptr) >= k20240101;
   return 0;
 }
 
