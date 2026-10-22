@@ -270,3 +270,11 @@ Held like #26-#30. API:
   to a higher port.
 - prosdk use: HAL DS joysticks 0-5 from `ds::rawGamepad(port)`, analog triggers, 8-way POV, joystick name and
   standard-mapping flag into the HAL joystick descriptor. The build clone moves to #31 after wave 4.
+
+### P1 R9 in review (2026-10-22, PR sha pending)
+
+API preview from probot-core (config-free, `<probot/api.hpp>`): `probot::console::info/warning/error(fmt, ...)`,
+`console::write(Level, text, len)`, `console::print(Level, text)`; `enum Level { Info = 0, Warning = 1, Error = 2 }`.
+prosdk use: ConsoleWrite moves from `telemetry::writeBytes` to `console::write` with a level (ReportError -> Error,
+ReportWarning/MathShared warnings -> Warning, everything else Info). Wired once the PR exists. Scheduler widget was
+added to core's R5 remainder (after R12/R13).
