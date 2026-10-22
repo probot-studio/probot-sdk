@@ -240,19 +240,24 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   shrinking the period; one below 1 ms runs once per pass (reported). The schedule is aligned with
   core's passes (start time and expirations shifted by less than half a pass) on the pass start
   (`CycleStartTime()`, taken when core enters the pre-cycle hook, before the late boot and
-  pre-cycle callbacks) at the first pass after the robot's construction pass (core's first pass
-  after boot starts off its tick grid; a robot registered after boot is constructed inside a
-  pass), after a period change and after a late pass (core restarts its grid). Each pass runs
+  pre-cycle callbacks) at the first pass after the robot's construction pass (a robot registered
+  after boot is constructed inside a pass; before core R15 core's first pass after boot started
+  right after the boot hook, off its tick grid, and with R15 it starts on a tick boundary, so
+  aligning one pass later is the same grid either way), after a period change and whenever core
+  restarts its grid after a late pass (no catch-up). Each pass runs
   `PeriodicPriorityQueue::RunDue` for every callback due before the pass start plus half a pass,
   earliest first, rescheduled exactly as `RunCallbacks()` (skips the periods it is behind), so
   neither the run time of the earlier pre-cycle callbacks nor a pass that starts up to half a
-  pass late moves a callback to another pass. A pass that changes core's phase and ends late also
-  restarts core's grid, but core does not count it as an overrun (a one-shot hook pass), so the
-  schedule keeps its phase until the next counted overrun or period change; the robot's mode
-  init runs in the pass after the phase change, which core does count. Core request R15 asks for
-  a grid-restart counter so the host can re-align on every restart. Upstream
-  watchdogs (`IterativeRobotBase`, `OpModeRobot`) still report loop overruns; core's late-pass
-  count is reported as a warning (at most once per second, after that pass's callbacks).
+  pass late moves a callback to another pass. Grid restarts come from core R15's
+  `loopGridRestarts()` (CoreOps ABI 7): every late pass, including a pass that ran a one-shot
+  INIT/START/STOP hook (a phase change), which core does not count as an overrun. Core steps the
+  count after the late pass, so the host re-aligns on the next pass, the first one on the new
+  grid. With a core without R15 the host re-aligns on a change of `loopOverruns()` only: after a
+  late one-shot pass the schedule keeps its old phase until the next counted overrun or period
+  change, so a pass that starts more than half a pass minus that offset late can run a callback
+  in the wrong pass. Upstream watchdogs (`IterativeRobotBase`, `OpModeRobot`) still report loop
+  overruns; core's overrun count (not the one-shot restarts) is reported as a warning (at most
+  once per second, after that pass's callbacks).
 - **Modes and opmodes** come only from the HAL Driver Station layer (`hal-esp32.md`): enabled = core
   `outputsEnabled()`, robot mode from the phase, the active opmode id in INIT/RUN and the selected
   one while idle (R7). `OpModeRobot::PublishOpModes()` sends the opmode list to core
@@ -266,10 +271,13 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   the ANSI sequences removed and repeated frames dropped (the page has no display panel).
 - **Tests.** `test/prosdk/robot` (own executable): the robot host on the HAL sim with a fake core
   table, driving core's hooks on simulated time (disabled -> auto -> teleop -> utility -> e-stop,
-  callback order, `AddPeriodic`/timeslice timing, jitter, late pass, opmode selection, halts).
+  callback order, `AddPeriodic`/timeslice timing, jitter, late pass and late one-shot pass,
+  opmode selection, halts); built twice, with core R15's grid-restart count and without it
+  (`prosdk_robot_legacy_tests`).
 - **Examples** (`esp32:esp32:esp32s3:PartitionScheme=huge_app`, `tools/build/build.sh examples` with
   CoreOps ABI 5 (3450336) against probot-core `feat/small-items` 09a6fe4, 2026-10-22; flash / static
-  RAM): `TimedRobotDifferential` 1846484 / 72276 bytes, `CommandBasedRobot` (commandsv2: scheduler,
+  RAM; four of them re-measured with ABI 7 against `feat/loop-grid-restarts` in design/size.md
+  section 10): `TimedRobotDifferential` 1846484 / 72276 bytes, `CommandBasedRobot` (commandsv2: scheduler,
   drive subsystem, `CommandXboxController`, PID command, autonomous `Selectable`, `SysIdRoutine`)
   1982192 / 75348, `DriversShowcase` (one of each `drivers/` device: Spark, Servo, BTS7960, VNH5019,
   PCA9685 with ProHubMotor and a servo, MPU6050, GoBildaPinpoint, ProHub encoders) 1898592 / 72844,

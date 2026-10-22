@@ -118,8 +118,8 @@ timestamps and file names.
 DS lists and downloads files that prosdk writes to LittleFS/SD (WPILib DataLog `.wpilog`). A generic
 `registerUri()` extension point would also do.
 
-Status: in progress on core branch `feat/ds-files` (agreed design under "R12 part 2 and R11 in progress"
-below).
+Status: delivered as draft PR #38 (`feat/ds-files` f48ef22, agreed design under "R12 part 2 and R11 in
+progress" below); in the pinned core since 2026-10-22, not wired yet.
 
 ### R12. Small items
 
@@ -136,7 +136,8 @@ below).
 Status: part 1 (everything except persistence) delivered as draft PR #37 and wired (CoreOps ABI 5, see
 "P1 R12 part 1 delivered" below). Persistence is in progress on core branch `feat/dash-persist`; the
 prosdk side is wired against its local commit 5513bb0 (CoreOps ABI 6, see "R12 part 2 persistence: prosdk
-side wired" below). Core declined storing only DS-written values (it stores the topic's current value,
+side wired" below); delivered as draft PR #39 (`feat/dash-persist` abef559), in the pinned core since
+2026-10-22 ("P1 R15 delivered" below). Core declined storing only DS-written values (it stores the topic's current value,
 like NT persistent topics) and adds no feature macro; prosdk follows both (same section).
 
 ### R13. Dashboard schemas larger than a value
@@ -183,8 +184,11 @@ the first pass after boot on a tick boundary (today it starts right after the bo
 the host skips aligning on it).
 
 Also nice to have (no prosdk change needed): a public accessor of the dashboard store's configured limits
-(`dashboard::Limits limits()`); the bridge reads `Limits::maxSchemaBytes` from `dashboard::detail::g_store`
-under its lock today.
+(`dashboard::Limits limits()`); the bridge read `Limits::maxSchemaBytes` from `dashboard::detail::g_store`
+under its lock.
+
+Status: delivered as draft PR #41 (all three items) and wired (CoreOps ABI 7), see "P1 R15 delivered"
+below.
 
 ## Status
 
@@ -575,3 +579,53 @@ Core's answer to prosdk's two questions (final, 2026-10-22):
   Preferences mirrors not PERSISTENT, CoreOpsTest (no-core and fake defaults), FakeCore.hpp leaves ABI 6
   null. A single-TU compile of CoreBridge.hpp detects persistence against 5513bb0 (and 25a34e8) and not
   against `feat/small-items`.
+
+### P1 R15 delivered (2026-10-22): draft PR #41 (branch `feat/loop-grid-restarts`, dbf9d1f, stacked on #40)
+
+Core rebased its stacked drafts for a docs-only `API.md` line in #37 (`git diff 09a6fe4 2eb1a72`: that
+line only). Current shas: #37 `feat/small-items` 2eb1a72 (was 09a6fe4), #38 `feat/ds-files` f48ef22, #39
+`feat/dash-persist` abef559, #40 `feat/dash-widgets` 960c63c, #41 `feat/loop-grid-restarts` dbf9d1f.
+`.upstream/probot-core` `sdk-target` and CI (`PROBOT_CORE_REF`) now pin `feat/loop-grid-restarts`, the top
+of the stack, so the pinned core also has R11 files (#38, not wired yet), R12 part 2 persistence (#39) and
+the R5 DS widgets for Field2d, Mechanism2d and Scheduler (#40, built from the layouts above).
+`PROBOT_CORE_OLDEST_REF` stays `feat/dashboard-store`.
+
+API (core `API.md`, `CHANGELOG.md`):
+- `probot::loopGridRestarts()` (`<probot/core/loop_timing.hpp>`, also through `<probot.h>`): times the pass
+  schedule restarted since boot, every late pass, including the one-shot INIT/START/STOP passes that
+  `loopOverruns()` leaves out (unchanged). Core steps it after the late pass, before its sleep, so the next
+  pass and its pre-cycle hook already see it. A period change is not counted.
+- The first pass after boot starts on a tick boundary (`vTaskDelay(1)` after the boot hook).
+- `dashboard::limits()`: the `Limits` in effect (`PROBOT_DASH_*` after clamping), all zero before
+  `runtime_setup()`.
+- Detection: a requires-expression on `probot::loopGridRestarts` (no feature macro).
+
+Wired (prosdk 9ec2023, CoreOps ABI 7: `loopGridRestarts`):
+- Bridge: `kCoreHasGridRestarts`, a requires-check on a dependent call of `loopGridRestarts()` looked up
+  through a using-directive (as for `clearPersisted()`); without it the field stays null.
+  `dashMaxSchemaBytes` reads `dashboard::limits().maxSchemaBytes` when `limits()` exists (same kind of
+  check), else `detail::g_store` under the store's lock as before; prosdk reads no other core internals.
+  The archive never keeps the value: it is read when a refused schema is reported, which happens only
+  once the store is configured (a schema refused before that is kept and retried), so a zero read before
+  `runtime_setup()` never sticks.
+- Robot host (`RobotMain.cpp`): re-aligns its schedule on the pass where `GetLoopGridRestarts()` changed,
+  i.e. the first pass of core's new grid, also after a late one-shot pass. The overrun warning still
+  follows `loopOverruns()` only (a one-shot restart is not reported). Without R15
+  (`GetLoopGridRestarts()` false) it re-aligns on overrun changes, as before. Alignment still starts at
+  pass 1: with R15 core's first pass is on the grid too, so pass 1 is the same grid; before R15 pass 0 was
+  off it, and a late registration constructs the robot inside pass 0 either way.
+- Tests: test/prosdk/robot/RobotHostTest.cpp, built twice (`prosdk_robot_tests` with the count,
+  `prosdk_robot_legacy_tests` with the field null): a late one-shot pass moves core's grid by 2.4 ms of a
+  5 ms pass, then passes start up to 1.5 ms late; every pass runs the loop exactly once and nothing is
+  reported as an overrun (the legacy build needs a counted overrun to re-align). CoreOpsTest: no core and
+  a null field report "not available". QEMU FakeCore leaves ABI 7 null.
+- R12 part 2 against the rebased #39: the ABI 6 wiring builds unchanged against the pinned core (archive,
+  HAL link test and examples, no worktree). Core changes since 25a34e8 that prosdk follows without code:
+  stored values are limited to 2048 bytes (PB-E308 above that), a restored value is erased by
+  `rejectWrite()` only before another write to that topic is delivered (prosdk rejects it right after the
+  publish's drain), and `clearPersisted()` also drops restores not drained yet.
+- Checked: the HAL link test links against the pinned core (`grid_probe::LoopGridRestarts<>` and
+  `persist_probe::ClearPersisted<>` in the ELF) and against `feat/dashboard-store` (neither); a host
+  syntax check of `CoreBridge.hpp` with core's test stubs detects R15 on dbf9d1f, not on #40 960c63c
+  (the `g_store` path of `dashMaxSchemaBytes` compiles there) nor on `feat/dashboard-store`. Sizes:
+  design/size.md section 10.

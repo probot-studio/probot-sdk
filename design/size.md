@@ -333,3 +333,24 @@ day for the others (design/PORT.md 8.1, design/examples.md).
   prints the schema's size. TemplateTimed 1,771,660 B (-108), HalSmoke 1,591,573 B (-72), HAL link
   test 1,687,629 B (-84); static RAM unchanged. The table above keeps the `3450336` numbers.
 - The other examples were not re-measured; CI builds all of them against `feat/small-items`.
+
+## 10. Core loop-grid-restarts (measured 2026-10-22)
+
+Archive and sketches at `9ec2023` (CoreOps ABI 7), probot-core `sdk-target` at `dbf9d1f`
+(`feat/loop-grid-restarts`, PR #41, on top of #38 files, #39 dashboard persistence and #40 DS widgets),
+one `tools/build/build.sh examples <4 names>` run. "Before" is the last number in section 9 (the
+follow-up line where there is one, against `feat/small-items` 09a6fe4).
+
+| Sketch | Flash before | Flash after | Change | Static RAM before | after | Change |
+|---|---:|---:|---:|---:|---:|---:|
+| TemplateTimed | 1,771,660 | 1,791,940 | +20,280 | 71,252 | 72,292 | +1,040 |
+| CommandBasedRobot | 1,982,192 | 2,002,516 | +20,324 | 75,348 | 76,388 | +1,040 |
+| DriversShowcase | 1,898,592 | 1,918,840 | +20,248 | 72,844 | 73,900 | +1,056 |
+| HalSmoke | 1,591,573 | 1,607,945 | +16,372 | 73,308 | 74,284 | +976 |
+| HAL link test | 1,687,629 | 1,704,033 | +16,404 | 74,924 | 75,900 | +976 |
+
+- The growth is the four core PRs added since `feat/small-items` (files listing and download, NVS
+  persistence of dashboard values, the larger DS page with the three widgets, the grid-restart count)
+  and prosdk's ABI 6 persistence and ABI 7 entries; not attributed further.
+- The largest of these (CommandBasedRobot) is 63.7 % of the huge_app partition.
+- The other examples were not re-measured; CI builds all of them against `feat/loop-grid-restarts`.
