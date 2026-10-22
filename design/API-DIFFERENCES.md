@@ -68,6 +68,8 @@ spelled in a sketch, because the Xtensa header `xtensa/config/specreg.h` (includ
 | HAL backend | host: the WPILib simulation backend (`host/hal/sim`, outside the Arduino tree; `HAL_GetRuntimeType()` is `HAL_RUNTIME_SIMULATION`). ESP32: the prosdk backend in `src/prosdk/platform/hal/esp32` (SystemCore's backend is its reference). The function contract is `design/hal-esp32-functions.txt`; hardware limits and deviations from SystemCore are in `design/hal-esp32.md` | layout |
 | HAL handle version check (`getHandleTypedIndex`, `handles/HandlesInternal.hpp`) | `__FIRST_SYSTEMCORE__` replaced by `PROSDK_TARGET_HW`: like SystemCore, the ESP32 does not check the handle version byte; the host build checks it | `hal/0001` |
 | `HAL_SetPrintErrorImpl` default (text printed by `HAL_SendError`) | written to the platform console instead of `fwrite(stderr)` | `hal/0002` |
+| Console levels (`prosdk::platform::ConsoleWrite(text, level)`) | every console line carries a level, shown on the Driver Station Logs page (probot-core R9 `console::write`): `HAL_SendError` errors (ReportError, HAL errors) and the `MathShared`, `DrivetrainSplineTrajectoryGenerator`, DataLog error defaults are errors; `HAL_SendError` warnings (ReportWarning), the `MathShared` warning default, the telemetry/tunables warning reporters (alerts on the robot), DataLog warnings and the hand-written backends' warnings are warnings; everything else (status lines, command scheduler messages, `DataLogManager::Log`) is info. A core without R9 gets the text without its level. On the robot a write from an ISR is dropped | `hal/0002`, `wpimath/0002`, `wpimath/0003`, `datalog/0002`, `telemetry/0001`, `tunables/0001`, `wpilibc/0001`, `wpilibc/0007`; hand-written `src/prosdk/platform/Console.cpp`, `CoreOps.cpp` |
+| `RobotController::IsSystemTimeValid()` (`HAL_GetSystemTimeValid`) | ESP32: probot-core's `ds::systemTimeValid()` (R10): true once the Driver Station page has set the robot's clock to the browser's UTC time, so DataLogManager names its log `WPILIB_<UTC date>_<time>.wpilog` and writes `systemTime` entries as upstream. A core without R10: true once the clock is past 2024-01-01. Host: simulation (always true) | hand-written `src/prosdk/platform/hal/esp32/DriverStation.cpp`, `CoreOps.cpp` |
 | Telemetry, tunables and alerts on the Driver Station (`prosdk::platform::RegisterDashboardBackends()`, `ProbotTelemetryBackend`, `ProbotTunableBackend`) | backends on probot-core's dashboard topic store instead of NetworkTables (`NetworkTablesTelemetryBackend` / `NetworkTablesTunableBackend` are not ported). Same topic layout (`/Telemetry/...`, `/Tunables/...`, `.type` children, struct/protobuf type strings and schemas, JSON properties) with these differences: a robust tunable is one topic with flag ROBUST instead of `<path>/value` + `<path>/tune`, and its initial value is the code default (core persists nothing, `design/core-requests.md` R12); telemetry timestamps are ignored (the store keeps the latest value); `.type` topics are read-only (properties `{"mutable":false}`, DS writes refused); DS writes are queued by core, drained before each loop and applied by `TunableRegistry::Update()`; writes of the wrong type, to immutable tunables or to unknown topics are refused with core's `WriteStatus`; topics published before core's store exists wait and are sent on the next cycle. Core limits (`PROBOT_DASH_MAX_TOPICS` 128, `PROBOT_DASH_MAX_VALUE` 1024, `PROBOT_DASH_MAX_SCHEMAS` 32): an overflow is reported once on the console per limit and the robot keeps running (a refused telemetry entry is discarded, a refused tunable makes `Publish` return false); protobuf descriptors over 1024 bytes need a larger `PROBOT_DASH_MAX_VALUE` (R13). Alerts: active alerts are logged to `/Telemetry/Alerts/<group>` (`.type` "Alerts", string[] `errors`/`warnings`/`infos`, newest first) after each loop, replacing the SystemCore `MrcLibAlert` transport | hand-written `src/prosdk/platform/dashboard` |
 | Dashboard opmode chooser (`DashboardOpMode.hpp`: `InitializeDashboardOpMode`, `SetDashboardOpModeOptions`, `StartDashboardOpMode`, `EnableDashboardOpMode`, `GetDashboardSelectedOpMode`) | no-op: options are ignored and a dashboard never selects an opmode (`GetDashboardSelectedOpMode` returns 0). Upstream publishes ntcore string choosers (`/SmartDashboard/* OpMode`); ntcore is not ported and the probot-core Driver Station selects the opmode | hand-written `src/prosdk/platform/hal/DashboardOpMode.cpp` |
 | `prosdk::log::DataLog` buffers (`BLOCK_SIZE`, `MAX_BUFFER_COUNT`, `MAX_FREE_COUNT`) | ESP32: 2 KiB blocks, logging pauses at 16 outgoing buffers (32 KiB), 4 free buffers kept (8 KiB). Upstream (kept on the host): 16 KiB, 64 (1 MiB), 16 (256 KiB). Set by `PROSDK_DATALOG_*` in `prosdk/platform/DataLogConfig.hpp`; a different value needs an archive rebuilt with the same `-D` | `datalog/0001` |
@@ -261,12 +263,23 @@ and the hand-written ESP32-S3 backend, `design/hal-esp32.md`) and the DataLog wr
 wpilibc (framework, opmodes, Driver Station and the generated HID classes, events, hardware, drive,
 LED, system, sysid, preferences, simulation, smartdashboard), with NetworkTables removed by the
 `wpilibc/*` patches and the robot host hooks in `prosdk/platform/RobotHost.hpp`. The robot host
-(`PROSDK_ROBOT_MAIN`, hosted loop on probot-core, `wpilibc/0010`) runs robot classes on the robot. commandsv2 (the
-command-based framework, `commandsv2/*` patches) is vendored on top of wpilibc. fields (field metadata and the built-in AprilTag
-layouts, `fields/0001`) and apriltag (detector, pose estimator and the AprilTag C library,
-`apriltag/*`) are vendored on wpimath. drivers (the generated PWM motor controllers and
-GoBildaPinpoint, unchanged) is vendored on wpilibc; the hand-written devices are listed in section 7. Later waves add their
-renames and exclusions here.
+(`PROSDK_ROBOT_MAIN`, hosted loop on probot-core, `wpilibc/0010`) runs robot classes on the robot.
+commandsv2 (the command-based framework, `commandsv2/*` patches) is vendored on top of wpilibc.
+fields (field metadata and the built-in AprilTag layouts, `fields/0001`) and apriltag (detector,
+pose estimator and the AprilTag C library, `apriltag/*`) are vendored on wpimath. drivers (the
+generated PWM motor controllers and GoBildaPinpoint, unchanged) is vendored on wpilibc; the
+hand-written devices are listed in section 7.
+
+Wave 5 ports wpilibcExamples: 63 sketches in `examples/` and the five upstream example tests
+except UnitTest in `test/examples` (decisions, pin map and deviations in `design/examples.md`).
+They are ported by hand, not by `tools/upstream/wpilib.py`; `tools/upstream/examples.json` records
+the upstream files at the pin and `tools/upstream/examples.py --check` (CI) reports upstream
+changes.
+
+The robot side builds on probot-core's requests R1-R10 (`design/core-requests.md`, CoreOps ABI 4):
+gamepads on ports 0-5 with analog triggers and names (R8), leveled console lines (R9) and the
+Driver Station's wall clock (R10) are in section 3. R11-R14 are not delivered; where they limit
+prosdk (R12 persistence, R13 schema size), section 3 says so.
 
 ## 7. prosdk additions (not in WPILib 2027)
 

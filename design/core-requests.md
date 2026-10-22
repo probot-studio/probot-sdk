@@ -290,13 +290,27 @@ API preview from probot-core (config-free, `<probot/api.hpp>`): `probot::console
 `console::write(Level, text, len)`, `console::print(Level, text)`; `enum Level { Info = 0, Warning = 1, Error = 2 }`.
 Callable from any task (not an ISR). Lines up to 512 bytes; write() splits longer text at newlines, never inside a
 UTF-8 character. prosdk use: ConsoleWrite moves from `telemetry::writeBytes` to `console::write` with a level (ReportError -> Error,
-ReportWarning/MathShared warnings -> Warning, everything else Info). Wired once the PR exists. Scheduler widget was
-added to core's R5 remainder (after R12/R13).
+ReportWarning/MathShared warnings -> Warning, everything else Info). Scheduler widget was added to core's R5
+remainder (after R12/R13).
 
-### P1 R10 delivered (2026-10-22): draft PR #34 (branch `feat/wall-clock`, 29466db, stacked on #33 301f190)
+Wired (prosdk, CoreOps ABI 4): `prosdk::platform::ConsoleWrite(text, level)` carries a level (kInfo/kWarning/kError,
+same values as `console::Level`); the bridge (src/prosdk/probot/CoreBridge.hpp) detects R9 with
+`__has_include(<probot/telemetry/console.hpp>)` and fills CoreOps `consoleWriteLevel` with `console::write`. HAL
+errors and ReportError are Error; ReportWarning, MathShared, telemetry/tunables (alerts) and other warnings are
+Warning; everything else Info. A core without R9 leaves the field null and the text goes through
+`telemetry::writeBytes` without its level. On the robot a ConsoleWrite from an ISR is dropped. Tests:
+test/prosdk/ConsoleLevelTest.cpp, test/prosdk/CoreOpsTest.cpp.
+
+### P1 R10 delivered (2026-10-22): draft PR #34 (branch `feat/wall-clock`, b46069e, stacked on #33 301f190)
 
 The DS page sends the browser's UTC time on every WebSocket open; the robot calls settimeofday. The first valid time
 always sets the clock; later ones only while phase STOPPED and status STOP (never mid-match, including the
 auto->teleop TRANSITION). `probot::ds::systemTimeValid()`; `time()`/`gettimeofday()` give UTC (no TZ set).
 prosdk use: HAL_GetSystemTimeValid -> CoreOps systemTimeValid (replaces the time > 2024-01-01 heuristic), so
-DataLogManager gets real file names and systemTime entries. Wired after wave 5 together with R9.
+DataLogManager gets real file names and systemTime entries.
+
+Wired (prosdk, CoreOps ABI 4): the bridge detects R10 with `__has_include(<probot/core/wall_clock.hpp>)` and fills
+CoreOps `systemTimeValid` with `ds::systemTimeValid()`; HAL_GetSystemTimeValid reads it. A core without R10 keeps
+the heuristic (time() at or after 2024-01-01). CI builds the sketches against `feat/wall-clock`
+(PROBOT_CORE_REF). Tests: test/prosdk/CoreOpsTest.cpp, test/prosdk/DataLogManagerTimeTest.cpp (log renamed to
+WPILIB_<UTC>.wpilog and systemTime entries with a valid clock).

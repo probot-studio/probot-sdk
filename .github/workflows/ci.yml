@@ -1,6 +1,7 @@
 # prosdk CI (design/PORT.md sections 2, 5, 9):
-#   host:    vendoring drift check (tools/upstream/wpilib.py --check), host build, host header
-#            check and the upstream + prosdk unit tests
+#   host:    vendoring drift check (tools/upstream/wpilib.py --check), examples drift check
+#            (tools/upstream/examples.py --check), host build, host header check and the
+#            upstream + prosdk unit tests
 #   esp32s3: the same drift check with the Arduino toolchain installed (also verifies
 #            tools/upstream/arduino-macros.txt), the precompiled archive and the header check
 #            (every public header after #include <Arduino.h>, exact Arduino flags)
@@ -20,7 +21,7 @@ env:
   ARDUINO_CLI_VERSION: "1.5.1"
   ARDUINO_ESP32_VERSION: "3.3.10"
   # probot-core branch or tag the sketches link against (the only place it is named)
-  PROBOT_CORE_REF: "feat/multi-gamepad"
+  PROBOT_CORE_REF: "feat/wall-clock"
 
 jobs:
   host:
@@ -34,6 +35,9 @@ jobs:
 
       - name: Vendoring drift check
         run: python3 tools/upstream/wpilib.py --check
+
+      - name: Examples drift check
+        run: python3 tools/upstream/examples.py --check
 
       - name: Host build, header check and tests
         run: tools/build/build.sh host all header_check --test

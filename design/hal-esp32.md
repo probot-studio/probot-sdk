@@ -224,10 +224,16 @@ Driver Station (design/PORT.md section 8).
   `HIDType::STANDARD`, any other one a generic HID (not a gamepad, type UNKNOWN; the profile
   remap still applies). No touchpads, rumble or LEDs (`supportedOutputs` 0).
 - No alliance station, match info or game data. Match time from core (-1 when unknown).
-- `HAL_GetSystemTimeValid` (`RobotController::IsSystemTimeValid`) is true only once the wall clock
-  is past 2024-01-01: nothing sets it after boot yet (core-requests.md R10), so DataLogManager
-  keeps its random file name and writes no `systemTime` entries unless the sketch sets the time.
-- `HAL_SendError`/console lines go to the Driver Station console (`platform::ConsoleWrite`).
+- `HAL_GetSystemTimeValid` (`RobotController::IsSystemTimeValid`) = core's `ds::systemTimeValid()`
+  (core-requests.md R10, CoreOps `systemTimeValid`): true once the Driver Station page has set the
+  robot's clock to the browser's UTC time. DataLogManager then renames its log to
+  `WPILIB_<UTC date>_<time>.wpilog` and writes `systemTime` entries. With a core without R10 it is
+  the old heuristic: true once the wall clock is past 2024-01-01 (only if the sketch sets the time).
+- `HAL_SendError`/console lines go to the Driver Station console (`platform::ConsoleWrite`) with a
+  level (core-requests.md R9, `console::write`): HAL errors and ReportError are errors,
+  ReportWarning and the HAL's warnings (calibration, priorities, timer gating) warnings, all other
+  lines info. With a core without R9 the text goes to the console without its level. A console
+  write from an ISR is dropped.
 
 ### Power (Power.cpp)
 - `HAL_GetVinVoltage` = core's battery reading (0 without a configured battery sensor:

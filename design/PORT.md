@@ -32,6 +32,11 @@ Investigation reports that back these decisions are listed at the end.
   re-runs the script and fails on any diff.
 - Hand-written code lives only in paths the script never writes (section 3).
 - Updating upstream = bump the pin, re-run, refresh patches that no longer apply.
+- The examples (`examples/`, `test/examples`) are ported by hand (`design/examples.md`), so the script does
+  not produce them. `tools/upstream/examples.json` records each port's upstream folders or files and their
+  git blob ids at the pin; `tools/upstream/examples.py --check` (CI) fails when the pin moves and an
+  upstream example file, an example list or the set of local example folders differs. After carrying the
+  changes into the ports, `--write` refreshes the ids.
 
 ## 3. Repository layout
 
@@ -176,7 +181,12 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   registered at static-init time. Changing core's internals then never requires rebuilding the archive.
 - Mapping: core `Phase` to WPILib `RobotMode` + enabled; e-stop latched to `IsEStopped`; core gamepad
   (W3C order) to WPILib HID (SDL order) with the remap in one place; battery to `RobotController`;
-  telemetry/tunables backends to core's dashboard store; alerts to the DS alert widget.
+  telemetry/tunables backends to core's dashboard store; alerts to the DS alert widget; console lines with
+  their level to core's console (R9, `console::write`); `HAL_GetSystemTimeValid` to core's wall-clock flag
+  (R10, `ds::systemTimeValid()`). CoreOps fields are only appended, each change bumps
+  `kCoreOpsAbiVersion` (4 since R9/R10), and the bridge leaves a field null when the core lacks the
+  feature (detected with `__has_include`), so the archive falls back (text-only console, the
+  2024-01-01 clock heuristic).
 - Outputs (PWM, motor controllers) are zeroed whenever core reports "outputs disabled" and immediately
   on e-stop (core calls a registered e-stop callback on its own task).
 - Features prosdk needs from probot-core are listed in `design/core-requests.md` and are sent to the
@@ -280,7 +290,7 @@ tables: tag36h11 4,696 B, tag16h5 240 B). **Decision: the detector ships.** It c
 huge_app partition, only sketches that call it pay for it (archive linking), and a camera board can pass
 grayscale frames to `Detect()` although the kit has no camera. Detection heap is not measured (no camera;
 estimate in `design/API-DIFFERENCES.md` section 3). The field images are not vendored (9.3 MB; upstream
-builds them only for its GUI). `examples/AprilTagFieldPose`: 2,102,184 B flash (66 %), 70,836 B RAM.
+builds them only for its GUI). `examples/AprilTagFieldPose`: 2,090,204 B flash (66 %), 69,764 B RAM.
 
 Re-implemented for this platform: `NetworkButton` and `NetworkBooleanEvent` over tunables
 (`wpilibc/0011`); Preferences on the DS as robust tunables `/Preferences/<key>` written back to NVS

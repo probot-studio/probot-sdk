@@ -50,6 +50,10 @@ WPILib wpilibc            BSD 3-Clause (WPILib)                src/prosdk/{backe
                                                                preferences,simulation,smartdashboard,
                                                                sysid,system}, src/prosdk/util/SensorUtil.hpp,
                                                                src/prosdk/impl/wpilibc, test/wpilibc
+WPILib hal                BSD 3-Clause (WPILib)                src/prosdk/hal, src/prosdk/impl/hal,
+                                                               host/hal/sim, test/hal
+WPILib datalog            BSD 3-Clause (WPILib)                src/prosdk/datalog,
+                                                               src/prosdk/impl/datalog, test/datalog
 WPILib commandsv2         BSD 3-Clause (WPILib)                src/prosdk/commands2,
                                                                src/prosdk/impl/commandsv2, test/commandsv2
 WPILib drivers            BSD 3-Clause (WPILib)                src/prosdk/drivers/motor/{Koors40,PWM*,
@@ -67,6 +71,8 @@ Eigen 5.0.1               MPL 2.0 (file-level; see             src/prosdk/thirdp
 GCEM                      Apache 2.0 (kthohr)                  src/prosdk/thirdparty/gcem
 Sleipnir                  BSD 3-Clause (Sleipnir contributors) src/prosdk/thirdparty/sleipnir,
                                                                src/prosdk/impl/sleipnir
+WPILib examples           BSD 3-Clause (WPILib)                examples/ (the 63 ported sketches; see
+                                                               below), test/examples
 Catch2 (tests only)       Boost Software License 1.0           test/thirdparty/catch2
 
 Eigen source files are covered by MPL 2.0 at file level: the files under src/prosdk/thirdparty/eigen
@@ -74,5 +80,15 @@ are vendored unmodified apart from the include-path rewrite, the Arduino macro g
 configuration include (tools/upstream/wpilib.py) and the patches in tools/upstream/patches/eigen,
 and their source is this repository.
 
-Hand-written prosdk code (src/prosdk.h, src/prosdk/cxx, src/prosdk/platform, tools/, test/prosdk)
-is under the prosdk license (LICENSE, LICENSE-commercial).
+The examples in examples/ and their tests in test/examples are ported by hand from WPILib's
+wpilibcExamples with the same renames (design/examples.md). Each keeps upstream's copyright
+lines; tools/upstream/examples.json records the upstream files and their git blob ids at the
+pinned commit.
+
+Hand-written prosdk code is under the prosdk license (LICENSE, LICENSE-commercial):
+  src/prosdk.h, src/prosdk/cxx, src/prosdk/platform, src/prosdk/probot;
+  the drivers not listed above: src/prosdk/drivers/ProHub.*, src/prosdk/drivers/{encoder,imu,
+  pwm,servo}, src/prosdk/drivers/motor/{BTS7960,ProHubMotor,VNH5019}.*;
+  the prosdk examples HalSmoke, TimedRobotDifferential, OpModeRobotExample, TimesliceRobotExample,
+  CommandBasedRobot, DriversShowcase and AprilTagFieldPose in examples/;
+  tools/, test/prosdk and test/target.
