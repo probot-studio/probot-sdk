@@ -5,6 +5,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <memory>
 #include <thread>
 #include <utility>
@@ -27,6 +28,14 @@ class SafeThreadBase {
   mutable prosdk::util::mutex m_mutex;
   std::atomic_bool m_active{true};
   std::thread::id m_threadId;
+
+  // prosdk: creation settings of the thread, read by SafeThreadOwner::Start()
+  // (set them in the derived class's constructor). On the ESP32 the thread
+  // gets this stack size in bytes and this FreeRTOS task name; 0 / nullptr
+  // select the prosdk defaults (PROSDK_THREAD_STACK_SIZE, "prosdk";
+  // prosdk/platform/Thread.hpp). Ignored on the host.
+  std::size_t m_stackSize = 0;
+  const char* m_threadName = nullptr;
 };
 
 class SafeThread : public SafeThreadBase {

@@ -79,7 +79,14 @@ void detail::SafeThreadOwnerBase::Start(std::shared_ptr<SafeThreadBase> thr) {
     return;
   }
   // prosdk: never the ESP-IDF pthread defaults (design/PORT.md section 7)
-  prosdk::platform::ScopedThreadConfig threadConfig{{.name = "prosdk"}};
+  prosdk::platform::ThreadConfig config{.name = "prosdk"};
+  if (thr->m_stackSize != 0) {
+    config.stackSize = thr->m_stackSize;
+  }
+  if (thr->m_threadName != nullptr) {
+    config.name = thr->m_threadName;
+  }
+  prosdk::platform::ScopedThreadConfig threadConfig{config};
   m_stdThread = std::thread([=] {
     gSafeThreadRefcount++;
     void* opaque = (gOnSafeThreadStart.load())();

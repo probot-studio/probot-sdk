@@ -19,6 +19,8 @@
 
 #pragma once
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -46,5 +48,22 @@ void SetDeployDirectory(std::string_view dir);
  */
 std::string GetLogDirectory();
 void SetLogDirectory(std::string_view dir);
+
+/** Size and free space of a file system, in bytes. */
+struct StorageSpace {
+  std::uintmax_t capacity = 0;
+  std::uintmax_t available = 0;
+};
+
+/**
+ * Size and free space of the file system that holds path (DataLogManager's old-log cleanup).
+ *   ESP32: for a path under kLittleFsBasePath, the mounted LittleFS partition
+ *          (esp_littlefs_partition_info; the first mounted SPIFFS/LittleFS data partition, i.e.
+ *          the one LittleFS.begin() mounted, whatever its label). Other paths (an SD card, ...):
+ *          nullopt; the ESP32 C library has no statvfs.
+ *   Host:  prosdk::fs::space(path).
+ * nullopt when the space is unknown.
+ */
+std::optional<StorageSpace> GetStorageSpace(std::string_view path);
 
 }  // namespace prosdk::platform

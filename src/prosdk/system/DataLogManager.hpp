@@ -31,10 +31,22 @@ namespace prosdk {
  * On startup, all existing WPILIB_TBD log files are deleted. If there is less
  * than 50 MB of free space on the target storage, WPILIB_ log files are deleted
  * (oldest to newest) until there is 50 MB free OR there are 10 files remaining.
+ * prosdk: on the robot the limits are scaled to the LittleFS partition
+ * (prosdk/platform/WpilibcConfig.hpp): PROSDK_DATALOGMANAGER_FREE_SPACE_THRESHOLD
+ * (128 KiB, at most half the partition) and
+ * PROSDK_DATALOGMANAGER_FILE_COUNT_THRESHOLD (3 files); a warning is printed
+ * below twice the threshold. Free space comes from esp_littlefs (only for logs
+ * under /littlefs; elsewhere, e.g. an SD card, nothing is deleted).
  *
  * prosdk: NetworkTables is not ported; LogNetworkTables() has no effect.
- * LogConsoleOutput() has no effect either (upstream tails the SystemCore
- * console log file).
+ * The console log ("console" entry) holds the prosdk console output
+ * (prosdk::platform::ConsoleWrite: errors, warnings, DataLogManager::Log and
+ * other library messages), not Serial or stdout. It is copied through a
+ * PROSDK_DATALOGMANAGER_CONSOLE_BUFFER byte buffer that the manager's thread
+ * drains every loop (whole lines, stamped when drained, up to 250 ms late);
+ * overflow is counted in a "bytes dropped" line. As upstream it starts by
+ * default only on the robot (RobotBase::IsReal()); LogConsoleOutput(true) also
+ * starts it on the host.
  */
 class DataLogManager final {
  public:
@@ -92,6 +104,8 @@ class DataLogManager final {
 
   /**
    * Enable or disable logging of the console output. Defaults to enabled.
+   * prosdk: defaults to enabled on the robot only; true enables it on the host
+   * too (see the class comment).
    * @param enabled  true to enable, false to disable
    */
   static void LogConsoleOutput(bool enabled);

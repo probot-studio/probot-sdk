@@ -10,6 +10,8 @@
 
 #if PROSDK_TARGET_HW
 #include <dirent.h>
+#include <esp_littlefs.h>
+#include <esp_partition.h>
 #endif
 
 namespace prosdk::platform {
@@ -106,6 +108,46 @@ std::string GetLogDirectory() {
 
 void SetLogDirectory(std::string_view dir) {
   Set(&Overrides::logDir, dir);
+}
+
+std::optional<StorageSpace> GetStorageSpace(std::string_view path) {
+#if PROSDK_TARGET_HW
+  std::string_view base{kLittleFsBasePath};
+  if (path.substr(0, base.size()) != base ||
+      (path.size() > base.size() && path[base.size()] != '/')) {
+    return std::nullopt;
+  }
+  // LittleFS.begin() mounts a data partition of subtype spiffs (Arduino's default label
+  // "spiffs") or littlefs; esp_littlefs reports the mounted one whatever its label
+  std::optional<StorageSpace> result;
+  for (auto subtype : {ESP_PARTITION_SUBTYPE_DATA_SPIFFS, ESP_PARTITION_SUBTYPE_DATA_LITTLEFS}) {
+    // esp_partition_next() releases the iterator when it returns nullptr
+    esp_partition_iterator_t it = esp_partition_find(ESP_PARTITION_TYPE_DATA, subtype, nullptr);
+    while (it != nullptr && !result) {
+      const esp_partition_t* part = esp_partition_get(it);
+      size_t total = 0;
+      size_t used = 0;
+      if (esp_littlefs_partition_mounted(part) &&
+          esp_littlefs_partition_info(part, &total, &used) == ESP_OK) {
+        result = StorageSpace{total, total > used ? total - used : 0};
+      } else {
+        it = esp_partition_next(it);
+      }
+    }
+    esp_partition_iterator_release(it);
+    if (result) {
+      break;
+    }
+  }
+  return result;
+#else
+  std::error_code ec;
+  auto info = prosdk::fs::space(std::string{path}, ec);
+  if (ec) {
+    return std::nullopt;
+  }
+  return StorageSpace{info.capacity, info.available};
+#endif
 }
 
 }  // namespace prosdk::platform

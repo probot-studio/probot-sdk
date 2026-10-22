@@ -1,0 +1,342 @@
+diff --git a/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp b/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
+index cbd7338..50192f5 100644
+--- a/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
+@@ -7,9 +7,11 @@
+ #include <algorithm>
+ #include <chrono>
+ #include <format>
++#include <mutex>
+ #include <random>
+ #include <span>
+ #include <string>
++#include <utility>
+ #include <vector>
+ 
+ #include "prosdk/datalog/DataLog.hpp"
+@@ -18,9 +20,11 @@
+ #include "prosdk/driverstation/RobotState.hpp"
+ #include "prosdk/driverstation/internal/DriverStationBackend.hpp"
+ #include "prosdk/framework/RobotBase.hpp"
++#include "prosdk/platform/Console.hpp"
+ #include "prosdk/platform/ConsoleFormat.hpp"
+ #include "prosdk/platform/Random.hpp"
+ #include "prosdk/platform/Storage.hpp"
++#include "prosdk/platform/WpilibcConfig.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/system/Filesystem.hpp"
+ #include "prosdk/system/RobotController.hpp"
+@@ -43,14 +47,23 @@ struct Thread final : public prosdk::util::SafeThread {
+ 
+   void StartNTLog();
+   void StopNTLog();
+-  void StartConsoleLog();
++  // prosdk: upstream starts the console logger only on a real robot, also when
++  // LogConsoleOutput(true) asks; here an explicit request (force) works on the host too
++  void StartConsoleLog(bool force = false);
+   void StopConsoleLog();
++  // prosdk: moves the complete console lines captured so far into the "console" entry
++  void DrainConsoleLog(bool all);
+ 
+   std::string m_logDir;
+   bool m_filenameOverride;
+   prosdk::log::DataLogBackgroundWriter m_log;
+-  // prosdk: no NetworkTables entry/connection loggers (ntcore is not ported) and no console
+-  // file logger (upstream tails /home/systemcore/WPILIB_UserProgram.log)
++  // prosdk: no NetworkTables entry/connection loggers (ntcore is not ported). Upstream's
++  // console logger tails /home/systemcore/WPILIB_UserProgram.log; here the console tee
++  // (prosdk::platform::SetConsoleTee) copies every prosdk console write into a bounded buffer
++  // that this thread drains into the "console" entry (created on the first
++  // StartConsoleLog; guarded by m_consoleLogMutex, taken before the buffer's).
++  std::mutex m_consoleLogMutex;
++  prosdk::log::StringLogEntry m_consoleLog;
+   prosdk::log::StringLogEntry m_messageLog;
+ };
+ 
+@@ -63,8 +76,54 @@ struct Instance {
+ 
+ // if less than this much free space, delete log files until there is this much
+ // free space OR there are this many files remaining.
+-static constexpr uintmax_t FREE_SPACE_THRESHOLD = 50000000;
+-static constexpr int FILE_COUNT_THRESHOLD = 10;
++// prosdk: scaled to the robot's flash (prosdk/platform/WpilibcConfig.hpp): on the
++// ESP32 the threshold is PROSDK_DATALOGMANAGER_FREE_SPACE_THRESHOLD bytes, at
++// most half the file system, and fewer files are kept; the host keeps upstream's
++// 50 MB / 10 files.
++static constexpr uintmax_t FREE_SPACE_THRESHOLD =
++    PROSDK_DATALOGMANAGER_FREE_SPACE_THRESHOLD;
++static constexpr int FILE_COUNT_THRESHOLD =
++    PROSDK_DATALOGMANAGER_FILE_COUNT_THRESHOLD;
++#if PROSDK_TARGET_HW
++static constexpr uintmax_t SPACE_UNIT = 1024;
++static constexpr const char* SPACE_UNIT_NAME = "KiB";
++#else
++static constexpr uintmax_t SPACE_UNIT = 1000000;
++static constexpr const char* SPACE_UNIT_NAME = "MB";
++#endif
++
++namespace {
++
++// prosdk: console capture (see Thread::m_consoleLog). The tee is a plain
++// function, so the buffer is global; it is bounded (no allocation while
++// capturing) and counts what it had to drop.
++struct ConsoleCapture {
++  std::mutex mutex;
++  bool enabled = false;
++  std::string buf;
++  size_t dropped = 0;
++};
++
++ConsoleCapture& GetConsoleCapture() {
++  static ConsoleCapture capture;
++  return capture;
++}
++
++void ConsoleCaptureTee(std::string_view text) {
++  auto& capture = GetConsoleCapture();
++  std::scoped_lock lock{capture.mutex};
++  if (!capture.enabled) {
++    return;
++  }
++  size_t room = PROSDK_DATALOGMANAGER_CONSOLE_BUFFER - capture.buf.size();
++  if (text.size() > room) {
++    capture.dropped += text.size() - room;
++    text = text.substr(0, room);
++  }
++  capture.buf.append(text);
++}
++
++}  // namespace
+ 
+ // prosdk: the default directory comes from prosdk::platform::GetLogDirectory()
+ // (prosdk/platform/Storage.hpp); "" means no storage and selects a discarding log.
+@@ -116,6 +175,10 @@ Thread::Thread(std::string_view dir, std::string_view filename, double period)
+       m_filenameOverride{!filename.empty()},
+       m_log{MakeWriter(dir, filename, period)},
+       m_messageLog{m_log, "messages"} {
++  // prosdk: per-thread stack and name (wpiutil SafeThread, read by Start());
++  // the date/time std::format of the rename needs more than the default
++  m_stackSize = PROSDK_DATALOGMANAGER_THREAD_STACK_SIZE;
++  m_threadName = "datalogmgr";
+   StartNTLog();
+   StartConsoleLog();
+ }
+@@ -130,13 +193,21 @@ void Thread::Main() {
+   {
+     std::error_code ec;
+     uintmax_t freeSpace;
+-    auto freeSpaceInfo = prosdk::fs::space(m_logDir, ec);
+-    if (!ec) {
+-      freeSpace = freeSpaceInfo.available;
++    uintmax_t freeSpaceThreshold = FREE_SPACE_THRESHOLD;
++    // prosdk: the ESP32 has no statvfs (fs::space fails there); the platform
++    // asks esp_littlefs for the LittleFS partition (prosdk/platform/Storage.hpp)
++    auto freeSpaceInfo = prosdk::platform::GetStorageSpace(m_logDir);
++    if (freeSpaceInfo) {
++      freeSpace = freeSpaceInfo->available;
++#if PROSDK_TARGET_HW
++      // never aim for more than half of a small partition
++      freeSpaceThreshold =
++          std::min(freeSpaceThreshold, freeSpaceInfo->capacity / 2);
++#endif
+     } else {
+       freeSpace = UINTMAX_MAX;
+     }
+-    if (!m_logDir.empty() && freeSpace < FREE_SPACE_THRESHOLD) {
++    if (!m_logDir.empty() && freeSpace < freeSpaceThreshold) {
+       // Delete oldest WPILIB_*.wpilog files (ignore WPILIB_TBD_*.wpilog as we
+       // just created one)
+       std::vector<prosdk::fs::directory_entry> entries;
+@@ -148,9 +219,17 @@ void Thread::Main() {
+           entries.emplace_back(entry);
+         }
+       }
++      // prosdk: ties (a file system without modification times) are broken by
++      // name, which is the date/time for renamed logs
+       std::sort(entries.begin(), entries.end(),
+                 [](const auto& a, const auto& b) {
+-                  return a.last_write_time() < b.last_write_time();
++                  std::error_code aec, bec;
++                  auto at = a.last_write_time(aec);
++                  auto bt = b.last_write_time(bec);
++                  if (!aec && !bec && at != bt) {
++                    return at < bt;
++                  }
++                  return a.path() < b.path();
+                 });
+ 
+       int count = entries.size();
+@@ -164,7 +243,7 @@ void Thread::Main() {
+           WPILIB_ReportWarning("DataLogManager: Deleted {}",
+                                entry.path().string());
+           freeSpace += size;
+-          if (freeSpace >= FREE_SPACE_THRESHOLD) {
++          if (freeSpace >= freeSpaceThreshold) {
+             break;
+           }
+         } else {
+@@ -172,13 +251,14 @@ void Thread::Main() {
+                                          entry.path().string());
+         }
+       }
+-    } else if (!m_logDir.empty() && freeSpace < 2 * FREE_SPACE_THRESHOLD) {
++    } else if (!m_logDir.empty() && freeSpace < 2 * freeSpaceThreshold) {
+       WPILIB_ReportError(
+           warn::Warning,
+-          "DataLogManager: Log storage device has {} MB of free space "
+-          "remaining! Logs will get deleted below {} MB of free space. "
++          "DataLogManager: Log storage device has {} {} of free space "
++          "remaining! Logs will get deleted below {} {} of free space. "
+           "Consider deleting logs off the storage device.",
+-          freeSpace / 1000000, FREE_SPACE_THRESHOLD / 1000000);
++          freeSpace / SPACE_UNIT, SPACE_UNIT_NAME,
++          freeSpaceThreshold / SPACE_UNIT, SPACE_UNIT_NAME);
+     }
+   }
+ 
+@@ -204,6 +284,7 @@ void Thread::Main() {
+     if (!m_active) {
+       break;
+     }
++    DrainConsoleLog(false);
+     if (!newData) {
+       ++timeoutCount;
+       // pause logging after being disconnected for 10 seconds
+@@ -291,16 +372,87 @@ void Thread::Main() {
+   }
+   prosdk::internal::DriverStationBackend::RemoveRefreshedDataEventHandle(
+       newDataEvent.GetHandle());
++  DrainConsoleLog(true);
+ }
+ 
+-// prosdk: NetworkTables logging and console capture are not available (see above)
++// prosdk: NetworkTables logging is not available (see above)
+ void Thread::StartNTLog() {}
+ 
+ void Thread::StopNTLog() {}
+ 
+-void Thread::StartConsoleLog() {}
++void Thread::StartConsoleLog(bool force) {
++  if (!force && !RobotBase::IsReal()) {
++    return;
++  }
++  auto& capture = GetConsoleCapture();
++  {
++    std::scoped_lock lock{capture.mutex};
++    if (capture.enabled) {
++      return;
++    }
++    capture.enabled = true;
++    capture.buf.clear();
++    capture.buf.reserve(PROSDK_DATALOGMANAGER_CONSOLE_BUFFER);
++    capture.dropped = 0;
++  }
++  {
++    std::scoped_lock lock{m_consoleLogMutex};
++    if (!m_consoleLog) {
++      m_consoleLog = prosdk::log::StringLogEntry{m_log, "console"};
++    }
++  }
++  prosdk::platform::SetConsoleTee(ConsoleCaptureTee);
++}
++
++void Thread::StopConsoleLog() {
++  auto& capture = GetConsoleCapture();
++  {
++    std::scoped_lock lock{capture.mutex};
++    if (!capture.enabled) {
++      return;
++    }
++    capture.enabled = false;
++  }
++  prosdk::platform::SetConsoleTee(nullptr);
++  DrainConsoleLog(true);
++}
+ 
+-void Thread::StopConsoleLog() {}
++void Thread::DrainConsoleLog(bool all) {
++  std::scoped_lock logLock{m_consoleLogMutex};
++  std::string text;
++  size_t dropped;
++  {
++    auto& capture = GetConsoleCapture();
++    std::scoped_lock lock{capture.mutex};
++    // upstream's FileLogger::Buffer: whole lines, without the last newline; a
++    // full buffer without a newline is flushed as is
++    size_t n = capture.buf.size();
++    if (!all) {
++      size_t newline = capture.buf.rfind('\n');
++      if (newline != std::string::npos) {
++        n = newline + 1;
++      } else if (n < PROSDK_DATALOGMANAGER_CONSOLE_BUFFER) {
++        n = 0;
++      }
++    }
++    text.assign(capture.buf, 0, n);
++    capture.buf.erase(0, n);
++    dropped = std::exchange(capture.dropped, 0);
++  }
++  if (!m_consoleLog) {
++    return;
++  }
++  if (!text.empty()) {
++    if (text.back() == '\n') {
++      text.pop_back();
++    }
++    m_consoleLog.Append(text);
++  }
++  if (dropped != 0) {
++    m_consoleLog.Append(std::format(
++        "[DataLogManager: {} bytes of console output dropped]", dropped));
++  }
++}
+ 
+ Instance::Instance(std::string_view dir, std::string_view filename,
+                    double period) {
+@@ -369,7 +521,7 @@ void DataLogManager::LogNetworkTables(bool enabled) {
+ void DataLogManager::LogConsoleOutput(bool enabled) {
+   if (auto thr = GetInstance().owner.GetThread()) {
+     if (enabled) {
+-      thr->StartConsoleLog();
++      thr->StartConsoleLog(true);
+     } else if (!enabled) {
+       thr->StopConsoleLog();
+     }
+diff --git a/src/prosdk/system/DataLogManager.hpp b/src/prosdk/system/DataLogManager.hpp
+index f0961bd..685af03 100644
+--- a/src/prosdk/system/DataLogManager.hpp
++++ b/src/prosdk/system/DataLogManager.hpp
+@@ -31,10 +31,22 @@ namespace prosdk {
+  * On startup, all existing WPILIB_TBD log files are deleted. If there is less
+  * than 50 MB of free space on the target storage, WPILIB_ log files are deleted
+  * (oldest to newest) until there is 50 MB free OR there are 10 files remaining.
++ * prosdk: on the robot the limits are scaled to the LittleFS partition
++ * (prosdk/platform/WpilibcConfig.hpp): PROSDK_DATALOGMANAGER_FREE_SPACE_THRESHOLD
++ * (128 KiB, at most half the partition) and
++ * PROSDK_DATALOGMANAGER_FILE_COUNT_THRESHOLD (3 files); a warning is printed
++ * below twice the threshold. Free space comes from esp_littlefs (only for logs
++ * under /littlefs; elsewhere, e.g. an SD card, nothing is deleted).
+  *
+  * prosdk: NetworkTables is not ported; LogNetworkTables() has no effect.
+- * LogConsoleOutput() has no effect either (upstream tails the SystemCore
+- * console log file).
++ * The console log ("console" entry) holds the prosdk console output
++ * (prosdk::platform::ConsoleWrite: errors, warnings, DataLogManager::Log and
++ * other library messages), not Serial or stdout. It is copied through a
++ * PROSDK_DATALOGMANAGER_CONSOLE_BUFFER byte buffer that the manager's thread
++ * drains every loop (whole lines, stamped when drained, up to 250 ms late);
++ * overflow is counted in a "bytes dropped" line. As upstream it starts by
++ * default only on the robot (RobotBase::IsReal()); LogConsoleOutput(true) also
++ * starts it on the host.
+  */
+ class DataLogManager final {
+  public:
+@@ -92,6 +104,8 @@ class DataLogManager final {
+ 
+   /**
+    * Enable or disable logging of the console output. Defaults to enabled.
++   * prosdk: defaults to enabled on the robot only; true enables it on the host
++   * too (see the class comment).
+    * @param enabled  true to enable, false to disable
+    */
+   static void LogConsoleOutput(bool enabled);

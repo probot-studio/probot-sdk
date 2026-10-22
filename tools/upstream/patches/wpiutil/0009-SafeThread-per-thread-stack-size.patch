@@ -1,0 +1,47 @@
+diff --git a/src/prosdk/impl/wpiutil/cpp/SafeThread.cpp b/src/prosdk/impl/wpiutil/cpp/SafeThread.cpp
+index 84ae6b6..bdc7966 100644
+--- a/src/prosdk/impl/wpiutil/cpp/SafeThread.cpp
++++ b/src/prosdk/impl/wpiutil/cpp/SafeThread.cpp
+@@ -79,7 +79,14 @@ void detail::SafeThreadOwnerBase::Start(std::shared_ptr<SafeThreadBase> thr) {
+     return;
+   }
+   // prosdk: never the ESP-IDF pthread defaults (design/PORT.md section 7)
+-  prosdk::platform::ScopedThreadConfig threadConfig{{.name = "prosdk"}};
++  prosdk::platform::ThreadConfig config{.name = "prosdk"};
++  if (thr->m_stackSize != 0) {
++    config.stackSize = thr->m_stackSize;
++  }
++  if (thr->m_threadName != nullptr) {
++    config.name = thr->m_threadName;
++  }
++  prosdk::platform::ScopedThreadConfig threadConfig{config};
+   m_stdThread = std::thread([=] {
+     gSafeThreadRefcount++;
+     void* opaque = (gOnSafeThreadStart.load())();
+diff --git a/src/prosdk/util/SafeThread.hpp b/src/prosdk/util/SafeThread.hpp
+index 3707d7d..c3f1315 100644
+--- a/src/prosdk/util/SafeThread.hpp
++++ b/src/prosdk/util/SafeThread.hpp
+@@ -5,6 +5,7 @@
+ #pragma once
+ 
+ #include <atomic>
++#include <cstddef>
+ #include <memory>
+ #include <thread>
+ #include <utility>
+@@ -27,6 +28,14 @@ class SafeThreadBase {
+   mutable prosdk::util::mutex m_mutex;
+   std::atomic_bool m_active{true};
+   std::thread::id m_threadId;
++
++  // prosdk: creation settings of the thread, read by SafeThreadOwner::Start()
++  // (set them in the derived class's constructor). On the ESP32 the thread
++  // gets this stack size in bytes and this FreeRTOS task name; 0 / nullptr
++  // select the prosdk defaults (PROSDK_THREAD_STACK_SIZE, "prosdk";
++  // prosdk/platform/Thread.hpp). Ignored on the host.
++  std::size_t m_stackSize = 0;
++  const char* m_threadName = nullptr;
+ };
+ 
+ class SafeThread : public SafeThreadBase {
