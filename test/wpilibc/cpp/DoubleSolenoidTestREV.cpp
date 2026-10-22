@@ -1,0 +1,87 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+
+#include "prosdk/hardware/pneumatic/DoubleSolenoid.hpp"
+#include "prosdk/hardware/pneumatic/PneumaticsControlModule.hpp"
+#include "prosdk/hardware/pneumatic/Solenoid.hpp"
+
+namespace prosdk {
+
+TEST_CASE("DoubleSolenoidREVTest ValidInitialization", "[wpilibc]") {
+  DoubleSolenoid solenoid{CANPort::CAN_S0, 3,
+                          prosdk::PneumaticsModuleType::CTRE_PCM, 2, 3};
+  solenoid.Set(DoubleSolenoid::REVERSE);
+  CHECK(DoubleSolenoid::REVERSE == solenoid.Get());
+
+  solenoid.Set(DoubleSolenoid::FORWARD);
+  CHECK(DoubleSolenoid::FORWARD == solenoid.Get());
+
+  solenoid.Set(DoubleSolenoid::OFF);
+  CHECK(DoubleSolenoid::OFF == solenoid.Get());
+}
+
+TEST_CASE("DoubleSolenoidREVTest ThrowForwardPortAlreadyInitialized",
+          "[wpilibc]") {
+  // Single solenoid that is reused for forward port
+  Solenoid solenoid{CANPort::CAN_S0, 5, prosdk::PneumaticsModuleType::CTRE_PCM, 2};
+  CHECK_THROWS_AS(DoubleSolenoid(CANPort::CAN_S0, 5,
+                                 prosdk::PneumaticsModuleType::CTRE_PCM, 2, 3),
+                  std::runtime_error);
+}
+
+TEST_CASE("DoubleSolenoidREVTest ThrowReversePortAlreadyInitialized",
+          "[wpilibc]") {
+  // Single solenoid that is reused for forward port
+  Solenoid solenoid{CANPort::CAN_S0, 6, prosdk::PneumaticsModuleType::CTRE_PCM, 3};
+  CHECK_THROWS_AS(DoubleSolenoid(CANPort::CAN_S0, 6,
+                                 prosdk::PneumaticsModuleType::CTRE_PCM, 2, 3),
+                  std::runtime_error);
+}
+
+TEST_CASE("DoubleSolenoidREVTest ThrowBothPortsAlreadyInitialized",
+          "[wpilibc]") {
+  PneumaticsControlModule pcm{CANPort::CAN_S0, 6};
+  // Single solenoid that is reused for forward port
+  Solenoid solenoid0(CANPort::CAN_S0, 6, prosdk::PneumaticsModuleType::CTRE_PCM,
+                     2);
+  Solenoid solenoid1(CANPort::CAN_S0, 6, prosdk::PneumaticsModuleType::CTRE_PCM,
+                     3);
+  CHECK_THROWS_AS(DoubleSolenoid(CANPort::CAN_S0, 6,
+                                 prosdk::PneumaticsModuleType::CTRE_PCM, 2, 3),
+                  std::runtime_error);
+}
+
+TEST_CASE("DoubleSolenoidREVTest Toggle", "[wpilibc]") {
+  DoubleSolenoid solenoid{CANPort::CAN_S0, 4,
+                          prosdk::PneumaticsModuleType::CTRE_PCM, 2, 3};
+  // Bootstrap it into reverse
+  solenoid.Set(DoubleSolenoid::REVERSE);
+
+  solenoid.Toggle();
+  CHECK(DoubleSolenoid::FORWARD == solenoid.Get());
+
+  solenoid.Toggle();
+  CHECK(DoubleSolenoid::REVERSE == solenoid.Get());
+
+  // Of shouldn't do anything on toggle
+  solenoid.Set(DoubleSolenoid::OFF);
+  solenoid.Toggle();
+  CHECK(DoubleSolenoid::OFF == solenoid.Get());
+}
+
+TEST_CASE("DoubleSolenoidREVTest InvalidForwardPort", "[wpilibc]") {
+  CHECK_THROWS_AS(DoubleSolenoid(CANPort::CAN_S0, 0,
+                                 prosdk::PneumaticsModuleType::CTRE_PCM, 100, 1),
+                  std::runtime_error);
+}
+
+TEST_CASE("DoubleSolenoidREVTest InvalidReversePort", "[wpilibc]") {
+  CHECK_THROWS_AS(DoubleSolenoid(CANPort::CAN_S0, 0,
+                                 prosdk::PneumaticsModuleType::CTRE_PCM, 0, 100),
+                  std::runtime_error);
+}
+}  // namespace wpi

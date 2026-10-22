@@ -1,0 +1,68 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/sysid/SysIdRoutineLog.hpp"
+
+#include <format>
+#include <string>
+
+#include "prosdk/system/DataLogManager.hpp"
+
+using namespace prosdk::sysid;
+
+SysIdRoutineLog::SysIdRoutineLog(std::string_view logName)
+    : m_logName(logName) {}
+
+SysIdRoutineLog::MotorLog::MotorLog(std::string_view motorName,
+                                    std::string_view logName,
+                                    LogEntries* logEntries)
+    : m_motorName(motorName), m_logName(logName), m_logEntries(logEntries) {
+  (*logEntries)[motorName] = MotorEntries();
+}
+
+SysIdRoutineLog::MotorLog& SysIdRoutineLog::MotorLog::value(
+    std::string_view name, double value, std::string_view unit) {
+  auto& motorEntries = (*m_logEntries)[m_motorName];
+
+  if (!motorEntries.contains(name)) {
+    prosdk::log::DataLog& log = prosdk::DataLogManager::GetLog();
+
+    motorEntries[name] = prosdk::log::DoubleLogEntry(
+        log, std::format("{}-{}-{}", name, m_motorName, m_logName), unit);
+  }
+
+  motorEntries[name].Append(value);
+  return *this;
+}
+
+SysIdRoutineLog::MotorLog SysIdRoutineLog::Motor(std::string_view motorName) {
+  return MotorLog{motorName, m_logName, &m_logEntries};
+}
+
+void SysIdRoutineLog::RecordState(State state) {
+  if (!m_stateInitialized) {
+    m_state =
+        prosdk::log::StringLogEntry{prosdk::DataLogManager::GetLog(),
+                                 std::format("sysid-test-state-{}", m_logName)};
+    m_stateInitialized = true;
+  }
+  m_state.Append(StateEnumToString(state));
+}
+
+std::string SysIdRoutineLog::StateEnumToString(State state) {
+  switch (state) {
+    case State::QUASISTATIC_FORWARD:
+      return "quasistatic-forward";
+    case State::QUASISTATIC_REVERSE:
+      return "quasistatic-reverse";
+    case State::DYNAMIC_FORWARD:
+      return "dynamic-forward";
+    case State::DYNAMIC_REVERSE:
+      return "dynamic-reverse";
+    case State::NONE:
+      return "none";
+    default:
+      return "none";
+  }
+}

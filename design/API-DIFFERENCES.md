@@ -36,6 +36,10 @@ the Java names are the same upper-case words, so there is no other spelling to u
 | `wpi::util::Alert::Level::HIGH` / `MEDIUM` / `LOW` | `prosdk::util::Alert::Level::kHigh` / `kMedium` / `kLow` | `HIGH`, `LOW` |
 | `wpi::tunables::TunableConfig::Polling::DEFAULT` / `ALWAYS_GET` / `GET_ON_CHANGE` | `prosdk::tunables::TunableConfig::Polling::kDefault` / `kAlwaysGet` / `kGetOnChange` | `DEFAULT` |
 | `wpi::hal::SimDevice::Direction::INPUT` / `OUTPUT` / `BIDIR` | `prosdk::hal::SimDevice::Direction::kInput` / `kOutput` / `kBidir` (the WPILib Java spelling) | `INPUT`, `OUTPUT` |
+| `wpi::math::Debouncer::DebounceType::RISING` / `FALLING` / `BOTH` | `prosdk::math::Debouncer::DebounceType::kRising` / `kFalling` / `kBoth` (also the default argument of `BooleanEvent::Debounce`) | `RISING`, `FALLING` |
+| `wpi::CompressorConfigType::DISABLED` / `DIGITAL` / `ANALOG` / `HYBRID` | `prosdk::CompressorConfigType::kDisabled` / `kDigital` / `kAnalog` / `kHybrid` | `DISABLED`, `ANALOG` |
+| `Button::CROSS` ... `Button::RIGHT_FUNCTION` of the PlayStation controllers (`DualShock4Controller`, `DualSenseController`, `DualSenseEdgeController`, `NiDsPS4Controller`, `NiDsPS5Controller`) | `Button::kCross`, `kCircle`, `kSquare`, `kTriangle`, `kShare`/`kCreate`, `kPS`, `kOptions`, `kL1`, `kR1`, `kL2`, `kR2`, `kL3`, `kR3`, `kDpadUp`, `kDpadDown`, `kDpadLeft`, `kDpadRight`, `kTouchpad`, `kMicrophone`, `kRightPaddle1`, `kLeftPaddle1`, `kLeftFunction`, `kRightFunction` (only in these five classes; the other controllers keep their `Button` names) | `PS` (Xtensa `specreg.h`) |
+| `BooleanEvent PS(EventLoop*)` of the same five classes | `PSButton(EventLoop*)` (matches `GetPSButton()` / `GetPSButtonPressed()`) | `PS` |
 
 Other Arduino macro names used inside vendored headers (internal names, parameters, `F`, `likely`, ...)
 need no rename: each public header is wrapped in `#pragma push_macro` / `#undef` / `#pragma pop_macro` for
@@ -77,6 +81,19 @@ spelled in a sketch, because the Xtensa header `xtensa/config/specreg.h` (includ
 | Eigen non-MPL code | refused at compile time (`EIGEN_MPL2_ONLY`) | config |
 | `PoseEstimator::SampleAt`, `PoseEstimator3d::SampleAt` | none (build fix: `std::optional::transform` is C++23; written as an explicit check) | `wpimath/0004` |
 | Sleipnir `Problem` constraint-type printout | none (build fix: `std::views::zip` is C++23; indexed loop); only reachable with diagnostics, which are compiled out | `sleipnir/0003` |
+| `prosdk::RobotBase` constructor | no NetworkTables server, no NT telemetry/tunable backend registration, no `/Robot/ProgramStartTime`, no NT connection usage reports. Calls `prosdk::platform::OnRobotBaseConstructed()` instead (hook of the robot host, `prosdk/platform/RobotHost.hpp`; no-op until installed). MathShared and the warning-to-Alert reporters are set up as upstream | `wpilibc/0001` |
+| `RobotBase::IsReal()` / `IsSimulation()`, `prosdk::impl::ResetMotorSafety` | `__FIRST_SYSTEMCORE__` replaced by `PROSDK_TARGET_HW`: the ESP32 is "real", the host is simulation | `wpilibc/0001` |
+| `prosdk::StartRobot<Robot>()` | compiles unchanged except that the robot thread (only when `HAL_HasMain()`) is started through `ScopedThreadConfig` (name `robot`, stack `PROSDK_ROBOT_THREAD_STACK_SIZE` = 16384). How a sketch runs a robot class on probot-core's loop is the robot host's job (not part of wpilibc) | `wpilibc/0001` |
+| Robot framework status lines (`Robot program starting`, `startup complete`, opmode creating/starting/ending/closing, `Default ...() method... Override me!`, HAL init failure, default telemetry/tunable warnings) | written to the platform console (`prosdk::platform::ConsoleWrite`, Driver Station console on the robot) instead of stdout/stderr | `wpilibc/0001`, `wpilibc/0002` |
+| `IterativeRobotBase` / `OpModeRobotBase` loop | instead of `NetworkTableInstance::FlushLocal()` each iteration calls `prosdk::platform::FlushTelemetry()` (robot host hook, no-op until installed) | `wpilibc/0002` |
+| `prosdk::internal::DriverStationBackend` | the `/DriverStation` NetworkTables table (match data, control word, opmode name, `.type`) is not published; everything else (joystick data, edge flags, alerts, DataLog of DS/joystick data, opmode lookup) is unchanged | `wpilibc/0003` |
+| `prosdk::Preferences` | API unchanged; storage is `prosdk/platform/PreferencesStore.hpp` instead of the persistent NT table `/Preferences`. ESP32: one NVS blob (namespace `prosdk`, key `prefs`), rewritten on every change (a `Set` of the stored value writes nothing; do not set changing values every loop). Host: memory, or a JSON file named with `prosdk::platform::prefs::SetPreferencesFile()`. Getters follow the NT entry semantics (numeric getters convert between integer/float/double, other types give the default); a `Set` replaces value and type (in NT a `Set` of another type fails). No `.type` key. Name clash: Arduino-ESP32's Preferences library defines a global `::Preferences`; with `using namespace prosdk;` and `<Preferences.h>` in the same sketch, write `prosdk::Preferences` | `wpilibc/0005` |
+| `prosdk::filesystem::GetOperatingDirectory()` / `GetDeployDirectory()` | ESP32: `/littlefs` and `/littlefs/deploy` (LittleFS mounted by the sketch with `LittleFS.begin()`; the sketch's `data/deploy` folder after a LittleFS upload). Host: upstream simulation paths. Both configurable (`prosdk/platform/Storage.hpp`). `GetLaunchDirectory()` returns `/` if the current path is unavailable | `wpilibc/0006` |
+| `prosdk::DataLogManager` | default directory `prosdk::platform::GetLogDirectory()`: ESP32 `/littlefs/logs` when LittleFS is mounted, otherwise the log discards its data (a writer whose output goes nowhere; `GetLogDir()` is `""`) and a console line says so; host `<operating directory>/logs`. `LogNetworkTables()` and `LogConsoleOutput()` have no effect (no ntcore; upstream's console capture tails a SystemCore log file with `FileLogger`, not vendored). Random file names come from `prosdk::platform::RandomEngine`. `Log()` echoes to the platform console | `wpilibc/0007` |
+| `prosdk::Notifier`, `prosdk::Watchdog`, `prosdk::internal::DriverStationModeThread` | threads started through `ScopedThreadConfig` (names `notifier`, `watchdog`, `dsmode`; stacks `PROSDK_NOTIFIER_THREAD_STACK_SIZE` 8192, `PROSDK_WATCHDOG_THREAD_STACK_SIZE` 6144, `PROSDK_DS_MODE_THREAD_STACK_SIZE` 6144 in `prosdk/platform/WpilibcConfig.hpp`) | `wpilibc/0008` |
+| Pneumatics (`Solenoid`, `DoubleSolenoid`, `Compressor`, `PneumaticsControlModule`, `PneumaticHub`, `PneumaticsBase`), `PowerDistribution`, `OnboardIMU`, CAN (`CAN`, CAN motor/device APIs) and their `*Sim` classes | API vendored unchanged and compiled. ESP32: the kit has no PCM/PH/PDP/PDH, no onboard IMU and no CAN bus; the ESP32 HAL backend reports an error when one is constructed (`design/hal-esp32.md`), so they fail at run time, not at compile time. Host: the simulation backend implements them as upstream (the upstream tests run) | HAL stubs |
+| `GetWPILibVersion()` | returns `prosdk 2027.0.0-alpha.1 (WPILib b68effca)` (upstream: generated from the Gradle version) | hand-written `src/prosdk/platform/WPILibVersion.cpp` |
+| Upstream test `TimedRobotTest` `ConstructorPublishesProgramStartTime`, `ConstructorRegistersTelemetryAndTunableBackends` | replaced by `TimedRobotTest RobotHostHooks` (they read NT topics; ntcore is not ported). The robot tests no longer reset the NT instance | `wpilibc/0004` |
 
 ## 4. Excluded files (vendored modules)
 
@@ -113,6 +130,15 @@ spelled in a sketch, because the Xtensa header `xtensa/config/specreg.h` (includ
 | datalog (tests) | `datalog/src/test/native/cpp/DataLogReaderThreadTest.cpp` | DataLogReaderThread is not vendored (upb) |
 | datalog (tests) | `datalog/src/test/native/cpp/FileLoggerTest.cpp` | FileLogger is not vendored (inotify) |
 | wpimath | `wpimath/src/main/native/cpp/jni/*` | JNI (no JVM on the MCU) |
+| wpilibc | `wpilibc/src/main/native/include/wpi/backend/NetworkTablesTelemetryBackend.hpp`, `cpp/backend/NetworkTablesTelemetryBackend.cpp` | NetworkTables telemetry backend (ntcore is not ported); the robot host registers the probot-core dashboard backend (`src/prosdk/platform/dashboard`) instead |
+| wpilibc | `wpilibc/src/main/native/include/wpi/backend/NetworkTablesTunableBackend.hpp`, `cpp/backend/NetworkTablesTunableBackend.cpp` | NetworkTables tunable backend; replaced like the telemetry backend |
+| wpilibc | `wpilibc/src/main/native/include/wpi/event/NetworkBooleanEvent.hpp`, `cpp/event/NetworkBooleanEvent.cpp` | BooleanEvent over an NT boolean topic; to be re-implemented over tunables |
+| wpilibc | `wpilibc/src/main/native/include/wpi/system/SystemServer.hpp`, `cpp/system/SystemServer.cpp` | returns the SystemCore system server's ntcore instance (HAL `SystemServer.h` is not vendored) |
+| wpilibc | `wpilibc/src/main/native/include/wpi/hardware/expansionhub/*`, `cpp/hardware/expansionhub/*` | REV Expansion Hub through the SystemCore USB `rhsp` server, driven over NT topics; no rhsp server, ntcore is not ported |
+| wpilibc (tests) | `wpilibc/src/test/native/cpp/NetworkTablesTelemetryBackendTest.cpp`, `NetworkTablesTunableBackendTest.cpp` | the NT backends are not vendored |
+| wpilibc (tests) | `wpilibc/src/test/native/cpp/event/NetworkBooleanEventTest.cpp` | NetworkBooleanEvent is not vendored |
+| wpilibc (tests) | `wpilibc/src/test/native/cpp/UnitNetworkTablesTest.cpp` | unit-typed NT topics (ntcore is not ported) |
+| wpilibc (tests) | `wpilibc/src/test/native/cpp/hardware/ExpansionHubMotorTest.cpp` | ExpansionHub is not vendored |
 
 Whole upstream trees not vendored:
 
@@ -139,6 +165,10 @@ Whole upstream trees not vendored:
 | `wpimath/src/main/proto` | `.proto` sources; the committed nanopb output (`src/generated/.../wpimath/protobuf`) is vendored instead |
 | `wpimath/docs` | design notes (not code) |
 | `wpimath/src/main/native/thirdparty/eigen/include/BUILD.bazel`, `MODULE.bazel` | Bazel build files |
+| `wpilibc/src/test/native/c` | C compile check of `HAL.h` together with `ntcore.h` (ntcore is not ported) |
+| `wpilibc/src/generate` | Jinja templates of the HID classes; their output (`wpilibc/src/generated`, 15 controllers and 15 `*ControllerSim` classes plus their tests) is committed upstream and vendored instead. `WPILibVersion.cpp.in`: hand-written `src/prosdk/platform/WPILibVersion.cpp` |
+| `wpilibc/src/main/python`, `wpilibc/src/test/python` | Python bindings and tests |
+| `wpilibc/src/dev` | upstream developer scratch executable |
 
 The source of truth for these lists is the module data in `tools/upstream/modules/*.py`; this table is
 updated with it.
@@ -165,5 +195,8 @@ are checked through the module headers that include them.
 
 Wave 1 (foundation) covers wpiutil, telemetry and tunables. Wave 2 adds wpimath (wpi/math, wpi/units,
 struct, protobuf, json), Eigen, gcem and Sleipnir, the HAL (common code, the host simulation backend
-and the hand-written ESP32-S3 backend, `design/hal-esp32.md`) and the DataLog writer. Later waves
-(wpilibc, commandsv2) add their renames and exclusions here.
+and the hand-written ESP32-S3 backend, `design/hal-esp32.md`) and the DataLog writer. Wave 3 adds
+wpilibc (framework, opmodes, Driver Station and the generated HID classes, events, hardware, drive,
+LED, system, sysid, preferences, simulation, smartdashboard), with NetworkTables removed by the
+`wpilibc/*` patches and the robot host hooks in `prosdk/platform/RobotHost.hpp`. Later waves
+(commandsv2) add their renames and exclusions here.

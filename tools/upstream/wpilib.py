@@ -83,7 +83,23 @@ CXX_SHIM_HEADERS = {
 # Section 5: identifiers users must type that collide with Arduino macros. Every enumerator of an
 # enum with at least one collision is renamed (k prefix, WPILib C++ style) so the enum stays
 # consistent. Applied to every module as `<Qualifier>::<NAME>` and inside the enum body in the
-# defining header. Listed in design/API-DIFFERENCES.md.
+# defining header(s). Listed in design/API-DIFFERENCES.md.
+#
+# Optional keys: `define_file` may be a list (several classes with a nested enum of the same
+# name); `scope` (fnmatch globs on the upstream path) limits the qualified renames to those files,
+# for enum names such as `Button` that other classes use with different enumerators; `members`
+# renames a token followed by `(` (a member function) in the scoped files.
+_PS_BUTTONS = {
+    "CROSS": "kCross", "CIRCLE": "kCircle", "SQUARE": "kSquare", "TRIANGLE": "kTriangle",
+    "SHARE": "kShare", "CREATE": "kCreate", "PS": "kPS", "OPTIONS": "kOptions",
+    "L1": "kL1", "R1": "kR1", "L2": "kL2", "R2": "kR2", "L3": "kL3", "R3": "kR3",
+    "DPAD_UP": "kDpadUp", "DPAD_DOWN": "kDpadDown", "DPAD_LEFT": "kDpadLeft",
+    "DPAD_RIGHT": "kDpadRight", "TOUCHPAD": "kTouchpad", "MICROPHONE": "kMicrophone",
+    "RIGHT_PADDLE_1": "kRightPaddle1", "LEFT_PADDLE_1": "kLeftPaddle1",
+    "LEFT_FUNCTION": "kLeftFunction", "RIGHT_FUNCTION": "kRightFunction",
+}
+_PS_CONTROLLERS = ["DualShock4Controller", "DualSenseController", "DualSenseEdgeController",
+                   "NiDsPS4Controller", "NiDsPS5Controller"]
 ARDUINO_RENAMES = [
     {
         "enum": "Level",
@@ -101,7 +117,35 @@ ARDUINO_RENAMES = [
         "define_file": "wpi/hal/SimDevice.hpp",
         "names": {"INPUT": "kInput", "OUTPUT": "kOutput", "BIDIR": "kBidir"},
     },
+    {
+        "enum": "DebounceType",
+        "define_file": "wpi/math/filter/Debouncer.hpp",
+        "names": {"RISING": "kRising", "FALLING": "kFalling", "BOTH": "kBoth"},
+    },
+    {
+        "enum": "CompressorConfigType",
+        "define_file": "wpi/hardware/pneumatic/CompressorConfigType.hpp",
+        "names": {"DISABLED": "kDisabled", "DIGITAL": "kDigital", "ANALOG": "kAnalog",
+                  "HYBRID": "kHybrid"},
+    },
+    {
+        # `PS` (PlayStation button) is an Xtensa special-register macro (xtensa/config/specreg.h)
+        "enum": "Button",
+        "define_file": [f"wpi/driverstation/{c}.hpp" for c in _PS_CONTROLLERS],
+        "scope": [f"*{c}*" for c in _PS_CONTROLLERS],
+        "names": _PS_BUTTONS,
+        "members": {"PS": "PSButton"},
+    },
 ]
+
+
+def _define_files(r: dict) -> list[str]:
+    d = r["define_file"]
+    return [d] if isinstance(d, str) else list(d)
+
+
+def _in_scope(r: dict, up_file: str) -> bool:
+    return "scope" not in r or any(fnmatch.fnmatchcase(up_file, g) for g in r["scope"])
 
 # Baseline for the Arduino macro set: every macro defined after <Arduino.h> that is not already
 # defined by the C/C++ standard library (and POSIX headers vendored code uses) under the same flags.
@@ -439,8 +483,10 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
     defined_shim_headers: set[str] = set()
     define_file = None
     for r in ARDUINO_RENAMES:
-        if up_file.endswith("/" + r["define_file"]) or up_file == r["define_file"]:
-            define_file = r
+        for d in _define_files(r):
+            if up_file.endswith("/" + d) or up_file == d:
+                define_file = r
+    scoped = [r for r in ARDUINO_RENAMES if _in_scope(r, up_file)]
 
     # enum bodies to rename in the defining file: token index ranges
     enum_ranges: list[tuple[int, int, dict]] = []
@@ -478,7 +524,7 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
                 s = re.sub(r"\bwpi::", "prosdk::", s)
                 s = re.sub(r'([<"])wpi/', r"\1prosdk/", s)
             if tr["arduino_renames"]:
-                s = _qualified_renames(s)
+                s = _qualified_renames(s, scoped)
             t[1] = s
             continue
         if kind == "string":
@@ -541,7 +587,7 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
                         used_shims.add(CXX_SHIMS[name])
             continue
         if tr["arduino_renames"]:
-            for r in ARDUINO_RENAMES:
+            for r in scoped:
                 if s in r["names"]:
                     p = _sig(toks, i, -1)
                     if _tok(toks, p)[1] == "::":
@@ -549,6 +595,9 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
                         if _tok(toks, q)[1] == r["enum"]:
                             t[1] = r["names"][s]
                             break
+                if s in r.get("members", {}) and _tok(toks, _sig(toks, i, 1))[1] == "(":
+                    t[1] = r["members"][s]
+                    break
             for (a, b, names) in enum_ranges:
                 if a < i < b and s in names:
                     nx = _sig(toks, i, 1)
@@ -573,8 +622,8 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
     return out
 
 
-def _qualified_renames(s: str) -> str:
-    for r in ARDUINO_RENAMES:
+def _qualified_renames(s: str, renames: list[dict]) -> str:
+    for r in renames:
         for old, new in r["names"].items():
             s = re.sub(rf"\b{r['enum']}::{old}\b", f"{r['enum']}::{new}", s)
     return s

@@ -1,0 +1,1145 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/hardware/led/LEDPattern.hpp"
+
+#include <format>
+
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+
+#include "prosdk/math/util/MathUtil.hpp"
+#include "prosdk/util/MathExtras.hpp"
+#include "prosdk/util/timestamp.h"
+
+namespace prosdk {
+
+static LEDPattern whiteYellowPurple{[](auto data, auto writer) {
+  for (size_t led = 0; led < data.size(); led++) {
+    switch (led % 3) {
+      case 0:
+        writer(led, prosdk::util::Color::WHITE);
+        break;
+      case 1:
+        writer(led, prosdk::util::Color::YELLOW);
+        break;
+      case 2:
+        writer(led, prosdk::util::Color::PURPLE);
+        break;
+    }
+  }
+}};
+
+void AssertIndexColor(std::span<AddressableLED::LEDData> data, int index,
+                      prosdk::util::Color color);
+prosdk::util::Color LerpColors(prosdk::util::Color a, prosdk::util::Color b, double t);
+
+TEST_CASE("LEDPatternTest SolidColor", "[wpilibc]") {
+  LEDPattern pattern = LEDPattern::Solid(prosdk::util::Color::YELLOW);
+  std::array<AddressableLED::LEDData, 5> buffer;
+
+  // prefill
+  for (int i = 0; i < 5; i++) {
+    buffer[i].SetLED(prosdk::util::Color::PURPLE);
+  }
+
+  pattern.ApplyTo(buffer);
+  for (int i = 0; i < 5; i++) {
+    AssertIndexColor(buffer, i, prosdk::util::Color::YELLOW);
+  }
+}
+
+TEST_CASE("LEDPatternTest EmptyGradientSetsToBlack", "[wpilibc]") {
+  std::array<prosdk::util::Color, 0> colors;
+  LEDPattern pattern =
+      LEDPattern::Gradient(LEDPattern::GradientType::CONTINUOUS, colors);
+  std::array<AddressableLED::LEDData, 5> buffer;
+  pattern.ApplyTo(buffer);
+  for (int i = 0; i < 5; i++) {
+    AssertIndexColor(buffer, i, prosdk::util::Color::BLACK);
+  }
+}
+
+TEST_CASE("LEDPatternTest SingleColorGradientSetsSolid", "[wpilibc]") {
+  std::array<prosdk::util::Color, 1> colors{prosdk::util::Color::YELLOW};
+  LEDPattern pattern =
+      LEDPattern::Gradient(LEDPattern::GradientType::CONTINUOUS, colors);
+  std::array<AddressableLED::LEDData, 5> buffer;
+  pattern.ApplyTo(buffer);
+  for (int i = 0; i < 5; i++) {
+    AssertIndexColor(buffer, i, prosdk::util::Color::YELLOW);
+  }
+}
+
+TEST_CASE("LEDPatternTest Gradient2Colors", "[wpilibc]") {
+  std::array<prosdk::util::Color, 2> colors{prosdk::util::Color::YELLOW,
+                                         prosdk::util::Color::PURPLE};
+  LEDPattern pattern =
+      LEDPattern::Gradient(LEDPattern::GradientType::CONTINUOUS, colors);
+  std::array<AddressableLED::LEDData, 99> buffer;
+  pattern.ApplyTo(buffer);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::YELLOW);
+  AssertIndexColor(buffer, 25,
+                   LerpColors(prosdk::util::Color::YELLOW,
+                              prosdk::util::Color::PURPLE, 25 / 49.0));
+  AssertIndexColor(buffer, 49, prosdk::util::Color::PURPLE);
+  AssertIndexColor(buffer, 74,
+                   LerpColors(prosdk::util::Color::PURPLE,
+                              prosdk::util::Color::YELLOW, 25 / 49.0));
+  AssertIndexColor(buffer, 98, prosdk::util::Color::YELLOW);
+}
+
+TEST_CASE("LEDPatternTest DiscontinuousGradient2Colors", "[wpilibc]") {
+  std::array<prosdk::util::Color, 2> colors{prosdk::util::Color::YELLOW,
+                                         prosdk::util::Color::PURPLE};
+  LEDPattern pattern =
+      LEDPattern::Gradient(LEDPattern::GradientType::DISCONTINUOUS, colors);
+  std::array<AddressableLED::LEDData, 99> buffer;
+  pattern.ApplyTo(buffer);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::YELLOW);
+  AssertIndexColor(
+      buffer, 49,
+      LerpColors(prosdk::util::Color::YELLOW, prosdk::util::Color::PURPLE, 0.5));
+  AssertIndexColor(buffer, 98, prosdk::util::Color::PURPLE);
+}
+
+TEST_CASE("LEDPatternTest Gradient3Colors", "[wpilibc]") {
+  std::array<prosdk::util::Color, 3> colors{prosdk::util::Color::YELLOW,
+                                         prosdk::util::Color::PURPLE,
+                                         prosdk::util::Color::WHITE};
+  LEDPattern pattern =
+      LEDPattern::Gradient(LEDPattern::GradientType::CONTINUOUS, colors);
+  std::array<AddressableLED::LEDData, 99> buffer;
+  pattern.ApplyTo(buffer);
+
+  AssertIndexColor(buffer, 0, prosdk::util::Color::YELLOW);
+  AssertIndexColor(buffer, 25,
+                   LerpColors(prosdk::util::Color::YELLOW,
+                              prosdk::util::Color::PURPLE, 25 / 33.0));
+  AssertIndexColor(buffer, 33, prosdk::util::Color::PURPLE);
+  AssertIndexColor(
+      buffer, 58,
+      LerpColors(prosdk::util::Color::PURPLE, prosdk::util::Color::WHITE, 25 / 33.0));
+  AssertIndexColor(buffer, 66, prosdk::util::Color::WHITE);
+  AssertIndexColor(
+      buffer, 91,
+      LerpColors(prosdk::util::Color::WHITE, prosdk::util::Color::YELLOW, 25 / 33.0));
+  AssertIndexColor(
+      buffer, 98,
+      LerpColors(prosdk::util::Color::WHITE, prosdk::util::Color::YELLOW, 32 / 33.0));
+}
+
+TEST_CASE("LEDPatternTest DiscontinuousGradient3Colors", "[wpilibc]") {
+  std::array<prosdk::util::Color, 3> colors{prosdk::util::Color::YELLOW,
+                                         prosdk::util::Color::PURPLE,
+                                         prosdk::util::Color::WHITE};
+  LEDPattern pattern =
+      LEDPattern::Gradient(LEDPattern::GradientType::DISCONTINUOUS, colors);
+  std::array<AddressableLED::LEDData, 101> buffer;
+  pattern.ApplyTo(buffer);
+
+  AssertIndexColor(buffer, 0, prosdk::util::Color::YELLOW);
+  AssertIndexColor(
+      buffer, 25,
+      LerpColors(prosdk::util::Color::YELLOW, prosdk::util::Color::PURPLE, 0.5));
+  AssertIndexColor(buffer, 50, prosdk::util::Color::PURPLE);
+  AssertIndexColor(
+      buffer, 75,
+      LerpColors(prosdk::util::Color::PURPLE, prosdk::util::Color::WHITE, 0.5));
+  AssertIndexColor(buffer, 100, prosdk::util::Color::WHITE);
+}
+
+TEST_CASE("LEDPatternTest EmptyStepsSetsToBlack", "[wpilibc]") {
+  std::array<std::pair<double, prosdk::util::Color>, 0> steps;
+  LEDPattern pattern = LEDPattern::Steps(steps);
+  std::array<AddressableLED::LEDData, 5> buffer;
+
+  // prefill
+  for (int i = 0; i < 5; i++) {
+    buffer[i].SetLED(prosdk::util::Color::PURPLE);
+  }
+
+  pattern.ApplyTo(buffer);
+
+  for (int i = 0; i < 5; i++) {
+    AssertIndexColor(buffer, i, prosdk::util::Color::BLACK);
+  }
+}
+
+TEST_CASE("LEDPatternTest SingleStepSetsSolid", "[wpilibc]") {
+  std::array<std::pair<double, prosdk::util::Color>, 1> steps{
+      std::pair{0.0, prosdk::util::Color::YELLOW}};
+  LEDPattern pattern = LEDPattern::Steps(steps);
+  std::array<AddressableLED::LEDData, 5> buffer;
+
+  pattern.ApplyTo(buffer);
+
+  for (int i = 0; i < 5; i++) {
+    AssertIndexColor(buffer, i, prosdk::util::Color::YELLOW);
+  }
+}
+
+TEST_CASE("LEDPatternTest SingleHalfStepSetsHalfOffHalfColor", "[wpilibc]") {
+  std::array<std::pair<double, prosdk::util::Color>, 1> steps{
+      std::pair{0.5, prosdk::util::Color::YELLOW}};
+  LEDPattern pattern = LEDPattern::Steps(steps);
+  std::array<AddressableLED::LEDData, 99> buffer;
+
+  pattern.ApplyTo(buffer);
+
+  // [0, 48] should be black...
+  for (int i = 0; i < 49; i++) {
+    AssertIndexColor(buffer, i, prosdk::util::Color::BLACK);
+  }
+
+  // ... and [49, <end>] should be the color that was set
+  for (int i = 49; i < 99; i++) {
+    AssertIndexColor(buffer, i, prosdk::util::Color::YELLOW);
+  }
+}
+
+TEST_CASE("LEDPatternTest ScrollRelativeForward", "[wpilibc]") {
+  // A black to white gradient
+  LEDPattern pattern = LEDPattern{[=](auto data, auto writer) {
+    for (size_t led = 0; led < data.size(); led++) {
+      int ch = static_cast<int>(led % 256);
+      writer(led, prosdk::util::Color{ch, ch, ch});
+    }
+  }};
+  std::array<AddressableLED::LEDData, 256> buffer;
+
+  // Scrolling at 1/256th of the buffer per second,
+  // or 1 individual diode per second
+  auto scroll =
+      pattern.ScrollAtRelativeVelocity(prosdk::units::hertz_t{1 / 256.0});
+
+  static int64_t now = 0;
+  WPI_SetNowImpl([] { return now; });
+
+  for (int time = 0; time < 500; time++) {
+    // convert time (seconds) to nanoseconds
+    now = time * 1'000'000'000LL;
+
+    scroll.ApplyTo(buffer);
+
+    for (size_t led = 0; led < buffer.size(); led++) {
+      UNSCOPED_INFO(
+          std::format("LED {} of 256, run {} of 500", led + 1, time + 1));
+      // Base: [(0, 0, 0) (1, 1, 1) (2, 2, 2) (3, 3, 3) (4, 4, 4) ... (255, 255,
+      // 255)] Value for every channel should DECREASE by 1 in each timestep,
+      // wrapping around 0 and 255
+
+      // t=0,   channel value = (0, 1, 2, ..., 254, 255)
+      // t=1,   channel value = (255, 0, 1, ..., 253, 254)
+      // t=2,   channel value = (254, 255, 0, ..., 252, 253)
+      // t=255, channel value = (1, 2, 3, ..., 255, 0)
+      // t=256, channel value = (0, 1, 2, ..., 254, 255)
+      int ch = prosdk::math::FloorMod(static_cast<int>(led - time), 256);
+      AssertIndexColor(buffer, led, prosdk::util::Color{ch, ch, ch});
+    }
+  }
+
+  WPI_SetNowImpl(nullptr);  // cleanup
+}
+
+TEST_CASE("LEDPatternTest ScrollRelativeBackward", "[wpilibc]") {
+  // A black to white gradient
+  LEDPattern pattern = LEDPattern{[=](auto data, auto writer) {
+    for (size_t led = 0; led < data.size(); led++) {
+      int ch = static_cast<int>(led % 256);
+      writer(led, prosdk::util::Color{ch, ch, ch});
+    }
+  }};
+  std::array<AddressableLED::LEDData, 256> buffer;
+
+  // Scrolling at 1/256th of the buffer per second,
+  // or 1 individual diode per second
+  auto scroll =
+      pattern.ScrollAtRelativeVelocity(prosdk::units::hertz_t{-1 / 256.0});
+
+  static int64_t now = 0;
+  WPI_SetNowImpl([] { return now; });
+
+  for (int time = 0; time < 500; time++) {
+    // convert time (seconds) to nanoseconds
+    now = time * 1'000'000'000LL;
+
+    scroll.ApplyTo(buffer);
+
+    for (size_t led = 0; led < buffer.size(); led++) {
+      UNSCOPED_INFO(
+          std::format("LED {} of 256, run {} of 500", led + 1, time + 1));
+      // Base: [(0, 0, 0) (1, 1, 1) (2, 2, 2) (3, 3, 3) (4, 4, 4) ... (255, 255,
+      // 255)] Value for every channel should DECREASE by 1 in each timestep,
+      // wrapping around 0 and 255
+
+      // t=0,   channel value = (0, 1, 2, ..., 254, 255)
+      // t=1,   channel value = (255, 0, 1, ..., 253, 254)
+      // t=2,   channel value = (254, 255, 0, ..., 252, 253)
+      // t=255, channel value = (1, 2, 3, ..., 255, 0)
+      // t=256, channel value = (0, 1, 2, ..., 254, 255)
+      int ch = prosdk::math::FloorMod(static_cast<int>(led + time), 256);
+      AssertIndexColor(buffer, led, prosdk::util::Color{ch, ch, ch});
+    }
+  }
+
+  WPI_SetNowImpl(nullptr);  // cleanup
+}
+
+TEST_CASE("LEDPatternTest ScrollAbsoluteForward", "[wpilibc]") {
+  // A black to white gradient
+  LEDPattern pattern = LEDPattern{[](auto data, auto writer) {
+    for (size_t led = 0; led < data.size(); led++) {
+      int ch = static_cast<int>(led % 256);
+      writer(led, prosdk::util::Color{ch, ch, ch});
+    }
+  }};
+  std::array<AddressableLED::LEDData, 256> buffer;
+  // scroll at 16 m/s, LED spacing = 2cm
+  // buffer is 256 LEDs, so total length = 512cm = 5.12m
+  // scrolling at 16 m/s yields a period of 0.32 seconds,
+  // or 0.00125 seconds per LED (800 LEDs/s)
+  auto scroll = pattern.ScrollAtAbsoluteVelocity(16_mps, 2_cm);
+
+  static int64_t now = 0;
+  WPI_SetNowImpl([] { return now; });
+
+  for (int time = 0; time < 500; time++) {
+    // convert time (seconds) to nanoseconds
+    now = time * 1'250'000;  // 1.25ms per LED
+
+    scroll.ApplyTo(buffer);
+
+    for (size_t led = 0; led < buffer.size(); led++) {
+      UNSCOPED_INFO(
+          std::format("LED {} of 256, run {} of 500", led + 1, time + 1));
+      // Base: [(0, 0, 0) (1, 1, 1) (2, 2, 2) (3, 3, 3) (4, 4, 4) ... (255, 255,
+      // 255)] Value for every channel should DECREASE by 1 in each timestep,
+      // wrapping around 0 and 255
+
+      // t=0,   channel value = (0, 1, 2, ..., 254, 255)
+      // t=1,   channel value = (255, 0, 1, ..., 253, 254)
+      // t=2,   channel value = (254, 255, 0, ..., 252, 253)
+      // t=255, channel value = (1, 2, 3, ..., 255, 0)
+      // t=256, channel value = (0, 1, 2, ..., 254, 255)
+      int ch = prosdk::math::FloorMod(static_cast<int>(led - time), 256);
+      AssertIndexColor(buffer, led, prosdk::util::Color{ch, ch, ch});
+    }
+  }
+
+  WPI_SetNowImpl(nullptr);  // cleanup
+}
+
+TEST_CASE("LEDPatternTest ScrollAbsoluteBackward", "[wpilibc]") {
+  // A black to white gradient
+  LEDPattern pattern = LEDPattern{[](auto data, auto writer) {
+    for (size_t led = 0; led < data.size(); led++) {
+      int ch = static_cast<int>(led % 256);
+      writer(led, prosdk::util::Color{ch, ch, ch});
+    }
+  }};
+  std::array<AddressableLED::LEDData, 256> buffer;
+  // scroll at 16 m/s, LED spacing = 2cm
+  // buffer is 256 LEDs, so total length = 512cm = 5.12m
+  // scrolling at 16 m/s yields a period of 0.32 seconds,
+  // or 0.00125 seconds per LED (800 LEDs/s)
+  auto scroll = pattern.ScrollAtAbsoluteVelocity(-16_mps, 2_cm);
+
+  static int64_t now = 0;
+  WPI_SetNowImpl([] { return now; });
+
+  for (int time = 0; time < 500; time++) {
+    // convert time (seconds) to nanoseconds
+    now = time * 1'250'000;  // 1.25ms per LED
+
+    scroll.ApplyTo(buffer);
+
+    for (size_t led = 0; led < buffer.size(); led++) {
+      UNSCOPED_INFO(
+          std::format("LED {} of 256, run {} of 500", led + 1, time + 1));
+      // Base: [(0, 0, 0) (1, 1, 1) (2, 2, 2) (3, 3, 3) (4, 4, 4) ... (255, 255,
+      // 255)] Value for every channel should DECREASE by 1 in each timestep,
+      // wrapping around 0 and 255
+
+      // t=0,   channel value = (0, 1, 2, ..., 254, 255)
+      // t=1,   channel value = (255, 0, 1, ..., 253, 254)
+      // t=2,   channel value = (254, 255, 0, ..., 252, 253)
+      // t=255, channel value = (1, 2, 3, ..., 255, 0)
+      // t=256, channel value = (0, 1, 2, ..., 254, 255)
+      int ch = prosdk::math::FloorMod(static_cast<int>(led + time), 256);
+      AssertIndexColor(buffer, led, prosdk::util::Color{ch, ch, ch});
+    }
+  }
+
+  WPI_SetNowImpl(nullptr);  // cleanup
+}
+
+TEST_CASE("LEDPatternTest RainbowFullSize", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 180> buffer;
+  int saturation = 255;
+  int value = 255;
+  LEDPattern pattern = LEDPattern::Rainbow(saturation, value);
+  pattern.ApplyTo(buffer);
+
+  for (int led = 0; led < 180; led++) {
+    AssertIndexColor(buffer, led,
+                     prosdk::util::Color::FromHSV(led, saturation, value));
+  }
+}
+
+TEST_CASE("LEDPatternTest LEDDataSetHSVExactRgbValues", "[wpilibc]") {
+  struct TestCase {
+    int h;
+    int s;
+    int v;
+    int r;
+    int g;
+    int b;
+  };
+
+  constexpr TestCase CASES[] = {
+      {0, 0, 0, 0, 0, 0},          {0, 0, 255, 255, 255, 255},
+      {0, 255, 255, 255, 0, 0},    {60, 255, 255, 0, 255, 0},
+      {120, 255, 255, 0, 0, 255},  {30, 255, 255, 255, 255, 0},
+      {90, 255, 255, 0, 255, 255}, {150, 255, 255, 255, 0, 255},
+      {0, 255, 128, 128, 0, 0},    {60, 255, 128, 0, 128, 0},
+      {120, 255, 128, 0, 0, 128},
+  };
+
+  for (const auto& test : CASES) {
+    UNSCOPED_INFO("SetHSV(" << test.h << ", " << test.s << ", " << test.v
+                            << ")");
+    AddressableLED::LEDData data;
+    data.SetHSV(test.h, test.s, test.v);
+
+    CHECK(test.r == (data.r & 0xFF));
+    CHECK(test.g == (data.g & 0xFF));
+    CHECK(test.b == (data.b & 0xFF));
+  }
+}
+
+TEST_CASE("LEDPatternTest RainbowFullSizeExactRgbValues", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 180> buffer;
+  LEDPattern::Rainbow(255, 255).ApplyTo(buffer);
+
+  struct TestCase {
+    int index;
+    int r;
+    int g;
+    int b;
+  };
+
+  constexpr TestCase CASES[] = {
+      {0, 255, 0, 0},    {30, 255, 255, 0}, {60, 0, 255, 0},
+      {90, 0, 255, 255}, {120, 0, 0, 255},  {150, 255, 0, 255},
+  };
+
+  for (const auto& test : CASES) {
+    UNSCOPED_INFO("LED " << test.index);
+    CHECK(test.r == (buffer[test.index].r & 0xFF));
+    CHECK(test.g == (buffer[test.index].g & 0xFF));
+    CHECK(test.b == (buffer[test.index].b & 0xFF));
+  }
+}
+
+TEST_CASE("LEDPatternTest RainbowHalfSize", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 90> buffer;
+  int saturation = 42;
+  int value = 87;
+  LEDPattern pattern = LEDPattern::Rainbow(saturation, value);
+  pattern.ApplyTo(buffer);
+
+  for (int led = 0; led < 90; led++) {
+    AssertIndexColor(buffer, led,
+                     prosdk::util::Color::FromHSV(led * 2, saturation, value));
+  }
+}
+
+TEST_CASE("LEDPatternTest RainbowThirdSize", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 60> buffer;
+  int saturation = 191;
+  int value = 255;
+  LEDPattern pattern = LEDPattern::Rainbow(saturation, value);
+  pattern.ApplyTo(buffer);
+
+  for (int led = 0; led < 60; led++) {
+    UNSCOPED_INFO(std::format("LED {} of 60", led + 1));
+    AssertIndexColor(buffer, led,
+                     prosdk::util::Color::FromHSV(led * 3, saturation, value));
+  }
+}
+
+TEST_CASE("LEDPatternTest RainbowDoubleSize", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 360> buffer;
+  int saturation = 212;
+  int value = 93;
+  LEDPattern pattern = LEDPattern::Rainbow(saturation, value);
+  pattern.ApplyTo(buffer);
+
+  for (int led = 0; led < 360; led++) {
+    UNSCOPED_INFO(std::format("LED {} of 360", led + 1));
+    AssertIndexColor(buffer, led,
+                     prosdk::util::Color::FromHSV(led / 2, saturation, value));
+  }
+}
+
+TEST_CASE("LEDPatternTest RainbowOddSize", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 127> buffer;
+  double scale = 180.0 / 127;
+  int saturation = 73;
+  int value = 128;
+  LEDPattern pattern = LEDPattern::Rainbow(saturation, value);
+  pattern.ApplyTo(buffer);
+
+  for (int led = 0; led < 127; led++) {
+    UNSCOPED_INFO(std::format("LED {} of 127", led + 1));
+    AssertIndexColor(buffer, led,
+                     prosdk::util::Color::FromHSV(static_cast<int>(led * scale),
+                                               saturation, value));
+  }
+}
+
+TEST_CASE("LEDPatternTest ReverseSolid", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 90> buffer;
+  const auto color = prosdk::util::Color::ROSY_BROWN;
+
+  auto solid = LEDPattern::Solid(color);
+  auto pattern = solid.Reversed();
+
+  pattern.ApplyTo(buffer);
+
+  for (int led = 0; led < 90; led++) {
+    UNSCOPED_INFO(std::format("LED {} of 90", led + 1));
+    AssertIndexColor(buffer, led, prosdk::util::Color::ROSY_BROWN);
+  }
+}
+
+TEST_CASE("LEDPatternTest ReverseSteps", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 100> buffer;
+  std::array<std::pair<double, prosdk::util::Color>, 2> steps{
+      std::pair{0.0, prosdk::util::Color::PLUM},
+      std::pair{0.5, prosdk::util::Color::YELLOW}};
+  auto stepPattern = LEDPattern::Steps(steps);
+  auto pattern = stepPattern.Reversed();
+
+  pattern.ApplyTo(buffer);
+
+  // colors should be swapped; yellow first, then plum
+  for (int led = 0; led < 50; led++) {
+    UNSCOPED_INFO(std::format("LED {} of 100", led + 1));
+    AssertIndexColor(buffer, led, prosdk::util::Color::YELLOW);
+  }
+  for (int led = 50; led < 100; led++) {
+    UNSCOPED_INFO(std::format("LED {} of 100", led + 1));
+    AssertIndexColor(buffer, led, prosdk::util::Color::PLUM);
+  }
+}
+
+TEST_CASE("LEDPatternTest OffsetPositive", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 21> buffer;
+  auto offset = whiteYellowPurple.OffsetBy(1);
+  offset.ApplyTo(buffer);
+
+  for (int led = 0; led < 21; led++) {
+    UNSCOPED_INFO(std::format("LED {} of 21", led + 1));
+    switch (led % 3) {
+      case 0:
+        AssertIndexColor(buffer, led, prosdk::util::Color::PURPLE);
+        break;
+      case 1:
+        AssertIndexColor(buffer, led, prosdk::util::Color::WHITE);
+        break;
+      case 2:
+        AssertIndexColor(buffer, led, prosdk::util::Color::YELLOW);
+        break;
+    }
+  }
+}
+
+TEST_CASE("LEDPatternTest OffsetNegative", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 21> buffer;
+  auto offset = whiteYellowPurple.OffsetBy(-1);
+  offset.ApplyTo(buffer);
+
+  for (int led = 0; led < 21; led++) {
+    UNSCOPED_INFO(std::format("LED {} of 21", led + 1));
+    switch (led % 3) {
+      case 0:
+        AssertIndexColor(buffer, led, prosdk::util::Color::YELLOW);
+        break;
+      case 1:
+        AssertIndexColor(buffer, led, prosdk::util::Color::PURPLE);
+        break;
+      case 2:
+        AssertIndexColor(buffer, led, prosdk::util::Color::WHITE);
+        break;
+    }
+  }
+}
+
+TEST_CASE("LEDPatternTest OffsetZero", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 21> buffer;
+  auto offset = whiteYellowPurple.OffsetBy(0);
+  offset.ApplyTo(buffer);
+
+  for (int led = 0; led < 21; led++) {
+    UNSCOPED_INFO(std::format("LED {} of 21", led + 1));
+    switch (led % 3) {
+      case 0:
+        AssertIndexColor(buffer, led, prosdk::util::Color::WHITE);
+        break;
+      case 1:
+        AssertIndexColor(buffer, led, prosdk::util::Color::YELLOW);
+        break;
+      case 2:
+        AssertIndexColor(buffer, led, prosdk::util::Color::PURPLE);
+        break;
+    }
+  }
+}
+
+TEST_CASE("LEDPatternTest BlinkSymmetric", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+  auto white = LEDPattern::Solid(prosdk::util::Color::WHITE);
+
+  // on for 2 seconds, off for 2 seconds
+  auto pattern = white.Blink(2_s);
+
+  static int64_t now = 0;
+  WPI_SetNowImpl([] { return now; });
+  for (int t = 0; t < 8; t++) {
+    now = t * 1'000'000'000LL;  // time travel 1 second
+    UNSCOPED_INFO(std::format("Time {} seconds", t));
+    pattern.ApplyTo(buffer);
+
+    switch (t) {
+      case 0:
+      case 1:
+      case 4:
+      case 5:
+        AssertIndexColor(buffer, 0, prosdk::util::Color::WHITE);
+        break;
+      case 2:
+      case 3:
+      case 6:
+      case 7:
+        AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+        break;
+    }
+  }
+
+  WPI_SetNowImpl(nullptr);  // cleanup
+}
+
+TEST_CASE("LEDPatternTest BlinkAsymmetric", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+  auto white = LEDPattern::Solid(prosdk::util::Color::WHITE);
+
+  // on for 3 seconds, off for 1 second
+  auto pattern = white.Blink(3_s, 1_s);
+
+  static int64_t now = 0;
+  WPI_SetNowImpl([] { return now; });
+  for (int t = 0; t < 8; t++) {
+    now = t * 1'000'000'000LL;  // time travel 1 second
+    UNSCOPED_INFO(std::format("Time {} seconds", t));
+    pattern.ApplyTo(buffer);
+
+    switch (t) {
+      case 0:
+      case 1:
+      case 2:  // first period
+      case 4:
+      case 5:
+      case 6:  // second period
+        AssertIndexColor(buffer, 0, prosdk::util::Color::WHITE);
+        break;
+      case 3:
+      case 7:
+        AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+        break;
+    }
+  }
+
+  WPI_SetNowImpl(nullptr);  // cleanup
+}
+
+TEST_CASE("LEDPatternTest BlinkInSync", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+  auto white = LEDPattern::Solid(prosdk::util::Color::WHITE);
+
+  bool flag = false;
+  auto condition = [&flag]() { return flag; };
+
+  auto pattern = white.SynchronizedBlink(condition);
+
+  UNSCOPED_INFO("Flag off");
+  pattern.ApplyTo(buffer);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+
+  UNSCOPED_INFO("Flag on");
+  flag = true;
+  pattern.ApplyTo(buffer);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::WHITE);
+
+  UNSCOPED_INFO("Flag off");
+  flag = false;
+  pattern.ApplyTo(buffer);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+}
+
+TEST_CASE("LEDPatternTest Breathe", "[wpilibc]") {
+  prosdk::util::Color midGray{0.5, 0.5, 0.5};
+  std::array<AddressableLED::LEDData, 1> buffer;
+  auto white = LEDPattern::Solid(prosdk::util::Color::WHITE);
+  auto pattern = white.Breathe(prosdk::units::nanosecond_t{4});
+
+  static int64_t now = 0;
+  WPI_SetNowImpl([] { return now; });
+
+  {
+    now = 0;  // start
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+    AssertIndexColor(buffer, 0, prosdk::util::Color::WHITE);
+  }
+  {
+    now = 1;  // midway (down)
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+    AssertIndexColor(buffer, 0, midGray);
+  }
+  {
+    now = 2;  // bottom
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+    AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+  }
+  {
+    now = 3;  // midway (up)
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+    AssertIndexColor(buffer, 0, midGray);
+  }
+  {
+    now = 4;  // back to start
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+    AssertIndexColor(buffer, 0, prosdk::util::Color::WHITE);
+  }
+  WPI_SetNowImpl(nullptr);  // cleanup
+}
+
+TEST_CASE("LEDPatternTest OverlaySolidOnSolid", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+
+  auto base = LEDPattern::Solid(prosdk::util::Color::WHITE);
+  auto overlay = LEDPattern::Solid(prosdk::util::Color::YELLOW);
+  auto pattern = overlay.OverlayOn(base);
+  pattern.ApplyTo(buffer);
+
+  AssertIndexColor(buffer, 0, prosdk::util::Color::YELLOW);
+}
+
+TEST_CASE("LEDPatternTest OverlayNearlyBlack", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+
+  auto base = LEDPattern::Solid(prosdk::util::Color::WHITE);
+  auto overlay = LEDPattern::Solid(prosdk::util::Color{1, 0, 0});
+  auto pattern = overlay.OverlayOn(base);
+  pattern.ApplyTo(buffer);
+
+  AssertIndexColor(buffer, 0, prosdk::util::Color{1, 0, 0});
+}
+
+TEST_CASE("LEDPatternTest OverlayMixed", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 2> buffer;
+
+  auto base = LEDPattern::Solid(prosdk::util::Color::WHITE);
+  std::array<std::pair<double, prosdk::util::Color>, 2> steps{
+      std::pair{0.0, prosdk::util::Color::YELLOW},
+      std::pair{0.5, prosdk::util::Color::BLACK}};
+  auto overlay = LEDPattern::Steps(steps);
+  auto pattern = overlay.OverlayOn(base);
+  pattern.ApplyTo(buffer);
+
+  AssertIndexColor(buffer, 0, prosdk::util::Color::YELLOW);
+  AssertIndexColor(buffer, 1, prosdk::util::Color::WHITE);
+}
+
+TEST_CASE("LEDPatternTest Blend", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+
+  auto pattern1 = LEDPattern::Solid(prosdk::util::Color::BLUE);
+  auto pattern2 = LEDPattern::Solid(prosdk::util::Color::RED);
+  auto blend = pattern1.Blend(pattern2);
+  blend.ApplyTo(buffer);
+
+  // Individual RGB channels are averaged
+  // #0000FF blended with #FF0000 yields #7F007F
+  AssertIndexColor(buffer, 0, prosdk::util::Color{127, 0, 127});
+}
+
+TEST_CASE("LEDPatternTest BinaryMask", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 10> buffer;
+
+  prosdk::util::Color color{123, 123, 123};
+  auto base = LEDPattern::Solid(color);
+
+  // first 50% mask on, last 50% mask off
+  std::array<std::pair<double, prosdk::util::Color>, 2> steps{
+      std::pair{0.0, prosdk::util::Color::WHITE},
+      std::pair{0.5, prosdk::util::Color::BLACK}};
+  auto mask = LEDPattern::Steps(steps);
+  auto masked = base.Mask(mask);
+  masked.ApplyTo(buffer);
+
+  for (int i = 0; i < 5; i++) {
+    AssertIndexColor(buffer, i, color);
+  }
+
+  for (int i = 5; i < 10; i++) {
+    AssertIndexColor(buffer, i, prosdk::util::Color::BLACK);
+  }
+}
+
+TEST_CASE("LEDPatternTest ChannelwiseMask", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 5> buffer;
+
+  prosdk::util::Color baseColor{123, 123, 123};
+  prosdk::util::Color halfGray{0.5, 0.5, 0.5};
+  auto base = LEDPattern::Solid(baseColor);
+  std::array<std::pair<double, prosdk::util::Color>, 5> steps{
+      std::pair{0.0, prosdk::util::Color::RED},
+      std::pair{0.2, prosdk::util::Color::LIME},
+      std::pair{0.4, prosdk::util::Color::BLUE}, std::pair{0.6, halfGray},
+      std::pair{0.8, prosdk::util::Color::WHITE}};
+  auto mask = LEDPattern::Steps(steps);
+  auto masked = base.Mask(mask);
+  masked.ApplyTo(buffer);
+
+  AssertIndexColor(buffer, 0, prosdk::util::Color{123, 0, 0});
+  AssertIndexColor(buffer, 1, prosdk::util::Color{0, 123, 0});
+  AssertIndexColor(buffer, 2, prosdk::util::Color{0, 0, 123});
+
+  // mask channels are all 0b00111111, base is 0b00111011,
+  // so the AND should give us the unmodified base color
+  AssertIndexColor(buffer, 3, baseColor);
+  AssertIndexColor(buffer, 4, baseColor);
+}
+
+TEST_CASE("LEDPatternTest ProcessMaskLayer", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 100> buffer;
+
+  double progress = 0.0;
+  auto maskLayer =
+      LEDPattern::ProgressMaskLayer([&progress]() { return progress; });
+
+  for (double t = 0; t <= 1.0; t += 0.01) {
+    UNSCOPED_INFO(std::format("Time {}", t));
+    progress = t;
+    maskLayer.ApplyTo(buffer);
+
+    int lastMaskedLED = static_cast<int>(t * 100);
+    for (int i = 0; i < lastMaskedLED; i++) {
+      UNSCOPED_INFO(std::format("LED {}", i));
+      AssertIndexColor(buffer, i, prosdk::util::Color::WHITE);
+    }
+    for (int i = lastMaskedLED; i < 100; i++) {
+      UNSCOPED_INFO(std::format("LED {}", i));
+      AssertIndexColor(buffer, i, prosdk::util::Color::BLACK);
+    }
+  }
+}
+
+TEST_CASE("LEDPatternTest ZeroBrightness", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+
+  auto base = LEDPattern::Solid(prosdk::util::Color::RED);
+  auto pattern = base.AtBrightness(0);
+  pattern.ApplyTo(buffer);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+}
+
+TEST_CASE("LEDPatternTest SameBrightness", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+
+  auto base = LEDPattern::Solid(prosdk::util::Color::MAGENTA);
+  auto pattern = base.AtBrightness(1.0);
+  pattern.ApplyTo(buffer);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::MAGENTA);
+}
+
+TEST_CASE("LEDPatternTest HigherBrightness", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+
+  auto base = LEDPattern::Solid(prosdk::util::Color::MAGENTA);
+  auto pattern = base.AtBrightness(4 / 3.0);
+  pattern.ApplyTo(buffer);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::MAGENTA);
+}
+
+TEST_CASE("LEDPatternTest NegativeBrightness", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+
+  auto base = LEDPattern::Solid(prosdk::util::Color::WHITE);
+  auto pattern = base.AtBrightness(-1.0);
+  pattern.ApplyTo(buffer);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+}
+
+TEST_CASE("LEDPatternTest ClippingBrightness", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 1> buffer;
+  auto base = LEDPattern::Solid(prosdk::util::Color::MIDNIGHT_BLUE);
+  auto pattern = base.AtBrightness(100);
+  pattern.ApplyTo(buffer);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::WHITE);
+}
+
+TEST_CASE("LEDPatternTest ReverseMask", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 8> buffer;
+
+  std::array<std::pair<double, prosdk::util::Color>, 4> colorSteps{
+      std::pair{0.0, prosdk::util::Color::RED},
+      std::pair{0.25, prosdk::util::Color::BLUE},
+      std::pair{0.5, prosdk::util::Color::YELLOW},
+      std::pair{0.75, prosdk::util::Color::GREEN}};
+  std::array<std::pair<double, prosdk::util::Color>, 2> maskSteps{
+      std::pair{0, prosdk::util::Color::WHITE},
+      std::pair{0.5, prosdk::util::Color::BLACK}};
+
+  auto pattern = LEDPattern::Steps(colorSteps)
+                     .Mask(LEDPattern::Steps(maskSteps))
+                     .Reversed();
+
+  pattern.ApplyTo(buffer);
+
+  AssertIndexColor(buffer, 7, prosdk::util::Color::RED);
+  AssertIndexColor(buffer, 6, prosdk::util::Color::RED);
+  AssertIndexColor(buffer, 5, prosdk::util::Color::BLUE);
+  AssertIndexColor(buffer, 4, prosdk::util::Color::BLUE);
+  AssertIndexColor(buffer, 3, prosdk::util::Color::BLACK);
+  AssertIndexColor(buffer, 2, prosdk::util::Color::BLACK);
+  AssertIndexColor(buffer, 1, prosdk::util::Color::BLACK);
+  AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+}
+
+TEST_CASE("LEDPatternTest OffsetMask", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 8> buffer;
+
+  std::array<std::pair<double, prosdk::util::Color>, 4> colorSteps{
+      std::pair{0.0, prosdk::util::Color::RED},
+      std::pair{0.25, prosdk::util::Color::BLUE},
+      std::pair{0.5, prosdk::util::Color::YELLOW},
+      std::pair{0.75, prosdk::util::Color::GREEN}};
+  std::array<std::pair<double, prosdk::util::Color>, 2> maskSteps{
+      std::pair{0, prosdk::util::Color::WHITE},
+      std::pair{0.5, prosdk::util::Color::BLACK}};
+
+  auto pattern = LEDPattern::Steps(colorSteps)
+                     .Mask(LEDPattern::Steps(maskSteps))
+                     .OffsetBy(4);
+
+  pattern.ApplyTo(buffer);
+
+  AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+  AssertIndexColor(buffer, 1, prosdk::util::Color::BLACK);
+  AssertIndexColor(buffer, 2, prosdk::util::Color::BLACK);
+  AssertIndexColor(buffer, 3, prosdk::util::Color::BLACK);
+  AssertIndexColor(buffer, 4, prosdk::util::Color::RED);
+  AssertIndexColor(buffer, 5, prosdk::util::Color::RED);
+  AssertIndexColor(buffer, 6, prosdk::util::Color::BLUE);
+  AssertIndexColor(buffer, 7, prosdk::util::Color::BLUE);
+}
+
+TEST_CASE("LEDPatternTest RelativeScrollingMask", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 8> buffer;
+
+  std::array<std::pair<double, prosdk::util::Color>, 4> colorSteps{
+      std::pair{0.0, prosdk::util::Color::RED},
+      std::pair{0.25, prosdk::util::Color::BLUE},
+      std::pair{0.5, prosdk::util::Color::YELLOW},
+      std::pair{0.75, prosdk::util::Color::GREEN}};
+  std::array<std::pair<double, prosdk::util::Color>, 2> maskSteps{
+      std::pair{0, prosdk::util::Color::WHITE},
+      std::pair{0.5, prosdk::util::Color::BLACK}};
+
+  auto pattern = LEDPattern::Steps(colorSteps)
+                     .Mask(LEDPattern::Steps(maskSteps))
+                     .ScrollAtRelativeVelocity(prosdk::units::hertz_t{1e9 / 8.0});
+
+  pattern.ApplyTo(buffer);
+
+  static int64_t now = 0;
+  WPI_SetNowImpl([] { return now; });
+
+  {
+    now = 0;  // start
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+
+    AssertIndexColor(buffer, 0, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 1, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 2, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 3, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 4, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 5, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 6, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 7, prosdk::util::Color::BLACK);
+  }
+  {
+    now = 1;
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+
+    AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 1, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 2, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 3, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 4, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 5, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 6, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 7, prosdk::util::Color::BLACK);
+  }
+  {
+    now = 2;
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+
+    AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 1, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 2, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 3, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 4, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 5, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 6, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 7, prosdk::util::Color::BLACK);
+  }
+  {
+    now = 3;
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+
+    AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 1, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 2, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 3, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 4, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 5, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 6, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 7, prosdk::util::Color::BLACK);
+  }
+
+  WPI_SetNowImpl(nullptr);  // cleanup
+}
+
+TEST_CASE("LEDPatternTest AbsoluteScrollingMask", "[wpilibc]") {
+  std::array<AddressableLED::LEDData, 8> buffer;
+
+  std::array<std::pair<double, prosdk::util::Color>, 4> colorSteps{
+      std::pair{0.0, prosdk::util::Color::RED},
+      std::pair{0.25, prosdk::util::Color::BLUE},
+      std::pair{0.5, prosdk::util::Color::YELLOW},
+      std::pair{0.75, prosdk::util::Color::GREEN}};
+  std::array<std::pair<double, prosdk::util::Color>, 2> maskSteps{
+      std::pair{0, prosdk::util::Color::WHITE},
+      std::pair{0.5, prosdk::util::Color::BLACK}};
+
+  auto pattern = LEDPattern::Steps(colorSteps)
+                     .Mask(LEDPattern::Steps(maskSteps))
+                     .ScrollAtAbsoluteVelocity(1_mps, 1_m);
+
+  pattern.ApplyTo(buffer);
+
+  static int64_t now = 0;
+  WPI_SetNowImpl([] { return now; });
+
+  {
+    now = 0;  // start
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+
+    AssertIndexColor(buffer, 0, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 1, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 2, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 3, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 4, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 5, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 6, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 7, prosdk::util::Color::BLACK);
+  }
+  {
+    now = 1'000'000'000LL;
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+
+    AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 1, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 2, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 3, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 4, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 5, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 6, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 7, prosdk::util::Color::BLACK);
+  }
+  {
+    now = 2'000'000'000;
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+
+    AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 1, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 2, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 3, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 4, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 5, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 6, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 7, prosdk::util::Color::BLACK);
+  }
+  {
+    now = 3'000'000'000;
+    UNSCOPED_INFO(std::format("Time {}", now));
+
+    pattern.ApplyTo(buffer);
+
+    AssertIndexColor(buffer, 0, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 1, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 2, prosdk::util::Color::BLACK);
+    AssertIndexColor(buffer, 3, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 4, prosdk::util::Color::RED);
+    AssertIndexColor(buffer, 5, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 6, prosdk::util::Color::BLUE);
+    AssertIndexColor(buffer, 7, prosdk::util::Color::BLACK);
+  }
+
+  WPI_SetNowImpl(nullptr);  // cleanup
+}
+
+void AssertIndexColor(std::span<AddressableLED::LEDData> data, int index,
+                      prosdk::util::Color color) {
+  prosdk::util::Color8Bit color8bit{color};
+
+  CHECK(color8bit.red == (data[index].r & 0xFF));
+  CHECK(color8bit.green == (data[index].g & 0xFF));
+  CHECK(color8bit.blue == (data[index].b & 0xFF));
+}
+
+prosdk::util::Color LerpColors(prosdk::util::Color a, prosdk::util::Color b, double t) {
+  return prosdk::util::Color{prosdk::util::Lerp(a.red, b.red, t),
+                          prosdk::util::Lerp(a.green, b.green, t),
+                          prosdk::util::Lerp(a.blue, b.blue, t)};
+}
+}  // namespace wpi

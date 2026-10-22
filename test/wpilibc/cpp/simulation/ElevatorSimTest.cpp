@@ -1,0 +1,120 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/simulation/ElevatorSim.hpp"
+
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+
+#include "motorcontrol/TestPWMMotorController.hpp"
+#include "prosdk/hardware/rotation/Encoder.hpp"
+#include "prosdk/math/controller/PIDController.hpp"
+#include "prosdk/math/system/DCMotor.hpp"
+#include "prosdk/math/system/Models.hpp"
+#include "prosdk/simulation/EncoderSim.hpp"
+#include "prosdk/simulation/RoboRioSim.hpp"
+#include "prosdk/system/RobotController.hpp"
+#include "prosdk/units/time.hpp"
+
+#define CHECK_NEAR_UNITS(val1, val2, eps) \
+  CHECK(prosdk::units::math::abs(val1 - val2) <= eps)
+
+TEST_CASE("ElevatorSimTest StateSpaceSim", "[wpilibc][simulation]") {
+  prosdk::sim::ElevatorSim sim(prosdk::math::DCMotor::Vex775Pro(4), 14.67, 8_kg,
+                            0.75_in, 0_m, 3_m, true, 0_m, {0.01});
+  prosdk::math::PIDController controller(10, 0.0, 0.0);
+
+  prosdk::TestPWMMotorController motor(0);
+  prosdk::Encoder encoder(0, 1);
+  prosdk::sim::EncoderSim encoderSim(encoder);
+
+  prosdk::sim::RoboRioSim::ResetData();
+  encoderSim.ResetData();
+
+  for (size_t i = 0; i < 100; ++i) {
+    controller.SetSetpoint(2.0);
+    auto nextVoltage = controller.Calculate(encoderSim.GetDistance());
+    motor.SetThrottle(nextVoltage / prosdk::RobotController::GetInputVoltage());
+
+    prosdk::math::Vectord<1> u{motor.GetThrottle() *
+                            prosdk::RobotController::GetInputVoltage()};
+    sim.SetInput(u);
+    sim.Update(20_ms);
+
+    const auto& y = sim.GetOutput();
+    encoderSim.SetDistance(y(0));
+  }
+
+  CHECK_THAT(controller.GetSetpoint(),
+             Catch::Matchers::WithinAbs(sim.GetPosition().value(), 0.2));
+}
+
+TEST_CASE("ElevatorSimTest InitialState", "[wpilibc][simulation]") {
+  constexpr auto startingHeight = 0.5_m;
+  prosdk::sim::ElevatorSim sim(prosdk::math::DCMotor::KrakenX60(2), 20, 8_kg, 0.1_m,
+                            0_m, 1_m, true, startingHeight, {0.01, 0.0});
+
+  CHECK_THAT(startingHeight.value(),
+             Catch::Matchers::WithinULP(sim.GetPosition().value(), 4));
+  CHECK_THAT(0, Catch::Matchers::WithinULP(sim.GetVelocity().value(), 4));
+}
+
+TEST_CASE("ElevatorSimTest MinMax", "[wpilibc][simulation]") {
+  prosdk::sim::ElevatorSim sim(prosdk::math::DCMotor::Vex775Pro(4), 14.67, 8_kg,
+                            0.75_in, 0_m, 1_m, true, 0_m);
+  for (size_t i = 0; i < 100; ++i) {
+    sim.SetInput(prosdk::math::Vectord<1>{0.0});
+    sim.Update(20_ms);
+
+    auto height = sim.GetPosition();
+    CHECK(height >= 0_m);
+  }
+
+  for (size_t i = 0; i < 100; ++i) {
+    sim.SetInput(prosdk::math::Vectord<1>{12.0});
+    sim.Update(20_ms);
+
+    auto height = sim.GetPosition();
+    CHECK(height <= 1_m);
+  }
+}
+
+TEST_CASE("ElevatorSimTest Stability", "[wpilibc][simulation]") {
+  prosdk::sim::ElevatorSim sim{prosdk::math::DCMotor::Vex775Pro(4),
+                            100,
+                            4_kg,
+                            0.5_in,
+                            0_m,
+                            10_m,
+                            false,
+                            0_m};
+
+  sim.SetState(prosdk::math::Vectord<2>{0.0, 0.0});
+  sim.SetInput(prosdk::math::Vectord<1>{12.0});
+  for (int i = 0; i < 50; ++i) {
+    sim.Update(20_ms);
+  }
+
+  prosdk::math::LinearSystem<2, 1, 1> system =
+      prosdk::math::Models::ElevatorFromPhysicalConstants(
+          prosdk::math::DCMotor::Vex775Pro(4), 4_kg, 0.5_in, 100)
+          .Slice(0);
+  CHECK_NEAR_UNITS(prosdk::units::meter_t{system.CalculateX(
+                       prosdk::math::Vectord<2>{0.0, 0.0},
+                       prosdk::math::Vectord<1>{12.0}, 20_ms * 50)(0)},
+                   sim.GetPosition(), 1_cm);
+}
+
+TEST_CASE("ElevatorSimTest CurrentDraw", "[wpilibc][simulation]") {
+  constexpr auto motor = prosdk::math::DCMotor::KrakenX60(2);
+  prosdk::sim::ElevatorSim sim(motor, 20, 8_kg, 0.1_m, 0_m, 1_m, true, 0_m,
+                            {0.01, 0.0});
+
+  CHECK_THAT(0.0, Catch::Matchers::WithinULP(sim.GetCurrentDraw().value(), 4));
+  sim.SetInputVoltage(motor.Voltage(motor.Torque(60_A), 0_rad_per_s));
+  sim.Update(100_ms);
+  // Current draw should start at 60 A and decrease as the back-EMF catches up
+  CHECK(0_A < sim.GetCurrentDraw());
+  CHECK(sim.GetCurrentDraw() < 60_A);
+}

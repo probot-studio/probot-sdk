@@ -102,6 +102,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/modules/eigen.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/gcem.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/sleipnir.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/wpimath.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/modules/wpilibc.cmake")
 
 # libprosdk.a from every module's objects
 get_property(_modules GLOBAL PROPERTY PROSDK_MODULES)

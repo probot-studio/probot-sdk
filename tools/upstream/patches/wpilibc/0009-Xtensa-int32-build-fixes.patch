@@ -1,0 +1,45 @@
+diff --git a/src/prosdk/impl/wpilibc/cpp/simulation/AlertSim.cpp b/src/prosdk/impl/wpilibc/cpp/simulation/AlertSim.cpp
+index 79cebc5..6670fb1 100644
+--- a/src/prosdk/impl/wpilibc/cpp/simulation/AlertSim.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/simulation/AlertSim.cpp
+@@ -15,7 +15,8 @@ using namespace prosdk;
+ using namespace prosdk::sim;
+ 
+ int32_t AlertSim::GetCount() {
+-  return std::max(WPI_GetNumAlerts(), 0);
++  // prosdk: int32_t is long on Xtensa, so the literal must not decide the type
++  return std::max<int32_t>(WPI_GetNumAlerts(), 0);
+ }
+ 
+ std::vector<AlertSim::AlertInfo> AlertSim::GetAll() {
+diff --git a/src/prosdk/impl/wpilibc/cpp/simulation/DriverStationSim.cpp b/src/prosdk/impl/wpilibc/cpp/simulation/DriverStationSim.cpp
+index 505d7cc..8b32e47 100644
+--- a/src/prosdk/impl/wpilibc/cpp/simulation/DriverStationSim.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/simulation/DriverStationSim.cpp
+@@ -180,6 +180,7 @@ void DriverStationSim::NotifyNewData() {
+   prosdk::internal::DriverStationBackend::RefreshData();
+ }
+ 
++// prosdk: the handlers return int32_t, which is long on Xtensa: explicit lambda return types
+ void DriverStationSim::SetSendError(bool shouldSend) {
+   if (shouldSend) {
+     HALSIM_SetSendError(nullptr);
+@@ -188,7 +189,7 @@ void DriverStationSim::SetSendError(bool shouldSend) {
+                            const struct WPI_String* details,
+                            const struct WPI_String* location,
+                            const struct WPI_String* callStack,
+-                           HAL_Bool printMsg) { return 0; });
++                           HAL_Bool printMsg) -> int32_t { return 0; });
+   }
+ }
+ 
+@@ -196,7 +197,8 @@ void DriverStationSim::SetSendConsoleLine(bool shouldSend) {
+   if (shouldSend) {
+     HALSIM_SetSendConsoleLine(nullptr);
+   } else {
+-    HALSIM_SetSendConsoleLine([](const struct WPI_String* line) { return 0; });
++    HALSIM_SetSendConsoleLine(
++        [](const struct WPI_String* line) -> int32_t { return 0; });
+   }
+ }
+ 

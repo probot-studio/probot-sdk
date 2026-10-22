@@ -1,0 +1,102 @@
+diff --git a/src/prosdk/impl/wpilibc/cpp/system/Filesystem.cpp b/src/prosdk/impl/wpilibc/cpp/system/Filesystem.cpp
+index 9bc3737..e0fab71 100644
+--- a/src/prosdk/impl/wpilibc/cpp/system/Filesystem.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/system/Filesystem.cpp
+@@ -6,25 +6,24 @@
+ 
+ #include <string>
+ 
+-#include "prosdk/framework/RobotBase.hpp"
++#include <system_error>
++
++#include "prosdk/platform/Storage.hpp"
+ #include "prosdk/util/fs.hpp"
+ 
++// prosdk: the SystemCore paths are replaced by the platform storage locations
++// (prosdk/platform/Storage.hpp: LittleFS on the robot, the upstream simulation paths on the host).
++
+ std::string prosdk::filesystem::GetLaunchDirectory() {
+-  return fs::current_path().string();
++  std::error_code ec;
++  auto path = fs::current_path(ec);
++  return ec ? std::string{"/"} : path.string();
+ }
+ 
+ std::string prosdk::filesystem::GetOperatingDirectory() {
+-  if constexpr (!RobotBase::IsSimulation()) {
+-    return "/home/systemcore";
+-  } else {
+-    return prosdk::filesystem::GetLaunchDirectory();
+-  }
++  return prosdk::platform::GetOperatingDirectory();
+ }
+ 
+ std::string prosdk::filesystem::GetDeployDirectory() {
+-  if constexpr (!RobotBase::IsSimulation()) {
+-    return "/home/systemcore/deploy";
+-  } else {
+-    return (prosdk::fs::current_path() / "src" / "main" / "deploy").string();
+-  }
++  return prosdk::platform::GetDeployDirectory();
+ }
+diff --git a/src/prosdk/system/DataLogManager.hpp b/src/prosdk/system/DataLogManager.hpp
+index fac56f8..f0961bd 100644
+--- a/src/prosdk/system/DataLogManager.hpp
++++ b/src/prosdk/system/DataLogManager.hpp
+@@ -17,8 +17,10 @@ namespace prosdk {
+  * Centralized data log that provides automatic data log file management. It
+  * automatically cleans up old files when disk space is low and renames the file
+  * based either on current date/time or (if available) competition match number.
+- * The data file will be saved to a USB flash drive in a folder named "logs" if
+- * one is attached, or to /home/systemcore/logs otherwise.
++ * prosdk: the data file is saved to prosdk::platform::GetLogDirectory()
++ * (prosdk/platform/Storage.hpp): /littlefs/logs on the robot when the sketch has
++ * mounted LittleFS, otherwise the log is kept but its data is discarded (and
++ * GetLogDir() returns ""); <operating directory>/logs on the host.
+  *
+  * Log files are initially named "WPILIB_TBD_{random}.wpilog" until the DS
+  * connects. After the DS connects, the log file is renamed to
+@@ -30,7 +32,9 @@ namespace prosdk {
+  * than 50 MB of free space on the target storage, WPILIB_ log files are deleted
+  * (oldest to newest) until there is 50 MB free OR there are 10 files remaining.
+  *
+- * By default, all NetworkTables value changes are stored to the data log.
++ * prosdk: NetworkTables is not ported; LogNetworkTables() has no effect.
++ * LogConsoleOutput() has no effect either (upstream tails the SystemCore
++ * console log file).
+  */
+ class DataLogManager final {
+  public:
+diff --git a/src/prosdk/system/Filesystem.hpp b/src/prosdk/system/Filesystem.hpp
+index c75c563..cc5c325 100644
+--- a/src/prosdk/system/Filesystem.hpp
++++ b/src/prosdk/system/Filesystem.hpp
+@@ -18,9 +18,10 @@ namespace prosdk::filesystem {
+ std::string GetLaunchDirectory();
+ 
+ /**
+- * Obtains the operating directory of the program. On the roboRIO, this
+- * is /home/systemcore. In simulation, it is where the simulation was launched
+- * from (`pwd`).
++ * Obtains the operating directory of the program. On the robot (prosdk), this
++ * is the LittleFS mount point /littlefs. In simulation, it is where the
++ * simulation was launched from (`pwd`). Configurable with
++ * prosdk::platform::SetOperatingDirectory() (prosdk/platform/Storage.hpp).
+  *
+  * @return The result of the operating directory lookup.
+  */
+@@ -28,9 +29,11 @@ std::string GetOperatingDirectory();
+ 
+ /**
+  * Obtains the deploy directory of the program, which is the remote location
+- * src/main/deploy is deployed to by default. On the roboRIO, this is
+- * /home/systemcore/deploy. In simulation, it is where the simulation was
+- * launched from, in the subdirectory "src/main/deploy" (`pwd`/src/main/deploy).
++ * src/main/deploy is deployed to by default. On the robot (prosdk), this is
++ * /littlefs/deploy (the sketch's data/deploy folder after a LittleFS upload).
++ * In simulation, it is where the simulation was launched from, in the
++ * subdirectory "src/main/deploy" (`pwd`/src/main/deploy). Configurable with
++ * prosdk::platform::SetDeployDirectory() (prosdk/platform/Storage.hpp).
+  *
+  * @return The result of the operating directory lookup
+  */

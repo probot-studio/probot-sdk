@@ -1,0 +1,139 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/system/Notifier.hpp"
+
+#include <utility>
+
+#include "prosdk/hal/DriverStation.hpp"
+#include "prosdk/hal/Notifier.hpp"
+#include "prosdk/hal/Threads.h"
+#include "prosdk/platform/Thread.hpp"
+#include "prosdk/platform/WpilibcConfig.hpp"
+#include "prosdk/system/Errors.hpp"
+#include "prosdk/util/Synchronization.h"
+
+using namespace prosdk;
+
+Notifier::Notifier(int priority, std::function<void()> callback) {
+  if (!callback) {
+    throw WPILIB_MakeError(err::NullParameter, "callback");
+  }
+  m_callback = callback;
+  HAL_Status status = 0;
+  m_notifier = HAL_CreateNotifier(&status);
+  WPILIB_CheckErrorStatus(status, "InitializeNotifier");
+
+  // prosdk: never the ESP-IDF pthread defaults (design/PORT.md section 7)
+  prosdk::platform::ScopedThreadConfig threadConfig{
+      {.name = "notifier", .stackSize = PROSDK_NOTIFIER_THREAD_STACK_SIZE}};
+  m_thread = std::thread([=, this] {
+    if (priority > 0 && HAL_SetCurrentThreadPriority(priority) != 0) {
+      WPILIB_ReportWarning("Setting Notifier priority to {} failed\n",
+                           priority);
+    }
+    for (;;) {
+      HAL_NotifierHandle notifier = m_notifier.load();
+      if (notifier == 0) {
+        break;
+      }
+      if (WPI_WaitForObject(notifier) == 0) {
+        break;
+      }
+
+      std::function<void()> callback;
+      {
+        std::scoped_lock lock(m_processMutex);
+        callback = m_callback;
+      }
+
+      // call callback
+      if (callback) {
+        try {
+          callback();
+        } catch (const prosdk::RuntimeError& e) {
+          e.Report();
+          WPILIB_ReportError(
+              err::Error,
+              "Error in Notifier thread."
+              "  The above stacktrace can help determine where the error "
+              "occurred.\n"
+              "  See https://wpilib.org/stacktrace for more information.\n");
+          throw;
+        } catch (const std::exception& e) {
+          prosdk::hal::SendError(1, err::Error, e.what(), "", "", 1);
+          throw;
+        }
+      }
+
+      // Ack notifier
+      HAL_Status status = 0;
+      HAL_AcknowledgeNotifierAlarm(notifier, &status);
+      WPILIB_CheckErrorStatus(status, "AcknowledgeNotifier");
+    }
+  });
+}
+
+Notifier::~Notifier() {
+  // atomically set handle to 0, then clean
+  HAL_NotifierHandle handle = m_notifier.exchange(HAL_INVALID_HANDLE);
+  HAL_DestroyNotifier(handle);
+
+  // Join the thread to ensure the callback has exited.
+  if (m_thread.joinable()) {
+    m_thread.join();
+  }
+}
+
+Notifier::Notifier(Notifier&& rhs)
+    : m_thread(std::move(rhs.m_thread)),
+      m_notifier(rhs.m_notifier.exchange(HAL_INVALID_HANDLE)),
+      m_callback(std::move(rhs.m_callback)) {}
+
+Notifier& Notifier::operator=(Notifier&& rhs) {
+  m_thread = std::move(rhs.m_thread);
+  m_notifier = rhs.m_notifier.exchange(HAL_INVALID_HANDLE);
+  m_callback = std::move(rhs.m_callback);
+  return *this;
+}
+
+void Notifier::SetName(std::string_view name) {
+  int32_t status = 0;
+  HAL_SetNotifierName(m_notifier, name, &status);
+}
+
+void Notifier::SetCallback(std::function<void()> callback) {
+  std::scoped_lock lock(m_processMutex);
+  m_callback = callback;
+}
+
+void Notifier::StartSingle(prosdk::units::second_t delay) {
+  int32_t status = 0;
+  HAL_SetNotifierAlarm(m_notifier, static_cast<int64_t>(delay * 1e9), 0, false,
+                       false, &status);
+}
+
+void Notifier::StartPeriodic(prosdk::units::second_t period) {
+  int32_t status = 0;
+  HAL_SetNotifierAlarm(m_notifier, static_cast<int64_t>(period * 1e9),
+                       static_cast<int64_t>(period * 1e9), false, false,
+                       &status);
+}
+
+void Notifier::StartPeriodic(prosdk::units::hertz_t frequency) {
+  StartPeriodic(1 / frequency);
+}
+
+void Notifier::Stop() {
+  int32_t status = 0;
+  HAL_CancelNotifierAlarm(m_notifier, false, &status);
+  WPILIB_CheckErrorStatus(status, "CancelNotifierAlarm");
+}
+
+int32_t Notifier::GetOverrun() const {
+  int32_t status = 0;
+  int32_t overrun = HAL_GetNotifierOverrun(m_notifier, &status);
+  WPILIB_CheckErrorStatus(status, "GetNotifierOverrun");
+  return overrun;
+}

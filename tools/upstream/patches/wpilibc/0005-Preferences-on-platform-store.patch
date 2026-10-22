@@ -1,0 +1,313 @@
+diff --git a/src/prosdk/impl/wpilibc/cpp/preferences/Preferences.cpp b/src/prosdk/impl/wpilibc/cpp/preferences/Preferences.cpp
+index b2d2658..200cdea 100644
+--- a/src/prosdk/impl/wpilibc/cpp/preferences/Preferences.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/preferences/Preferences.cpp
+@@ -4,183 +4,188 @@
+ 
+ #include "prosdk/preferences/Preferences.hpp"
+ 
+-#include <format>
+-#include <memory>
++#include <optional>
+ #include <string>
++#include <variant>
++#include <utility>
+ #include <vector>
+ 
+-#include "prosdk/nt/MultiSubscriber.hpp"
+-#include "prosdk/nt/NetworkTable.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
+-#include "prosdk/nt/NetworkTableListener.hpp"
+-#include "prosdk/nt/StringTopic.hpp"
++#include "prosdk/platform/PreferencesStore.hpp"
++#include "prosdk/platform/config.hpp"
+ #include "prosdk/util/UsageReporting.hpp"
+-#include "prosdk/util/json.hpp"
+ 
+ using namespace prosdk;
+ 
+-// The Preferences table name
+-static constexpr std::string_view TABLE_NAME{"Preferences"};
+-static constexpr std::string_view SMART_DASHBOARD_TYPE = "RobotPreferences";
++// prosdk: upstream keeps the preferences in the persistent NetworkTables table "/Preferences";
++// ntcore is not ported, so they live in the platform store (prosdk/platform/PreferencesStore.hpp:
++// NVS on the ESP32, memory or a JSON file on the host). Reads follow the NetworkTables entry
++// semantics: the numeric getters convert between integer, float and double values, and a value of
++// another type yields the default.
++namespace prefs = prosdk::platform::prefs;
++
+ namespace {
+-struct Instance {
+-  Instance();
+-
+-  std::shared_ptr<prosdk::nt::NetworkTable> table{
+-      prosdk::nt::NetworkTableInstance::GetDefault().GetTable(TABLE_NAME)};
+-  prosdk::nt::StringPublisher typePublisher{
+-      table->GetStringTopic(".type").PublishEx(
+-          prosdk::nt::StringTopic::TYPE_STRING,
+-          prosdk::util::json::object("SmartDashboard", SMART_DASHBOARD_TYPE))};
+-  prosdk::nt::MultiSubscriber tableSubscriber{
+-      prosdk::nt::NetworkTableInstance::GetDefault(),
+-      {{std::format("{}/", table->GetPath())}}};
+-  prosdk::nt::NetworkTableListener listener;
+-};
+-}  // namespace
++void ReportUsageOnce() {
++  static bool reported = [] {
++    prosdk::util::ReportUsage("Preferences", "");
++    return true;
++  }();
++  (void)reported;
++}
+ 
+-static Instance& GetInstance() {
+-  static Instance instance;
+-  return instance;
++std::optional<prefs::Value> Lookup(std::string_view key) {
++  ReportUsageOnce();
++  return prefs::Get(key);
++}
++
++// numeric value of an integer, float or double preference
++std::optional<double> NumberOf(const std::optional<prefs::Value>& v) {
++  if (!v) {
++    return std::nullopt;
++  }
++  if (auto i = std::get_if<int64_t>(&*v)) {
++    return static_cast<double>(*i);
++  }
++  if (auto f = std::get_if<float>(&*v)) {
++    return static_cast<double>(*f);
++  }
++  if (auto d = std::get_if<double>(&*v)) {
++    return *d;
++  }
++  return std::nullopt;
++}
++
++int64_t IntegerOf(const std::optional<prefs::Value>& v, int64_t defaultValue) {
++  if (v) {
++    if (auto i = std::get_if<int64_t>(&*v)) {
++      return *i;
++    }
++  }
++  auto n = NumberOf(v);
++  return n ? static_cast<int64_t>(*n) : defaultValue;
+ }
+ 
+-#ifndef __FIRST_SYSTEMCORE__
++void Store(std::string_view key, prefs::Value value) {
++  ReportUsageOnce();
++  prefs::Set(key, std::move(value));
++}
++
++void Init(std::string_view key, prefs::Value value) {
++  ReportUsageOnce();
++  prefs::Init(key, std::move(value));
++}
++}  // namespace
++
++#if !PROSDK_TARGET_HW
+ namespace prosdk::impl {
+ void ResetPreferencesInstance() {
+-  GetInstance() = Instance();
++  prefs::Reload();
+ }
+ }  // namespace prosdk::impl
+ #endif
+ 
+ std::vector<std::string> Preferences::GetKeys() {
+-  return ::GetInstance().table->GetKeys();
++  ReportUsageOnce();
++  return prefs::Keys();
+ }
+ 
+ std::string Preferences::GetString(std::string_view key,
+                                    std::string_view defaultValue) {
+-  return ::GetInstance().table->GetEntry(key).GetString(defaultValue);
++  auto v = Lookup(key);
++  if (v) {
++    if (auto str = std::get_if<std::string>(&*v)) {
++      return *str;
++    }
++  }
++  return std::string{defaultValue};
+ }
+ 
+ int Preferences::GetInt(std::string_view key, int defaultValue) {
+-  return ::GetInstance().table->GetEntry(key).GetInteger(defaultValue);
++  return static_cast<int>(IntegerOf(Lookup(key), defaultValue));
+ }
+ 
+ double Preferences::GetDouble(std::string_view key, double defaultValue) {
+-  return ::GetInstance().table->GetEntry(key).GetDouble(defaultValue);
++  return NumberOf(Lookup(key)).value_or(defaultValue);
+ }
+ 
+ float Preferences::GetFloat(std::string_view key, float defaultValue) {
+-  return ::GetInstance().table->GetEntry(key).GetFloat(defaultValue);
++  auto n = NumberOf(Lookup(key));
++  return n ? static_cast<float>(*n) : defaultValue;
+ }
+ 
+ bool Preferences::GetBoolean(std::string_view key, bool defaultValue) {
+-  return ::GetInstance().table->GetEntry(key).GetBoolean(defaultValue);
++  auto v = Lookup(key);
++  if (v) {
++    if (auto b = std::get_if<bool>(&*v)) {
++      return *b;
++    }
++  }
++  return defaultValue;
+ }
+ 
+ int64_t Preferences::GetLong(std::string_view key, int64_t defaultValue) {
+-  return ::GetInstance().table->GetEntry(key).GetInteger(defaultValue);
++  return IntegerOf(Lookup(key), defaultValue);
+ }
+ 
+ void Preferences::SetString(std::string_view key, std::string_view value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetString(value);
+-  entry.SetPersistent();
++  Store(key, std::string{value});
+ }
+ 
+ void Preferences::InitString(std::string_view key, std::string_view value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetDefaultString(value);
+-  entry.SetPersistent();
++  Init(key, std::string{value});
+ }
+ 
+ void Preferences::SetInt(std::string_view key, int value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetInteger(value);
+-  entry.SetPersistent();
++  Store(key, static_cast<int64_t>(value));
+ }
+ 
+ void Preferences::InitInt(std::string_view key, int value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetDefaultInteger(value);
+-  entry.SetPersistent();
++  Init(key, static_cast<int64_t>(value));
+ }
+ 
+ void Preferences::SetDouble(std::string_view key, double value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetDouble(value);
+-  entry.SetPersistent();
++  Store(key, value);
+ }
+ 
+ void Preferences::InitDouble(std::string_view key, double value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetDefaultDouble(value);
+-  entry.SetPersistent();
++  Init(key, value);
+ }
+ 
+ void Preferences::SetFloat(std::string_view key, float value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetFloat(value);
+-  entry.SetPersistent();
++  Store(key, value);
+ }
+ 
+ void Preferences::InitFloat(std::string_view key, float value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetDefaultFloat(value);
+-  entry.SetPersistent();
++  Init(key, value);
+ }
+ 
+ void Preferences::SetBoolean(std::string_view key, bool value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetBoolean(value);
+-  entry.SetPersistent();
++  Store(key, value);
+ }
+ 
+ void Preferences::InitBoolean(std::string_view key, bool value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetDefaultBoolean(value);
+-  entry.SetPersistent();
++  Init(key, value);
+ }
+ 
+ void Preferences::SetLong(std::string_view key, int64_t value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetInteger(value);
+-  entry.SetPersistent();
++  Store(key, value);
+ }
+ 
+ void Preferences::InitLong(std::string_view key, int64_t value) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.SetDefaultInteger(value);
+-  entry.SetPersistent();
++  Init(key, value);
+ }
+ 
+ bool Preferences::ContainsKey(std::string_view key) {
+-  return ::GetInstance().table->ContainsKey(key);
++  ReportUsageOnce();
++  return prefs::Contains(key);
+ }
+ 
+ void Preferences::Remove(std::string_view key) {
+-  auto entry = ::GetInstance().table->GetEntry(key);
+-  entry.ClearPersistent();
+-  entry.Unpublish();
++  ReportUsageOnce();
++  prefs::Remove(key);
+ }
+ 
+ void Preferences::RemoveAll() {
+   for (auto preference : GetKeys()) {
+-    if (preference != ".type") {
+-      Remove(preference);
+-    }
++    Remove(preference);
+   }
+ }
+-
+-Instance::Instance() {
+-  typePublisher.Set(SMART_DASHBOARD_TYPE);
+-  listener = prosdk::nt::NetworkTableListener::CreateListener(
+-      tableSubscriber, NT_EVENT_PUBLISH | NT_EVENT_IMMEDIATE,
+-      [typeTopic = typePublisher.GetTopic().GetHandle()](auto& event) {
+-        if (auto topicInfo = event.GetTopicInfo()) {
+-          if (topicInfo->topic != typeTopic) {
+-            prosdk::nt::SetTopicPersistent(topicInfo->topic, true);
+-          }
+-        }
+-      });
+-  prosdk::util::ReportUsage("Preferences", "");
+-}
+diff --git a/src/prosdk/preferences/Preferences.hpp b/src/prosdk/preferences/Preferences.hpp
+index 9e62001..8eeb238 100644
+--- a/src/prosdk/preferences/Preferences.hpp
++++ b/src/prosdk/preferences/Preferences.hpp
+@@ -16,15 +16,13 @@ namespace prosdk {
+  * The preferences class provides a relatively simple way to save important
+  * values to the roboRIO to access the next time the roboRIO is booted.
+  *
+- * This class loads and saves from a file inside the roboRIO.  The user cannot
+- * access the file directly, but may modify values at specific fields which will
+- * then be automatically periodically saved to the file by the NetworkTable
+- * server.
++ * prosdk: the values are stored by prosdk/platform/PreferencesStore.hpp (no
++ * NetworkTables): in NVS flash on the robot, which is rewritten on every change
++ * (do not set changing values every loop), in memory or a JSON file on the host.
++ * Not to be confused with the Arduino-ESP32 Preferences library (global class
++ * ::Preferences); with `using namespace prosdk;` write prosdk::Preferences.
+  *
+  * This class is thread safe.
+- *
+- * This will also interact with NetworkTable by creating a table called
+- * "Preferences" with all the key-value pairs.
+  */
+ class Preferences {
+  public:

@@ -35,7 +35,7 @@ TEST_CASE_METHOD(DebouncerTest, "DebouncerTest DebounceRising", "[wpimath]") {
 
 TEST_CASE_METHOD(DebouncerTest, "DebouncerTest DebounceFalling", "[wpimath]") {
   prosdk::math::Debouncer debouncer{20_ms,
-                                 prosdk::math::Debouncer::DebounceType::FALLING};
+                                 prosdk::math::Debouncer::DebounceType::kFalling};
 
   debouncer.Calculate(true);
   CHECK(debouncer.Calculate(false));
@@ -47,7 +47,7 @@ TEST_CASE_METHOD(DebouncerTest, "DebouncerTest DebounceFalling", "[wpimath]") {
 
 TEST_CASE_METHOD(DebouncerTest, "DebouncerTest DebounceBoth", "[wpimath]") {
   prosdk::math::Debouncer debouncer{20_ms,
-                                 prosdk::math::Debouncer::DebounceType::BOTH};
+                                 prosdk::math::Debouncer::DebounceType::kBoth};
 
   debouncer.Calculate(false);
   CHECK_FALSE(debouncer.Calculate(true));
@@ -64,20 +64,20 @@ TEST_CASE_METHOD(DebouncerTest, "DebouncerTest DebounceBoth", "[wpimath]") {
 
 TEST_CASE_METHOD(DebouncerTest, "DebouncerTest DebounceParams", "[wpimath]") {
   prosdk::math::Debouncer debouncer{20_ms,
-                                 prosdk::math::Debouncer::DebounceType::BOTH};
+                                 prosdk::math::Debouncer::DebounceType::kBoth};
 
   CHECK(debouncer.GetDebounceTime() == 20_ms);
   CHECK(debouncer.GetDebounceType() ==
-        prosdk::math::Debouncer::DebounceType::BOTH);
+        prosdk::math::Debouncer::DebounceType::kBoth);
 
   debouncer.SetDebounceTime(100_ms);
 
   CHECK(debouncer.GetDebounceTime() == 100_ms);
 
-  debouncer.SetDebounceType(prosdk::math::Debouncer::DebounceType::FALLING);
+  debouncer.SetDebounceType(prosdk::math::Debouncer::DebounceType::kFalling);
 
   CHECK(debouncer.GetDebounceType() ==
-        prosdk::math::Debouncer::DebounceType::FALLING);
+        prosdk::math::Debouncer::DebounceType::kFalling);
 
   CHECK(debouncer.Calculate(false));
 }

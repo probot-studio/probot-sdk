@@ -45,6 +45,11 @@ V8 export-template        BSD 3-Clause (V8 project authors)    src/prosdk/util/S
 WPILib wpimath            BSD 3-Clause (WPILib)                src/prosdk/math, src/prosdk/units,
                                                                src/prosdk/generated/wpimath,
                                                                src/prosdk/impl/wpimath, test/wpimath
+WPILib wpilibc            BSD 3-Clause (WPILib)                src/prosdk/{backend,drive,driverstation,
+                                                               event,framework,hardware,internal,opmode,
+                                                               preferences,simulation,smartdashboard,
+                                                               sysid,system}, src/prosdk/util/SensorUtil.hpp,
+                                                               src/prosdk/impl/wpilibc, test/wpilibc
 Eigen 5.0.1               MPL 2.0 (file-level; see             src/prosdk/thirdparty/eigen
                           licenses/eigen/COPYING.MPL2)
 GCEM                      Apache 2.0 (kthohr)                  src/prosdk/thirdparty/gcem

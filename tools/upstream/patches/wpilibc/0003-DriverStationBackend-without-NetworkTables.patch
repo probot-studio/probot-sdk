@@ -1,0 +1,182 @@
+diff --git a/src/prosdk/impl/wpilibc/cpp/driverstation/internal/DriverStationBackend.cpp b/src/prosdk/impl/wpilibc/cpp/driverstation/internal/DriverStationBackend.cpp
+index e09cc39..430daf6 100644
+--- a/src/prosdk/impl/wpilibc/cpp/driverstation/internal/DriverStationBackend.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/driverstation/internal/DriverStationBackend.cpp
+@@ -23,12 +23,6 @@
+ #include "prosdk/hal/DriverStationTypes.h"
+ #include "prosdk/hal/HAL.h"
+ #include "prosdk/hal/Power.h"
+-#include "prosdk/nt/BooleanTopic.hpp"
+-#include "prosdk/nt/IntegerTopic.hpp"
+-#include "prosdk/nt/NetworkTable.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
+-#include "prosdk/nt/StringTopic.hpp"
+-#include "prosdk/nt/StructTopic.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/util/Alert.hpp"
+ #include "prosdk/util/Color.hpp"
+@@ -53,66 +47,8 @@ GenericHID DriverStationBackend::ConstructGenericHID(int port) {
+ }
+ 
+ namespace {
+-// A simple class which caches the previous value written to an NT entry
+-// Used to prevent redundant, repeated writes of the same value
+-template <typename Topic>
+-class MatchDataSenderEntry {
+- public:
+-  MatchDataSenderEntry(
+-      const std::shared_ptr<prosdk::nt::NetworkTable>& table, std::string_view key,
+-      typename Topic::ParamType initialVal,
+-      prosdk::util::json topicProperties = prosdk::util::json::object())
+-      : publisher{Topic{table->GetTopic(key)}.PublishEx(Topic::TYPE_STRING,
+-                                                        topicProperties)},
+-        prevVal{initialVal} {
+-    publisher.Set(initialVal);
+-  }
+-
+-  void Set(typename Topic::ParamType val) {
+-    if (val != prevVal) {
+-      publisher.Set(val);
+-      prevVal = val;
+-    }
+-  }
+-
+- private:
+-  typename Topic::PublisherType publisher;
+-  typename Topic::ValueType prevVal;
+-};
+-
+-static constexpr std::string_view SMART_DASHBOARD_TYPE = "DriverStation";
+-
+-struct MatchDataSender {
+-  MatchDataSender()
+-      : controlWord{table->GetStructTopic<prosdk::hal::ControlWord>("ControlWord")
+-                        .Publish()},
+-        opMode{table->GetStringTopic("OpMode").Publish()} {
+-    controlWord.Set(prevControlWord);
+-    opMode.Set("");
+-  }
+-
+-  std::shared_ptr<prosdk::nt::NetworkTable> table =
+-      prosdk::nt::NetworkTableInstance::GetDefault().GetTable("DriverStation");
+-  MatchDataSenderEntry<prosdk::nt::StringTopic> typeMetaData{
+-      table, ".type", SMART_DASHBOARD_TYPE,
+-      prosdk::util::json::object("SmartDashboard", SMART_DASHBOARD_TYPE)};
+-  MatchDataSenderEntry<prosdk::nt::StringTopic> gameData{table, "GameData", ""};
+-  MatchDataSenderEntry<prosdk::nt::StringTopic> eventName{table, "EventName", ""};
+-  MatchDataSenderEntry<prosdk::nt::IntegerTopic> matchNumber{table, "MatchNumber",
+-                                                          0};
+-  MatchDataSenderEntry<prosdk::nt::IntegerTopic> replayNumber{table,
+-                                                           "ReplayNumber", 0};
+-  MatchDataSenderEntry<prosdk::nt::IntegerTopic> matchType{table, "MatchType", 0};
+-  MatchDataSenderEntry<prosdk::nt::BooleanTopic> alliance{table, "IsRedAlliance",
+-                                                       true};
+-  MatchDataSenderEntry<prosdk::nt::IntegerTopic> station{table, "StationNumber",
+-                                                      1};
+-  MatchDataSenderEntry<prosdk::nt::IntegerTopic> allianceStation{
+-      table, "AllianceStationID", 0};
+-  prosdk::nt::StructPublisher<prosdk::hal::ControlWord> controlWord;
+-  prosdk::nt::StringPublisher opMode;
+-  prosdk::hal::ControlWord prevControlWord;
+-};
++// prosdk: upstream publishes the match data and the control word to the NetworkTables table
++// "/DriverStation" (MatchDataSender) here; ntcore is not ported, so that publisher is removed.
+ 
+ class JoystickLogSender {
+  public:
+@@ -201,7 +137,6 @@ struct Instance {
+   ~Instance();
+ 
+   prosdk::util::EventVector refreshEvents;
+-  MatchDataSender matchDataSender;
+   std::atomic<DataLogSender*> dataLogSender{nullptr};
+ 
+   // Joystick button rising/falling edge flags
+@@ -243,7 +178,6 @@ static Instance& GetInstance() {
+   return instance;
+ }
+ 
+-static void SendMatchData();
+ static void ClearJoystickAlerts();
+ static void ClearJoystickAlertsLocked();
+ static void ReportJoystickResourceWarning(int stick, JoystickResourceAlert type,
+@@ -1105,7 +1039,6 @@ void DriverStationBackend::RefreshData() {
+ 
+   inst.refreshEvents.Wakeup();
+ 
+-  SendMatchData();
+   if (auto sender = inst.dataLogSender.load()) {
+     sender->Send(prosdk::util::Now());
+   }
+@@ -1200,71 +1133,6 @@ void ClearJoystickAlertsLocked() {
+   }
+ }
+ 
+-void SendMatchData() {
+-  int32_t status = 0;
+-  HAL_AllianceStationID alliance = HAL_GetAllianceStation(&status);
+-  bool isRedAlliance = false;
+-  int stationNumber = 1;
+-  switch (alliance) {
+-    case HAL_ALLIANCE_STATION_BLUE_1:
+-      isRedAlliance = false;
+-      stationNumber = 1;
+-      break;
+-    case HAL_ALLIANCE_STATION_BLUE_2:
+-      isRedAlliance = false;
+-      stationNumber = 2;
+-      break;
+-    case HAL_ALLIANCE_STATION_BLUE_3:
+-      isRedAlliance = false;
+-      stationNumber = 3;
+-      break;
+-    case HAL_ALLIANCE_STATION_RED_1:
+-      isRedAlliance = true;
+-      stationNumber = 1;
+-      break;
+-    case HAL_ALLIANCE_STATION_RED_2:
+-      isRedAlliance = true;
+-      stationNumber = 2;
+-      break;
+-    case HAL_ALLIANCE_STATION_RED_3:
+-      isRedAlliance = true;
+-      stationNumber = 3;
+-      break;
+-    default:
+-      isRedAlliance = true;
+-      stationNumber = 0;
+-      break;
+-  }
+-
+-  HAL_MatchInfo tmpDataStore;
+-  HAL_GetMatchInfo(&tmpDataStore);
+-
+-  HAL_GameData tmpGameData;
+-  HAL_GetGameData(&tmpGameData);
+-
+-  auto& inst = GetInstance();
+-  inst.matchDataSender.eventName.Set(tmpDataStore.eventName);
+-  inst.matchDataSender.gameData.Set(
+-      std::string(reinterpret_cast<char*>(tmpGameData.gameData)));
+-  inst.matchDataSender.matchNumber.Set(tmpDataStore.matchNumber);
+-  inst.matchDataSender.replayNumber.Set(tmpDataStore.replayNumber);
+-  inst.matchDataSender.matchType.Set(static_cast<int>(tmpDataStore.matchType));
+-  inst.matchDataSender.alliance.Set(isRedAlliance);
+-  inst.matchDataSender.station.Set(stationNumber);
+-  inst.matchDataSender.allianceStation.Set(alliance);
+-
+-  hal::ControlWord ctlWord = hal::GetControlWord();
+-  if (ctlWord != inst.matchDataSender.prevControlWord) {
+-    int64_t opModeId = ctlWord.GetOpModeId();
+-    if (opModeId != inst.matchDataSender.prevControlWord.GetOpModeId()) {
+-      inst.matchDataSender.opMode.Set(inst.OpModeToString(opModeId));
+-    }
+-
+-    inst.matchDataSender.prevControlWord = ctlWord;
+-    inst.matchDataSender.controlWord.Set(ctlWord);
+-  }
+-}
+-
+ void JoystickLogSender::Init(prosdk::log::DataLog& log, unsigned int stick,
+                              int64_t timestamp) {
+   m_stick = stick;

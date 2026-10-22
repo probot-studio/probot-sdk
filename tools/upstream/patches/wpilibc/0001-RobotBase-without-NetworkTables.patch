@@ -1,0 +1,207 @@
+diff --git a/src/prosdk/framework/RobotBase.hpp b/src/prosdk/framework/RobotBase.hpp
+index 3efcdec..080deae 100644
+--- a/src/prosdk/framework/RobotBase.hpp
++++ b/src/prosdk/framework/RobotBase.hpp
+@@ -12,8 +12,9 @@
+ #include "prosdk/hal/DriverStation.hpp"
+ #include "prosdk/hal/HAL.h"
+ #include "prosdk/hal/Main.h"
+-#include "prosdk/nt/IntegerTopic.hpp"
+-#include "prosdk/nt/NetworkTable.hpp"
++#include "prosdk/platform/Thread.hpp"
++#include "prosdk/platform/WpilibcConfig.hpp"
++#include "prosdk/platform/config.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/system/RuntimeType.hpp"
+ #include "prosdk/util/RuntimeCheck.h"
+@@ -27,7 +28,7 @@ namespace prosdk {
+ int RunHALInitialization();
+ 
+ namespace impl {
+-#ifndef __FIRST_SYSTEMCORE__
++#if !PROSDK_TARGET_HW
+ void ResetMotorSafety();
+ #endif
+ 
+@@ -85,6 +86,9 @@ int StartRobot() {
+   static bool exited = false;
+ 
+   if (HAL_HasMain()) {
++    // prosdk: never the ESP-IDF pthread defaults (design/PORT.md section 7)
++    prosdk::platform::ScopedThreadConfig threadConfig{
++        {.name = "robot", .stackSize = PROSDK_ROBOT_THREAD_STACK_SIZE}};
+     std::thread thr([] {
+       try {
+         impl::RunRobot<Robot>(m, &robot);
+@@ -127,7 +131,7 @@ int StartRobot() {
+     impl::RunRobot<Robot>(m, &robot);
+   }
+ 
+-#ifndef __FIRST_SYSTEMCORE__
++#if !PROSDK_TARGET_HW
+   prosdk::impl::ResetMotorSafety();
+ #endif
+   HAL_Shutdown();
+@@ -257,7 +261,7 @@ class RobotBase {
+    * @return If the robot is running in the real world.
+    */
+   static constexpr bool IsReal() {
+-#ifdef __FIRST_SYSTEMCORE__
++#if PROSDK_TARGET_HW  // prosdk: the robot controller
+     return true;
+ #else
+     return false;
+@@ -270,7 +274,7 @@ class RobotBase {
+    * @return If the robot is running in simulation.
+    */
+   static constexpr bool IsSimulation() {
+-#ifdef __FIRST_SYSTEMCORE__
++#if PROSDK_TARGET_HW  // prosdk: the robot controller
+     return false;
+ #else
+     return true;
+@@ -302,8 +306,7 @@ class RobotBase {
+ 
+   static std::thread::id m_threadId;
+   std::shared_ptr<WarningReporter> m_warningReporter;
+-  prosdk::nt::IntegerPublisher m_programStartTimePublisher;
+-  NT_Listener connListenerHandle;
++  // prosdk: no NetworkTables (/Robot/ProgramStartTime publisher, connection listener)
+ };
+ 
+ }  // namespace wpi
+diff --git a/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp b/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp
+index c233c7b..3e431a3 100644
+--- a/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp
+@@ -17,15 +17,13 @@
+ #include <unordered_map>
+ #include <utility>
+ 
+-#include "prosdk/backend/NetworkTablesTelemetryBackend.hpp"
+-#include "prosdk/backend/NetworkTablesTunableBackend.hpp"
+ #include "prosdk/driverstation/RobotState.hpp"
+ #include "prosdk/driverstation/internal/DriverStationBackend.hpp"
+ #include "prosdk/hal/HAL.h"
+ #include "prosdk/hal/UsageReporting.hpp"
+ #include "prosdk/math/util/MathShared.hpp"
+-#include "prosdk/nt/NetworkTable.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
++#include "prosdk/platform/ConsoleFormat.hpp"
++#include "prosdk/platform/RobotHost.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/system/WPILibVersion.hpp"
+ #include "prosdk/telemetry/TelemetryRegistry.hpp"
+@@ -44,7 +42,7 @@ using namespace prosdk;
+ 
+ int prosdk::RunHALInitialization() {
+   if (!HAL_Initialize()) {
+-    std::puts("FATAL ERROR: HAL could not be initialized");
++    prosdk::platform::ConsoleWrite("FATAL ERROR: HAL could not be initialized\n");
+     return -1;
+   }
+   prosdk::util::SetReportUsageImpl(
+@@ -54,7 +52,7 @@ int prosdk::RunHALInitialization() {
+   prosdk::util::ReportUsage("WPILibVersion", GetWPILibVersion());
+   HAL_PublishWpilibVersion(std::format("{} (C++)", GetWPILibVersion()));
+ 
+-  std::puts("\n********** Robot program starting **********");
++  prosdk::platform::ConsoleWrite("\n********** Robot program starting **********\n");
+   return 0;
+ }
+ 
+@@ -64,11 +62,11 @@ namespace {
+ std::atomic<uint32_t> s_nextWarningReporterId{0};
+ 
+ void PrintDefaultTelemetryWarning(std::string_view path, std::string_view msg) {
+-  prosdk::cxx::print(stderr, "Telemetry '{}': warning: {}\n", path, msg);
++  prosdk::platform::ConsolePrint("Telemetry '{}': warning: {}\n", path, msg);
+ }
+ 
+ void PrintDefaultTunableWarning(std::string_view msg) {
+-  prosdk::cxx::print(stderr, "Tunable warning: {}\n", msg);
++  prosdk::platform::ConsolePrint("Tunable warning: {}\n", msg);
+ }
+ 
+ class WPILibMathShared : public prosdk::math::MathShared {
+@@ -193,15 +191,7 @@ RobotBase::RobotBase() {
+   m_warningReporter = std::make_shared<WarningReporter>();
+   std::weak_ptr<WarningReporter> warningReporter{m_warningReporter};
+ 
+-  auto inst = prosdk::nt::NetworkTableInstance::GetDefault();
+-  // subscribe to "" to force persistent values to propagate to local
+-  prosdk::nt::SubscribeMultiple(inst.GetHandle(), {{std::string_view{}}},
+-                             {.disableSignal = true});
+-  if constexpr (!IsSimulation()) {
+-    inst.StartServer("/home/systemcore/networktables.json", "", "robot");
+-  } else {
+-    inst.StartServer("networktables.json", "", "robot");
+-  }
++  // prosdk: no NetworkTables server (ntcore is not ported)
+ 
+   prosdk::telemetry::TelemetryRegistry::SetReportWarning(
+       [warningReporter](std::string_view path, std::string_view msg) {
+@@ -220,38 +210,10 @@ RobotBase::RobotBase() {
+         }
+       });
+ 
+-  prosdk::telemetry::TelemetryRegistry::RegisterBackend(
+-      "", std::make_shared<backend::NetworkTablesTelemetryBackend>(
+-              inst, "/Telemetry"));
+-  prosdk::tunables::TunableRegistry::RegisterBackend(
+-      "", std::make_shared<backend::NetworkTablesTunableBackend>(inst,
+-                                                                 "/Tunables"));
+-
+-  // wait for the NT server to actually start
+-  int count = 0;
+-  while ((inst.GetNetworkMode() & NT_NET_MODE_STARTING) != 0) {
+-    using namespace std::chrono_literals;
+-    std::this_thread::sleep_for(10ms);
+-    ++count;
+-    if (count > 100) {
+-      prosdk::util::print(stderr,
+-                       "timed out while waiting for NT server to start\n");
+-      break;
+-    }
+-  }
+-
+-  m_programStartTimePublisher =
+-      inst.GetIntegerTopic("/Robot/ProgramStartTime").Publish();
+-  m_programStartTimePublisher.Set(
+-      static_cast<int64_t>(prosdk::util::GetProgramStartTime()));
+-
+-  connListenerHandle =
+-      inst.AddConnectionListener(false, [&](const prosdk::nt::Event& event) {
+-        if (event.Is(prosdk::nt::EventFlags::CONNECTED)) {
+-          auto connInfo = event.GetConnectionInfo();
+-          prosdk::util::ReportUsage(std::format("NT/{}", connInfo->remote_id), "");
+-        }
+-      });
++  // prosdk: upstream registers the NetworkTables telemetry and tunable backends, waits for the
++  // NT server, publishes /Robot/ProgramStartTime and reports NT connections here. The robot host
++  // (prosdk/platform/RobotHost.hpp) installs its backends instead.
++  prosdk::platform::OnRobotBaseConstructed();
+ 
+   // Call prosdk::internal::DriverStationBackend::RefreshData() to kick things off
+   prosdk::internal::DriverStationBackend::RefreshData();
+diff --git a/src/prosdk/impl/wpilibc/cpp/hardware/motor/MotorSafety.cpp b/src/prosdk/impl/wpilibc/cpp/hardware/motor/MotorSafety.cpp
+index 5bc335d..c2565ed 100644
+--- a/src/prosdk/impl/wpilibc/cpp/hardware/motor/MotorSafety.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/hardware/motor/MotorSafety.cpp
+@@ -9,6 +9,7 @@
+ #include "prosdk/driverstation/RobotState.hpp"
+ #include "prosdk/hal/DriverStation.h"
+ #include "prosdk/hal/DriverStationTypes.h"
++#include "prosdk/platform/config.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/util/SafeThread.hpp"
+ #include "prosdk/util/SmallPtrSet.hpp"
+@@ -68,7 +69,7 @@ static MotorSafetyManager& GetManager() {
+   return manager;
+ }
+ 
+-#ifndef __FIRST_SYSTEMCORE__
++#if !PROSDK_TARGET_HW
+ namespace prosdk::impl {
+ void ResetMotorSafety() {
+   auto& manager = GetManager();

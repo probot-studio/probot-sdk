@@ -11,7 +11,7 @@ using namespace prosdk::math;
 
 Debouncer::Debouncer(prosdk::units::second_t debounceTime, DebounceType type)
     : m_debounceTime(debounceTime), m_debounceType(type) {
-  m_baseline = m_debounceType == DebounceType::FALLING;
+  m_baseline = m_debounceType == DebounceType::kFalling;
   ResetTimer();
 }
 
@@ -30,7 +30,7 @@ bool Debouncer::Calculate(bool input) {
   }
 
   if (HasElapsed()) {
-    if (m_debounceType == DebounceType::BOTH) {
+    if (m_debounceType == DebounceType::kBoth) {
       m_baseline = input;
       ResetTimer();
     }

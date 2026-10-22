@@ -1,0 +1,135 @@
+diff --git a/test/wpilibc/cpp/OpModeLifecycleTest.cpp b/test/wpilibc/cpp/OpModeLifecycleTest.cpp
+index eac62c7..800564c 100644
+--- a/test/wpilibc/cpp/OpModeLifecycleTest.cpp
++++ b/test/wpilibc/cpp/OpModeLifecycleTest.cpp
+@@ -83,7 +83,6 @@ class OpModeLifecycleTest {
+ 
+   ~OpModeLifecycleTest() {
+     prosdk::sim::ResumeTiming();
+-    prosdk::nt::ResetInstance(prosdk::nt::GetDefaultInstance());
+   }
+ 
+  protected:
+diff --git a/test/wpilibc/cpp/OpModeRobotTest.cpp b/test/wpilibc/cpp/OpModeRobotTest.cpp
+index 5aff18d..94215e6 100644
+--- a/test/wpilibc/cpp/OpModeRobotTest.cpp
++++ b/test/wpilibc/cpp/OpModeRobotTest.cpp
+@@ -29,7 +29,6 @@ class OpModeRobotTest {
+ 
+   ~OpModeRobotTest() {
+     prosdk::sim::ResumeTiming();
+-    prosdk::nt::ResetInstance(prosdk::nt::GetDefaultInstance());
+   }
+ };
+ 
+diff --git a/test/wpilibc/cpp/TimedRobotTest.cpp b/test/wpilibc/cpp/TimedRobotTest.cpp
+index 4f254ff..29c8597 100644
+--- a/test/wpilibc/cpp/TimedRobotTest.cpp
++++ b/test/wpilibc/cpp/TimedRobotTest.cpp
+@@ -14,9 +14,7 @@
+ #include <catch2/matchers/catch_matchers_floating_point.hpp>
+ 
+ #include "prosdk/hal/DriverStationTypes.h"
+-#include "prosdk/nt/DoubleTopic.hpp"
+-#include "prosdk/nt/IntegerTopic.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
++#include "prosdk/platform/RobotHost.hpp"
+ #include "prosdk/simulation/AlertSim.hpp"
+ #include "prosdk/simulation/DriverStationSim.hpp"
+ #include "prosdk/simulation/SimHooks.hpp"
+@@ -47,7 +45,6 @@ class TimedRobotTest {
+     prosdk::tunables::TunableRegistry::Reset();
+     prosdk::sim::AlertSim::ResetData();
+     prosdk::sim::ResumeTiming();
+-    prosdk::nt::ResetInstance(prosdk::nt::GetDefaultInstance());
+   }
+ };
+ 
+@@ -176,42 +173,45 @@ TEST_CASE_METHOD(TimedRobotTest, "TimedRobotTest DisabledMode", "[wpilibc]") {
+   robotThread.join();
+ }
+ 
+-TEST_CASE_METHOD(TimedRobotTest,
+-                 "TimedRobotTest ConstructorPublishesProgramStartTime",
+-                 "[wpilibc]") {
+-  auto sub = prosdk::nt::NetworkTableInstance::GetDefault()
+-                 .GetIntegerTopic("/Robot/ProgramStartTime")
+-                 .Subscribe(-1);
+-  MockRobot robot;
+-
+-  CHECK(static_cast<int64_t>(prosdk::util::GetProgramStartTime()) == sub.Get(-1));
+-}
+-
+-TEST_CASE_METHOD(
+-    TimedRobotTest,
+-    "TimedRobotTest ConstructorRegistersTelemetryAndTunableBackends",
+-    "[wpilibc]") {
+-  auto inst = prosdk::nt::NetworkTableInstance::GetDefault();
+-  MockRobot robot;
++// prosdk: upstream ConstructorPublishesProgramStartTime and
++// ConstructorRegistersTelemetryAndTunableBackends check the NetworkTables topics
++// /Robot/ProgramStartTime, /Telemetry and /Tunables; ntcore is not ported. RobotBase calls the
++// robot host hooks there instead (prosdk/platform/RobotHost.hpp), which this test checks.
++namespace {
++std::atomic<uint32_t> gRobotBaseConstructedCount{0};
++std::atomic<uint32_t> gFlushTelemetryCount{0};
++}  // namespace
+ 
+-  prosdk::telemetry::Log("telemetryDouble", 2.5);
++TEST_CASE_METHOD(TimedRobotTest, "TimedRobotTest RobotHostHooks",
++                 "[wpilibc]") {
++  gRobotBaseConstructedCount = 0;
++  gFlushTelemetryCount = 0;
++  prosdk::platform::SetRobotHostHooks(
++      {.robotBaseConstructed = [] { ++gRobotBaseConstructedCount; },
++       .flushTelemetry = [] { ++gFlushTelemetryCount; }});
++  {
++    MockRobot robot;
++    CHECK(1u == gRobotBaseConstructedCount);
++    CHECK(0u == gFlushTelemetryCount);
+ 
+-  auto telemetrySub =
+-      inst.GetDoubleTopic("/Telemetry/telemetryDouble").Subscribe(0.0);
+-  CHECK(telemetrySub.Get() == 2.5);
++    std::thread robotThread{[&] { robot.StartCompetition(); }};
++    prosdk::sim::WaitForProgramStart();
+ 
+-  prosdk::tunables::TunableDouble tunable{1.0};
+-  prosdk::tunables::Publish("tunableDouble", tunable);
++    prosdk::sim::DriverStationSim::SetEnabled(false);
++    prosdk::sim::DriverStationSim::NotifyNewData();
+ 
+-  auto tunableSub =
+-      inst.GetDoubleTopic("/Tunables/tunableDouble").Subscribe(0.0);
+-  CHECK(tunableSub.Get() == 1.0);
++    prosdk::sim::StepTiming(PERIOD);
++    CHECK(1u == robot.m_robotPeriodicCount);
++    CHECK(1u == gFlushTelemetryCount);
+ 
+-  auto tunablePub = inst.GetDoubleTopic("/Tunables/tunableDouble").Publish();
+-  tunablePub.Set(3.5);
+-  prosdk::tunables::TunableRegistry::Update();
++    prosdk::sim::StepTiming(PERIOD);
++    CHECK(2u == robot.m_robotPeriodicCount);
++    CHECK(2u == gFlushTelemetryCount);
+ 
+-  CHECK(tunable.Get() == 3.5);
++    robot.EndCompetition();
++    robotThread.join();
++  }
++  prosdk::platform::SetRobotHostHooks({});
+ }
+ 
+ TEST_CASE_METHOD(TimedRobotTest,
+diff --git a/test/wpilibc/cpp/TimesliceRobotTest.cpp b/test/wpilibc/cpp/TimesliceRobotTest.cpp
+index 461c03e..74b663b 100644
+--- a/test/wpilibc/cpp/TimesliceRobotTest.cpp
++++ b/test/wpilibc/cpp/TimesliceRobotTest.cpp
+@@ -27,7 +27,6 @@ class TimesliceRobotTest {
+ 
+   ~TimesliceRobotTest() {
+     prosdk::sim::ResumeTiming();
+-    prosdk::nt::ResetInstance(prosdk::nt::GetDefaultInstance());
+   }
+ };
+ 

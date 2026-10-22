@@ -1,0 +1,171 @@
+diff --git a/src/prosdk/impl/wpilibc/cpp/framework/IterativeRobotBase.cpp b/src/prosdk/impl/wpilibc/cpp/framework/IterativeRobotBase.cpp
+index e3bb0e8..fee59d3 100644
+--- a/src/prosdk/impl/wpilibc/cpp/framework/IterativeRobotBase.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/framework/IterativeRobotBase.cpp
+@@ -8,7 +8,8 @@
+ #include "prosdk/driverstation/internal/DriverStationBackend.hpp"
+ #include "prosdk/hal/DriverStation.h"
+ #include "prosdk/hal/DriverStationTypes.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
++#include "prosdk/platform/ConsoleFormat.hpp"
++#include "prosdk/platform/RobotHost.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/tunables/TunableRegistry.hpp"
+ #include "prosdk/util/print.hpp"
+@@ -34,7 +35,7 @@ void IterativeRobotBase::UtilityInit() {}
+ void IterativeRobotBase::RobotPeriodic() {
+   static bool firstRun = true;
+   if (firstRun) {
+-    prosdk::util::print("Default {}() method... Override me!\n", __FUNCTION__);
++    prosdk::platform::ConsolePrint("Default {}() method... Override me!\n", __FUNCTION__);
+     firstRun = false;
+   }
+ }
+@@ -42,7 +43,7 @@ void IterativeRobotBase::RobotPeriodic() {
+ void IterativeRobotBase::SimulationPeriodic() {
+   static bool firstRun = true;
+   if (firstRun) {
+-    prosdk::util::print("Default {}() method... Override me!\n", __FUNCTION__);
++    prosdk::platform::ConsolePrint("Default {}() method... Override me!\n", __FUNCTION__);
+     firstRun = false;
+   }
+ }
+@@ -50,7 +51,7 @@ void IterativeRobotBase::SimulationPeriodic() {
+ void IterativeRobotBase::DisabledPeriodic() {
+   static bool firstRun = true;
+   if (firstRun) {
+-    prosdk::util::print("Default {}() method... Override me!\n", __FUNCTION__);
++    prosdk::platform::ConsolePrint("Default {}() method... Override me!\n", __FUNCTION__);
+     firstRun = false;
+   }
+ }
+@@ -58,7 +59,7 @@ void IterativeRobotBase::DisabledPeriodic() {
+ void IterativeRobotBase::AutonomousPeriodic() {
+   static bool firstRun = true;
+   if (firstRun) {
+-    prosdk::util::print("Default {}() method... Override me!\n", __FUNCTION__);
++    prosdk::platform::ConsolePrint("Default {}() method... Override me!\n", __FUNCTION__);
+     firstRun = false;
+   }
+ }
+@@ -66,7 +67,7 @@ void IterativeRobotBase::AutonomousPeriodic() {
+ void IterativeRobotBase::TeleopPeriodic() {
+   static bool firstRun = true;
+   if (firstRun) {
+-    prosdk::util::print("Default {}() method... Override me!\n", __FUNCTION__);
++    prosdk::platform::ConsolePrint("Default {}() method... Override me!\n", __FUNCTION__);
+     firstRun = false;
+   }
+ }
+@@ -74,7 +75,7 @@ void IterativeRobotBase::TeleopPeriodic() {
+ void IterativeRobotBase::UtilityPeriodic() {
+   static bool firstRun = true;
+   if (firstRun) {
+-    prosdk::util::print("Default {}() method... Override me!\n", __FUNCTION__);
++    prosdk::platform::ConsolePrint("Default {}() method... Override me!\n", __FUNCTION__);
+     firstRun = false;
+   }
+ }
+@@ -167,8 +168,8 @@ void IterativeRobotBase::LoopFunc() {
+ 
+   m_watchdog.Disable();
+ 
+-  // Flush NetworkTables
+-  prosdk::nt::NetworkTableInstance::GetDefault().FlushLocal();
++  // prosdk: robot host telemetry flush (upstream: flush NetworkTables)
++  prosdk::platform::FlushTelemetry();
+ 
+   // Warn on loop time overruns
+   if (m_watchdog.IsExpired()) {
+diff --git a/src/prosdk/impl/wpilibc/cpp/framework/OpModeRobot.cpp b/src/prosdk/impl/wpilibc/cpp/framework/OpModeRobot.cpp
+index 4c94e5f..ab97069 100644
+--- a/src/prosdk/impl/wpilibc/cpp/framework/OpModeRobot.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/framework/OpModeRobot.cpp
+@@ -18,8 +18,9 @@
+ #include "prosdk/hal/DriverStationTypes.h"
+ #include "prosdk/hal/HAL.h"
+ #include "prosdk/hal/Notifier.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
+ #include "prosdk/opmode/OpMode.hpp"
++#include "prosdk/platform/ConsoleFormat.hpp"
++#include "prosdk/platform/RobotHost.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/system/RobotController.hpp"
+ #include "prosdk/tunables/TunableRegistry.hpp"
+@@ -87,7 +88,7 @@ void OpModeRobotBase::LoopFunc() {
+     if (data.factory) {
+       // Instantiate the new opmode
+       m_currentOpModeName = data.name;
+-      prosdk::util::print("********** Creating OpMode {} **********\n",
++      prosdk::platform::ConsolePrint("********** Creating OpMode {} **********\n",
+                        m_currentOpModeName);
+       m_currentOpMode = data.factory();
+       if (m_currentOpMode) {
+@@ -177,8 +178,8 @@ void OpModeRobotBase::LoopFunc() {
+ 
+   m_watchdog.Disable();
+ 
+-  // Flush NetworkTables
+-  prosdk::nt::NetworkTableInstance::GetDefault().FlushLocal();
++  // prosdk: robot host telemetry flush (upstream: flush NetworkTables)
++  prosdk::platform::FlushTelemetry();
+ 
+   // Warn on loop time overruns
+   if (m_watchdog.IsExpired()) {
+@@ -187,7 +188,7 @@ void OpModeRobotBase::LoopFunc() {
+ }
+ 
+ void OpModeRobotBase::StartCompetition() {
+-  prosdk::util::print("********** Robot program startup complete **********\n");
++  prosdk::platform::ConsolePrint("********** Robot program startup complete **********\n");
+ 
+   if constexpr (IsSimulation()) {
+     SimulationInit();
+@@ -259,7 +260,7 @@ void OpModeRobotBase::StartCurrentOpMode() {
+     return;
+   }
+ 
+-  prosdk::cxx::print("********** Starting OpMode {} **********\n", m_currentOpModeName);
++  prosdk::platform::ConsolePrint("********** Starting OpMode {} **********\n", m_currentOpModeName);
+ 
+   // Register the main opmode periodic callback. Capture a weak_ptr so a queued
+   // callback can never resurrect or outlive a destroyed opmode.
+@@ -283,7 +284,7 @@ void OpModeRobotBase::EndCurrentOpMode() {
+ 
+   // If the opmode was started, end it and remove its main periodic callback.
+   if (m_opmodePeriodic) {
+-    prosdk::cxx::print("********** Ending OpMode {} **********\n", m_currentOpModeName);
++    prosdk::platform::ConsolePrint("********** Ending OpMode {} **********\n", m_currentOpModeName);
+ 
+     m_currentOpMode->End();
+     m_watchdog.AddEpoch("OpMode::End()");
+@@ -301,6 +302,6 @@ void OpModeRobotBase::EndCurrentOpMode() {
+   m_activeOpModeCallbacks.clear();
+ 
+   // Regardless of whether opmode was started, destroy it
+-  prosdk::cxx::print("********** Closing OpMode {} **********\n", m_currentOpModeName);
++  prosdk::platform::ConsolePrint("********** Closing OpMode {} **********\n", m_currentOpModeName);
+   m_currentOpMode.reset();
+ }
+diff --git a/src/prosdk/impl/wpilibc/cpp/framework/TimedRobot.cpp b/src/prosdk/impl/wpilibc/cpp/framework/TimedRobot.cpp
+index 63a8663..d92f5d2 100644
+--- a/src/prosdk/impl/wpilibc/cpp/framework/TimedRobot.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/framework/TimedRobot.cpp
+@@ -12,6 +12,7 @@
+ #include "prosdk/driverstation/DriverStation.hpp"
+ #include "prosdk/driverstation/internal/DriverStationBackend.hpp"
+ #include "prosdk/hal/DriverStation.hpp"
++#include "prosdk/platform/Console.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/system/RobotController.hpp"
+ #include "prosdk/util/UsageReporting.hpp"
+@@ -24,7 +25,8 @@ void TimedRobot::StartCompetition() {
+   }
+ 
+   // Tell the DS that the robot is ready to be enabled
+-  std::puts("\n********** Robot program startup complete **********");
++  prosdk::platform::ConsoleWrite(
++      "\n********** Robot program startup complete **********\n");
+   prosdk::internal::DriverStationBackend::ObserveUserProgramStarting();
+ 
+   // Loop forever, calling the appropriate mode-dependent function

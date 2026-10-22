@@ -1,0 +1,187 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/drive/DifferentialDrive.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <utility>
+
+#include "prosdk/hardware/motor/MotorController.hpp"
+#include "prosdk/math/util/MathUtil.hpp"
+#include "prosdk/telemetry/TelemetryTable.hpp"
+#include "prosdk/util/UsageReporting.hpp"
+
+using namespace prosdk;
+
+DifferentialDrive::DifferentialDrive(MotorController& leftMotor,
+                                     MotorController& rightMotor)
+    : DifferentialDrive{
+          [&](double output) { leftMotor.SetThrottle(output); },
+          [&](double output) { rightMotor.SetThrottle(output); }} {}
+
+DifferentialDrive::DifferentialDrive(std::function<void(double)> leftMotor,
+                                     std::function<void(double)> rightMotor)
+    : m_leftMotor{std::move(leftMotor)}, m_rightMotor{std::move(rightMotor)} {}
+
+void DifferentialDrive::ArcadeDrive(double xVelocity, double zRotation,
+                                    bool squareInputs) {
+  static bool reported = false;
+  if (!reported) {
+    prosdk::util::ReportUsage("RobotDrive", "DifferentialArcade");
+    reported = true;
+  }
+
+  xVelocity = prosdk::math::ApplyDeadband(xVelocity, m_deadband);
+  zRotation = prosdk::math::ApplyDeadband(zRotation, m_deadband);
+
+  auto [left, right] = ArcadeDriveIK(xVelocity, zRotation, squareInputs);
+
+  m_leftOutput = left * m_maxOutput;
+  m_rightOutput = right * m_maxOutput;
+
+  m_leftMotor(m_leftOutput);
+  m_rightMotor(m_rightOutput);
+
+  Feed();
+}
+
+void DifferentialDrive::CurvatureDrive(double xVelocity, double zRotation,
+                                       bool allowTurnInPlace) {
+  static bool reported = false;
+  if (!reported) {
+    prosdk::util::ReportUsage("RobotDrive", "DifferentialCurvature");
+    reported = true;
+  }
+
+  xVelocity = prosdk::math::ApplyDeadband(xVelocity, m_deadband);
+  zRotation = prosdk::math::ApplyDeadband(zRotation, m_deadband);
+
+  auto [left, right] = CurvatureDriveIK(xVelocity, zRotation, allowTurnInPlace);
+
+  m_leftOutput = left * m_maxOutput;
+  m_rightOutput = right * m_maxOutput;
+
+  m_leftMotor(m_leftOutput);
+  m_rightMotor(m_rightOutput);
+
+  Feed();
+}
+
+void DifferentialDrive::TankDrive(double leftVelocity, double rightVelocity,
+                                  bool squareInputs) {
+  static bool reported = false;
+  if (!reported) {
+    prosdk::util::ReportUsage("RobotDrive", "DifferentialTank");
+    reported = true;
+  }
+
+  leftVelocity = prosdk::math::ApplyDeadband(leftVelocity, m_deadband);
+  rightVelocity = prosdk::math::ApplyDeadband(rightVelocity, m_deadband);
+
+  auto [left, right] = TankDriveIK(leftVelocity, rightVelocity, squareInputs);
+
+  m_leftOutput = left * m_maxOutput;
+  m_rightOutput = right * m_maxOutput;
+
+  m_leftMotor(m_leftOutput);
+  m_rightMotor(m_rightOutput);
+
+  Feed();
+}
+
+DifferentialDrive::WheelVelocities DifferentialDrive::ArcadeDriveIK(
+    double xVelocity, double zRotation, bool squareInputs) {
+  xVelocity = std::clamp(xVelocity, -1.0, 1.0);
+  zRotation = std::clamp(zRotation, -1.0, 1.0);
+
+  // Square the inputs (while preserving the sign) to increase fine control
+  // while permitting full power.
+  if (squareInputs) {
+    xVelocity = prosdk::math::CopyDirectionPow(xVelocity, 2);
+    zRotation = prosdk::math::CopyDirectionPow(zRotation, 2);
+  }
+
+  double leftVelocity = xVelocity - zRotation;
+  double rightVelocity = xVelocity + zRotation;
+
+  // Find the maximum possible value of (throttle + turn) along the vector that
+  // the joystick is pointing, then desaturate the wheel velocities
+  double greaterInput = (std::max)(std::abs(xVelocity), std::abs(zRotation));
+  double lesserInput = (std::min)(std::abs(xVelocity), std::abs(zRotation));
+  if (greaterInput == 0.0) {
+    return {0.0, 0.0};
+  }
+  double saturatedInput = (greaterInput + lesserInput) / greaterInput;
+  leftVelocity /= saturatedInput;
+  rightVelocity /= saturatedInput;
+
+  return {leftVelocity, rightVelocity};
+}
+
+DifferentialDrive::WheelVelocities DifferentialDrive::CurvatureDriveIK(
+    double xVelocity, double zRotation, bool allowTurnInPlace) {
+  xVelocity = std::clamp(xVelocity, -1.0, 1.0);
+  zRotation = std::clamp(zRotation, -1.0, 1.0);
+
+  double leftVelocity = 0.0;
+  double rightVelocity = 0.0;
+
+  if (allowTurnInPlace) {
+    leftVelocity = xVelocity - zRotation;
+    rightVelocity = xVelocity + zRotation;
+  } else {
+    leftVelocity = xVelocity - std::abs(xVelocity) * zRotation;
+    rightVelocity = xVelocity + std::abs(xVelocity) * zRotation;
+  }
+
+  // Desaturate wheel velocities
+  double maxMagnitude =
+      std::max(std::abs(leftVelocity), std::abs(rightVelocity));
+  if (maxMagnitude > 1.0) {
+    leftVelocity /= maxMagnitude;
+    rightVelocity /= maxMagnitude;
+  }
+
+  return {leftVelocity, rightVelocity};
+}
+
+DifferentialDrive::WheelVelocities DifferentialDrive::TankDriveIK(
+    double leftVelocity, double rightVelocity, bool squareInputs) {
+  leftVelocity = std::clamp(leftVelocity, -1.0, 1.0);
+  rightVelocity = std::clamp(rightVelocity, -1.0, 1.0);
+
+  // Square the inputs (while preserving the sign) to increase fine control
+  // while permitting full power.
+  if (squareInputs) {
+    leftVelocity = prosdk::math::CopyDirectionPow(leftVelocity, 2);
+    rightVelocity = prosdk::math::CopyDirectionPow(rightVelocity, 2);
+  }
+
+  return {leftVelocity, rightVelocity};
+}
+
+void DifferentialDrive::StopMotor() {
+  m_leftOutput = 0.0;
+  m_rightOutput = 0.0;
+
+  m_leftMotor(0.0);
+  m_rightMotor(0.0);
+
+  Feed();
+}
+
+std::string DifferentialDrive::GetDescription() const {
+  return "DifferentialDrive";
+}
+
+void DifferentialDrive::LogTo(prosdk::telemetry::TelemetryTable& table) const {
+  table.Log("Left Motor Velocity", m_leftOutput);
+  table.Log("Right Motor Velocity", m_rightOutput);
+}
+
+std::string_view DifferentialDrive::GetTelemetryType() const {
+  return "DifferentialDrive";
+}

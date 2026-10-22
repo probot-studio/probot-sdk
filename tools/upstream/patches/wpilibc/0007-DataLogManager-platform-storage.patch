@@ -1,0 +1,198 @@
+diff --git a/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp b/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
+index bc8b325..cbd7338 100644
+--- a/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
+@@ -8,17 +8,19 @@
+ #include <chrono>
+ #include <format>
+ #include <random>
++#include <span>
+ #include <string>
+ #include <vector>
+ 
+ #include "prosdk/datalog/DataLog.hpp"
+ #include "prosdk/datalog/DataLogBackgroundWriter.hpp"
+-#include "prosdk/datalog/FileLogger.hpp"
+ #include "prosdk/driverstation/MatchState.hpp"
+ #include "prosdk/driverstation/RobotState.hpp"
+ #include "prosdk/driverstation/internal/DriverStationBackend.hpp"
+ #include "prosdk/framework/RobotBase.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
++#include "prosdk/platform/ConsoleFormat.hpp"
++#include "prosdk/platform/Random.hpp"
++#include "prosdk/platform/Storage.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/system/Filesystem.hpp"
+ #include "prosdk/system/RobotController.hpp"
+@@ -47,11 +49,8 @@ struct Thread final : public prosdk::util::SafeThread {
+   std::string m_logDir;
+   bool m_filenameOverride;
+   prosdk::log::DataLogBackgroundWriter m_log;
+-  bool m_ntLoggerEnabled = false;
+-  NT_DataLogger m_ntEntryLogger = 0;
+-  NT_ConnectionDataLogger m_ntConnLogger = 0;
+-  bool m_consoleLoggerEnabled = false;
+-  prosdk::log::FileLogger m_consoleLogger;
++  // prosdk: no NetworkTables entry/connection loggers (ntcore is not ported) and no console
++  // file logger (upstream tails /home/systemcore/WPILIB_UserProgram.log)
+   prosdk::log::StringLogEntry m_messageLog;
+ };
+ 
+@@ -67,37 +66,29 @@ struct Instance {
+ static constexpr uintmax_t FREE_SPACE_THRESHOLD = 50000000;
+ static constexpr int FILE_COUNT_THRESHOLD = 10;
+ 
++// prosdk: the default directory comes from prosdk::platform::GetLogDirectory()
++// (prosdk/platform/Storage.hpp); "" means no storage and selects a discarding log.
+ static std::string MakeLogDir(std::string_view dir) {
+   if (!dir.empty()) {
+     return std::string{dir};
+   }
+-#ifdef __FIRST_SYSTEMCORE__
+-  // prefer a mounted USB drive if one is accessible
+-  std::error_code ec;
+-  auto s = prosdk::fs::status("/u", ec);
+-  if (!ec && prosdk::fs::is_directory(s) &&
+-      (s.permissions() & prosdk::fs::perms::others_write) != prosdk::fs::perms::none) {
+-    prosdk::fs::create_directory("/u/logs", ec);
+-    return "/u/logs";
+-    prosdk::util::ReportUsage("DataLogManager", "USB");
++  std::string logDir = prosdk::platform::GetLogDirectory();
++  if (logDir.empty()) {
++    prosdk::platform::ConsoleWrite(
++        "DataLogManager: no log storage (LittleFS is not mounted); log data is discarded\n");
++    return logDir;
+   }
+-  prosdk::fs::create_directory("/home/systemcore/logs", ec);
+-  prosdk::util::ReportUsage("DataLogManager", "Onboard");
+-  return "/home/systemcore/logs";
+-#else
+-  std::string logDir = filesystem::GetOperatingDirectory() + "/logs";
+   std::error_code ec;
+   prosdk::fs::create_directory(logDir, ec);
+   return logDir;
+-#endif
+ }
+ 
+ static std::string MakeLogFilename(std::string_view filenameOverride) {
+   if (!filenameOverride.empty()) {
+     return std::string{filenameOverride};
+   }
+-  static std::random_device dev;
+-  static std::mt19937 rng(dev());
++  // prosdk: the shared platform engine (no std::random_device / mt19937 on the stack)
++  prosdk::platform::RandomEngine rng;
+   std::uniform_int_distribution<int> dist(0, 15);
+   const char* v = "0123456789abcdef";
+   std::string filename = "WPILIB_TBD_";
+@@ -108,10 +99,22 @@ static std::string MakeLogFilename(std::string_view filenameOverride) {
+   return filename;
+ }
+ 
++// prosdk: without a log directory the writer discards its output (same API, no file)
++static prosdk::log::DataLogBackgroundWriter MakeWriter(std::string_view dir,
++                                                       std::string_view filename,
++                                                       double period) {
++  if (dir.empty()) {
++    return prosdk::log::DataLogBackgroundWriter{
++        [](std::span<const uint8_t>) {}, period};
++  }
++  return prosdk::log::DataLogBackgroundWriter{dir, MakeLogFilename(filename),
++                                              period};
++}
++
+ Thread::Thread(std::string_view dir, std::string_view filename, double period)
+     : m_logDir{dir},
+       m_filenameOverride{!filename.empty()},
+-      m_log{dir, MakeLogFilename(filename), period},
++      m_log{MakeWriter(dir, filename, period)},
+       m_messageLog{m_log, "messages"} {
+   StartNTLog();
+   StartConsoleLog();
+@@ -133,7 +136,7 @@ void Thread::Main() {
+     } else {
+       freeSpace = UINTMAX_MAX;
+     }
+-    if (freeSpace < FREE_SPACE_THRESHOLD) {
++    if (!m_logDir.empty() && freeSpace < FREE_SPACE_THRESHOLD) {
+       // Delete oldest WPILIB_*.wpilog files (ignore WPILIB_TBD_*.wpilog as we
+       // just created one)
+       std::vector<prosdk::fs::directory_entry> entries;
+@@ -165,11 +168,11 @@ void Thread::Main() {
+             break;
+           }
+         } else {
+-          prosdk::util::print(stderr, "DataLogManager: could not delete {}\n",
+-                           entry.path().string());
++          prosdk::platform::ConsolePrint("DataLogManager: could not delete {}\n",
++                                         entry.path().string());
+         }
+       }
+-    } else if (freeSpace < 2 * FREE_SPACE_THRESHOLD) {
++    } else if (!m_logDir.empty() && freeSpace < 2 * FREE_SPACE_THRESHOLD) {
+       WPILIB_ReportError(
+           warn::Warning,
+           "DataLogManager: Log storage device has {} MB of free space "
+@@ -290,37 +293,14 @@ void Thread::Main() {
+       newDataEvent.GetHandle());
+ }
+ 
+-void Thread::StartNTLog() {
+-  if (!m_ntLoggerEnabled) {
+-    m_ntLoggerEnabled = true;
+-    auto inst = prosdk::nt::NetworkTableInstance::GetDefault();
+-    m_ntEntryLogger = inst.StartEntryDataLog(m_log, "", "NT:");
+-    m_ntConnLogger = inst.StartConnectionDataLog(m_log, "NTConnection");
+-  }
+-}
++// prosdk: NetworkTables logging and console capture are not available (see above)
++void Thread::StartNTLog() {}
+ 
+-void Thread::StopNTLog() {
+-  if (m_ntLoggerEnabled) {
+-    m_ntLoggerEnabled = false;
+-    prosdk::nt::NetworkTableInstance::StopEntryDataLog(m_ntEntryLogger);
+-    prosdk::nt::NetworkTableInstance::StopConnectionDataLog(m_ntConnLogger);
+-  }
+-}
++void Thread::StopNTLog() {}
+ 
+-void Thread::StartConsoleLog() {
+-  if (!m_consoleLoggerEnabled && RobotBase::IsReal()) {
+-    m_consoleLoggerEnabled = true;
+-    m_consoleLogger = {"/home/systemcore/WPILIB_UserProgram.log", m_log,
+-                       "console"};
+-  }
+-}
++void Thread::StartConsoleLog() {}
+ 
+-void Thread::StopConsoleLog() {
+-  if (m_consoleLoggerEnabled && RobotBase::IsReal()) {
+-    m_consoleLoggerEnabled = false;
+-    m_consoleLogger = {};
+-  }
+-}
++void Thread::StopConsoleLog() {}
+ 
+ Instance::Instance(std::string_view dir, std::string_view filename,
+                    double period) {
+@@ -333,8 +313,8 @@ Instance::Instance(std::string_view dir, std::string_view filename,
+     if (prosdk::util::starts_with(entry.path().stem().string(), "WPILIB_TBD_") &&
+         entry.path().extension() == ".wpilog") {
+       if (!prosdk::fs::remove(entry, ec)) {
+-        prosdk::util::print(stderr, "DataLogManager: could not delete {}\n",
+-                         entry.path().string());
++        prosdk::platform::ConsolePrint("DataLogManager: could not delete {}\n",
++                                       entry.path().string());
+       }
+     }
+   }
+@@ -365,7 +345,7 @@ void DataLogManager::Stop() {
+ 
+ void DataLogManager::Log(std::string_view message) {
+   GetInstance().owner.GetThread()->m_messageLog.Append(message);
+-  prosdk::util::print("{}\n", message);
++  prosdk::platform::ConsolePrint("{}\n", message);
+ }
+ 
+ prosdk::log::DataLog& DataLogManager::GetLog() {
