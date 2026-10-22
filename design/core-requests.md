@@ -253,7 +253,7 @@ Held like #26-#29. Final API (config-free, `<probot/api.hpp>`, namespace `probot
   time). Loop overruns feed the Watchdog/`loop time overrun` warning. Sub-millisecond periods are rejected with a
   reported error.
 
-### P1 R8 delivered (2026-10-22): draft PR #31 (branch `feat/multi-gamepad`, 944be6b, stacked on #30 71a5c19)
+### P1 R8 delivered (2026-10-22): draft PR #31 (branch `feat/multi-gamepad`, 4484a97, stacked on #30 71a5c19)
 
 Held like #26-#30. API:
 - `probot::io::gamepad(int port = 0)`, `io::rawGamepad(int port = 0)`; `ds::rawGamepad(0..5, out)` returns true only for a
@@ -265,5 +265,8 @@ Held like #26-#30. API:
 - DS ports are sticky: port 0 is the selected source; others take the lowest free of 1-5 and keep it until unplugged
   (no shifting); a freed port is held for 600 ms. No rumble.
 - Wire (reference): 'J' byte 3 = port plus a value block; new 'N' frame (names). See core API.md.
+- Amend 4484a97 (same names): trigger axes get the stick deadzone (`getRawButtonValue` stays raw); when the DS
+  keyboard/touch source is port 0, the selected gamepad takes a port 1-5; a gamepad waiting for a port never moves
+  to a higher port.
 - prosdk use: HAL DS joysticks 0-5 from `ds::rawGamepad(port)`, analog triggers, 8-way POV, joystick name and
   standard-mapping flag into the HAL joystick descriptor. The build clone moves to #31 after wave 4.
