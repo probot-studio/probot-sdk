@@ -29,6 +29,12 @@ namespace prosdk::hal::esp32 {
 
 DigitalHandleResource<HAL_DigitalHandle, SmartIo, kNumSmartIo>* smartIoHandles;
 
+namespace can {
+// Weak reference (design/size.md): CAN.cpp, with the TWAI driver, is linked only when the sketch
+// uses CAN; without it there is no CAN transmission to stop.
+[[gnu::weak]] void OnEmergencyStop();
+}  // namespace can
+
 namespace {
 
 constexpr uint64_t Bit(int gpio) {
@@ -57,7 +63,9 @@ void OnEmergencyStop() {
       esp_rom_gpio_connect_out_signal(gpio, SIG_GPIO_OUT_IDX, false, false);
     }
   }
-  can::OnEmergencyStop();
+  if (can::OnEmergencyStop != nullptr) {
+    can::OnEmergencyStop();
+  }
 }
 
 // Never blocks the esp_timer task: if the PWM table is busy the next tick retries.

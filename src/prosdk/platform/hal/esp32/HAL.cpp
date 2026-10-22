@@ -35,26 +35,48 @@ namespace prosdk::hal {
 void InitializeDriverStation();
 void WaitForInitialPacket();
 namespace init {
+// Size (design/size.md): the initializers of modules a sketch may not use are weak references.
+// The linker never pulls an archive member for a weak reference, so a module (with its ESP-IDF
+// driver and its unwind tables) is linked only when the sketch calls one of its HAL functions;
+// then the initializer is defined and runs here exactly as before. SmartIo, DIO and PWM are
+// always linked (output gate), Main and the Driver Station pump are always needed.
+[[gnu::weak]] void InitializeAddressableLED();
+[[gnu::weak]] void InitializeAnalogInput();
+[[gnu::weak]] void InitializeCAN();
+[[gnu::weak]] void InitializeCANAPI();
+[[gnu::weak]] void InitializeCounter();
+[[gnu::weak]] void InitializeDutyCycle();
+[[gnu::weak]] void InitializeEncoder();
+[[gnu::weak]] void InitializeI2C();
+[[gnu::weak]] void InitializeNotifier();
+[[gnu::weak]] void InitializeSerialPort();
+
 std::atomic_bool HAL_IsInitialized{false};
 void RunInitialize() {
   HAL_Initialize();
 }
 
 void InitializeHAL() {
+  // a weak initializer is null when its module is not linked
+  auto optional = [](void (*init)()) {
+    if (init != nullptr) {
+      init();
+    }
+  };
   InitializeSmartIo();
-  InitializeAddressableLED();
-  InitializeAnalogInput();
-  InitializeCAN();
-  InitializeCANAPI();
-  InitializeCounter();
+  optional(InitializeAddressableLED);
+  optional(InitializeAnalogInput);
+  optional(InitializeCAN);
+  optional(InitializeCANAPI);
+  optional(InitializeCounter);
   InitializeDIO();
-  InitializeDutyCycle();
-  InitializeEncoder();
-  InitializeI2C();
+  optional(InitializeDutyCycle);
+  optional(InitializeEncoder);
+  optional(InitializeI2C);
   InitializeMain();
-  InitializeNotifier();
+  optional(InitializeNotifier);
   InitializePWM();
-  InitializeSerialPort();
+  optional(InitializeSerialPort);
   InitializeDriverStationPump();
 }
 }  // namespace init
