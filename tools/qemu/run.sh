@@ -154,7 +154,8 @@ for n in $(seq 1 "$boots"); do
   if [ "$bench" = 1 ] && [ "$n" -gt 1 ]; then merge_flash >/dev/null; fi
   echo "== QEMU boot $n (timeout ${timeout_s}s)"
   start=$(date +%s)
-  "$QEMU" -nographic -machine esp32s3 -m 4M "${ICOUNT[@]}" \
+  # low priority like the builds: the emulator is CPU-bound, -icount keeps its timings unaffected
+  nice -n 19 ionice -c3 "$QEMU" -nographic -machine esp32s3 -m 4M "${ICOUNT[@]}" \
     -drive "file=$FLASH,if=mtd,format=raw" \
     -drive "file=$OUT/efuse.bin,if=none,format=raw,id=efuse" \
     -global driver=nvram.esp32s3.efuse,property=drive,value=efuse \
