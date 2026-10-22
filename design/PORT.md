@@ -196,7 +196,7 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `dashboard::clearPersisted()`), so the archive falls back (text-only console, the 2024-01-01 clock
   heuristic, `HAL_HANDLE_ERROR` for the RSL state and comms-disable count, no DS stop on a halt, the
   `PROBOT_DASH_MAX_VALUE` advice for a refused schema, no `PERSISTENT` flag and one warning per
-  persistent tunable).
+  persistent tunable path).
 - Outputs (PWM, motor controllers) are zeroed whenever core reports "outputs disabled" and immediately
   on e-stop (core calls a registered e-stop callback on its own task).
 - Features prosdk needs from probot-core are listed in `design/core-requests.md` and are sent to the

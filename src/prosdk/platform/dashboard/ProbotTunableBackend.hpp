@@ -28,9 +28,12 @@
 //     robust tunable's retained value); a stored value that does not decode is refused, which
 //     erases it. A tunable published before the store is ready gets its stored value when it is
 //     published (FlushPending() or Update()). Published again in the same run (Remove and Publish,
-//     or a new tunable object on the same path), it gets the last value applied to that path in
-//     this run (or keeps its own value if none was), not core's possibly older record. A core
-//     without persistence: one warning per tunable, the flag is not set;
+//     or a new tunable object on the same path), it gets the last value a Driver Station write or
+//     restore applied to that path in this run (or keeps its own value if none was, or
+//     ClearPersistedTunables() ran since), not core's possibly older record. Core stores the
+//     topic's current value, also one the robot program set: such a value comes back after a
+//     reboot but not on a republish in the run (prosdk asked core to store only accepted Driver
+//     Station writes, R12). A core without persistence: one warning per path, the flag is not set;
 //   - before probot-core's runtime_setup() ran, Publish() succeeds and the topic waits; it is
 //     published by the next Update() or FlushPending();
 //   - a topic the store refuses (topic table, pool, name length) makes Publish() return false
@@ -117,6 +120,8 @@ class ProbotTunableBackend final : public prosdk::tunables::TunableBackend,
   void PublishWaiting();
   bool ApplyRestoredValue(const std::shared_ptr<Entry>& entry);
   void RememberTune(const Entry& entry, std::span<const uint8_t> data);
+  void SyncPersistClears();
+  void WarnIfNotPersistent(const Entry& entry);
   void TrackEntry(const std::shared_ptr<Entry>& entry,
                   const prosdk::tunables::TunableConfig* config,
                   prosdk::tunables::detail::TunableTypeValue type);
@@ -136,6 +141,8 @@ class ProbotTunableBackend final : public prosdk::tunables::TunableBackend,
   std::unordered_map<uint16_t, std::shared_ptr<ValueEntry>> m_topics;  // store id -> entry
   std::vector<PendingWrite> m_pendingWrites;
   prosdk::util::StringMap<PersistedTunable> m_persisted;
+  uint32_t m_persistClears = 0;  // dash::PersistClearCount() m_persisted last saw
+  prosdk::util::StringMap<bool> m_persistWarned;  // persistent paths warned about (no core support)
   std::vector<std::shared_ptr<Entry>> m_waiting;  // not published yet (store not ready)
   std::atomic<bool> m_hasWaiting{false};
   std::vector<std::shared_ptr<Entry>> m_dirtyEntries;

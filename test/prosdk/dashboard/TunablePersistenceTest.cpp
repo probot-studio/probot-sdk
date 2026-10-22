@@ -288,3 +288,78 @@ TEST_CASE_METHOD(DashboardFixture, "ClearPersistedTunables erases the stored val
   Arm arm{&onTune};
   CHECK(arm.gainSeenInConstructor == 1.0);
 }
+
+TEST_CASE_METHOD(DashboardFixture,
+                 "Published again after ClearPersistedTunables, a tunable starts from its code",
+                 "[prosdk][dashboard][tunable][persist]") {
+  int onTune = 0;
+  {
+    Arm arm{&onTune};
+    fake::PushWrite("/Tunables/arm/gain", VT(dash::ValueType::kDouble),
+                    fake::EncodeDouble(9.0));
+    DashboardFixture::Cycle();
+    CHECK(arm.gain.Get() == 9.0);
+    fake::PersistValues();
+    CHECK(fake::GetPersisted("/Tunables/arm/gain") == fake::EncodeDouble(9.0));
+    CHECK(prosdk::platform::ClearPersistedTunables());
+    CHECK_FALSE(fake::GetPersisted("/Tunables/arm/gain"));
+  }
+  // the next OpMode's object: the value tuned before the clear does not come back
+  Arm again{&onTune};
+  CHECK(again.gainSeenInConstructor == 1.0);
+  CHECK(onTune == 1);
+  CHECK(fake::GetDouble("/Tunables/arm/gain") == 1.0);
+  fake::PersistValues();
+  CHECK(fake::GetPersisted("/Tunables/arm/gain") != fake::EncodeDouble(9.0));
+
+  // a tune after the clear is remembered for the next republish again
+  fake::PushWrite("/Tunables/arm/gain", VT(dash::ValueType::kDouble), fake::EncodeDouble(4.0));
+  DashboardFixture::Cycle();
+  tunables::Remove("arm/gain");
+  REQUIRE(tunables::Publish("arm/gain", again.gain));
+  CHECK(again.gain.Get() == 4.0);
+}
+
+TEST_CASE_METHOD(DashboardFixture,
+                 "A stored value that does not decode is erased when a waiting topic publishes",
+                 "[prosdk][dashboard][tunable][persist]") {
+  const prosdk::math::Translation2d initial{1.25_m, 2.5_m};
+  fake::SetPersisted("/Tunables/target", VT(dash::ValueType::kRaw), "struct:Translation2d",
+                     std::vector<uint8_t>{1, 2, 3});
+  fake::SetReady(false);
+  int onTune = 0;
+  tunables::Tunable<prosdk::math::Translation2d> target{PersistentConfig(&onTune), initial};
+  REQUIRE(tunables::Publish("target", target));
+  CHECK(fake::RestoreErases() == 0);
+
+  fake::SetReady(true);
+  dash::FlushPending();
+  REQUIRE(fake::Find("/Tunables/target"));
+  CHECK(target.Get().X() == initial.X());
+  CHECK(onTune == 0);
+  CHECK(tunables::TunableRegistry::GetTuneRevision(target) == 0);
+  CHECK(fake::RestoreErases() == 1);
+  CHECK_FALSE(fake::GetPersisted("/Tunables/target"));
+  CHECK(fake::Rejects().empty());
+}
+
+TEST_CASE_METHOD(DashboardFixture,
+                 "A tunable of another type on a republished path takes core's record",
+                 "[prosdk][dashboard][tunable][persist]") {
+  int onTune = 0;
+  {
+    tunables::TunableDouble value{1.0, PersistentConfig(&onTune)};
+    REQUIRE(tunables::Publish("value", value));
+    fake::PushWrite("/Tunables/value", VT(dash::ValueType::kDouble), fake::EncodeDouble(9.0));
+    DashboardFixture::Cycle();
+    CHECK(value.Get() == 9.0);
+  }
+  // the remembered double does not apply to an int tunable on the same path
+  fake::SetPersisted("/Tunables/value", VT(dash::ValueType::kInt), "int", fake::EncodeInt(3));
+  tunables::TunableInt64 count{1, PersistentConfig(&onTune)};
+  REQUIRE(tunables::Publish("value", count));
+  CHECK(count.Get() == 3);
+  CHECK(onTune == 2);
+  CHECK(fake::Rejects().empty());
+  CHECK(fake::RestoreErases() == 0);
+}

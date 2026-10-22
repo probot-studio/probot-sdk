@@ -356,7 +356,11 @@ applied to that path in this run (Driver Station write or restore), or keeps its
 was none: core saves only while the robot is idle, so its record can be older than a value tuned
 while running. What core stores is the topic's current value (also values the robot program sets),
 2 s after it last changed and only while no OpMode runs; storing only Driver Station values is an
-open request to core. `prosdk::platform::ClearPersistedTunables()` (`<prosdk.h>`) erases every
-stored value (core's `clearPersisted()`; flash write: call it while the robot is stopped). With a
-probot-core without persistence the opt-in does nothing: the tunable starts from its code value and
-one console warning per tunable says so; `ClearPersistedTunables()` returns false.
+open request to core. Until core answers, the two rules can differ: a value the robot program set
+(after a tune) comes back after a reboot, while a republish in the same run applies the last tuned
+value. `prosdk::platform::ClearPersistedTunables()` (`<prosdk.h>`) erases every stored value (core's
+`clearPersisted()`; flash write: call it while the robot is stopped) and also what the backend
+remembers for republishing, so a tunable published again afterwards starts from its code value until
+it is tuned again. With a probot-core without persistence the opt-in does nothing: the tunable starts
+from its code value and one console warning per path says so (a republish does not repeat it);
+`ClearPersistedTunables()` returns false.

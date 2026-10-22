@@ -3,7 +3,8 @@
 // Tunable persistence with a probot-core that has no dashboard persistence (CoreOps ABI 6
 // dashClearPersisted null, as CoreBridge.hpp leaves it for a core before feat/dash-persist). Own
 // executable: the fake store is built with PROSDK_FAKE_CORE_NO_PERSIST (CoreOps is installed once
-// per process). The opt-in is a no-op with one console warning per tunable.
+// per process). The opt-in is a no-op with one console warning per path (not repeated on a
+// republish).
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -55,4 +56,15 @@ TEST_CASE_METHOD(DashboardFixture, "Persistent tunable on a core without persist
   DashboardFixture::Cycle();
   CHECK(gain.Get() == 3.0);
   CHECK(onTune == 1);
+
+  // published again (an OpMode change): no second warning for the same path
+  tunables::Remove("gain");
+  REQUIRE(tunables::Publish("gain", gain));
+  {
+    tunables::TunableDouble replacement{4.0, config};
+    tunables::Remove("other");
+    REQUIRE(tunables::Publish("other", replacement));
+  }
+  DashboardFixture::Cycle();
+  CHECK(CountOf(fake::Console(), "does not keep dashboard values across reboots") == 2);
 }

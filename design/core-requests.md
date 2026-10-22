@@ -427,7 +427,9 @@ comms-disable count). CI builds the sketches against `feat/small-items` (PROBOT_
 
 ### R12 part 2 and R11 in progress (agreed design, 2026-10-22)
 
-Core branches `feat/dash-persist` and `feat/ds-files` (work in progress; prosdk does not build against them).
+Core branches `feat/dash-persist` and `feat/ds-files` (work in progress). prosdk is wired against
+`feat/dash-persist` 5513bb0 (next section; sdk-target and CI stay on `feat/small-items`); `feat/ds-files` is
+not wired yet.
 
 - R12 tunable persistence (`feat/dash-persist`): a topic published with `PERSISTENT` gets its stored value
   back after a reboot. Core saves values of such topics to NVS (own namespace) with a debounced write, and
@@ -447,10 +449,11 @@ Core branches `feat/dash-persist` and `feat/ds-files` (work in progress; prosdk 
 
 ### R12 part 2 persistence: prosdk side wired (CoreOps ABI 6), 2026-10-22
 
-Wired against the local core commit `feat/dash-persist` 5513bb0 (not a PR yet). sdk-target and CI stay on
-`feat/small-items`, so the archive and the sketches build with the field null. Pending core's answer on two
-points: store only DS-accepted values (5513bb0 also stores the robot's own `set()` values after 2 s stable
-while idle), and a feature macro or header to detect persistence.
+Wired against the local core commit `feat/dash-persist` 5513bb0 (not a PR yet; the branch was since
+rebased onto `feat/ds-files` as 25a34e8 with the same dashboard code, and prosdk links against that too).
+sdk-target and CI stay on `feat/small-items`, so the archive and the sketches build with the field null.
+Pending core's answer on two points: store only DS-accepted values (5513bb0 also stores the robot's own
+`set()` values after 2 s stable while idle), and a feature macro or header to detect persistence.
 
 - Opt-in: a mutable tunable with `TunableConfig::properties["persistent"] = true` (the topic property name)
   is published with `TUNABLE | MUTABLE | PERSISTENT` (plus `ROBUST` when robust). Robust alone never sets
@@ -469,17 +472,25 @@ while idle), and a feature macro or header to detect persistence.
   path), the tunable gets the last value applied to that path in this run (DS write or restore), or keeps
   its own value if none was; core's restored write is then dropped without `rejectWrite()` (the record is
   not erased). Core's record can be older than a tune made less than 2 s ago or while enabled.
+  `ClearPersistedTunables()` also forgets the values remembered for republishing (a counter the backend
+  compares), so a republish after the clear does not bring a cleared value back and core does not store it
+  again. The remembered value is the last applied tune only, while 5513bb0 stores the topic's current value:
+  a value the robot program set after a tune comes back after a reboot but not on a republish in the run.
+  This goes away if core stores only DS-accepted writes (question above).
 - Detection: CoreBridge.hpp looks up `probot::dashboard::clearPersisted()` with a requires-expression on a
   dependent call (nothing is declared in core's namespaces) and fills the ABI 6 field `dashClearPersisted`.
-  A core without it leaves the field null: the opt-in is a no-op with one console warning per tunable
-  ("properties.persistent: this probot-core does not keep dashboard values across reboots ..."), the flag
-  is not set. `prosdk::platform::ClearPersistedTunables()` (Dashboard.hpp) calls `clearPersisted()`
-  (false without it); `prosdk::platform::DashPersistenceSupported()` reports the field.
+  A core without it leaves the field null: the opt-in is a no-op with one console warning per path (a
+  republish does not repeat it; "properties.persistent: this probot-core does not keep dashboard values
+  across reboots ..."), the flag is not set. `prosdk::platform::ClearPersistedTunables()` (Dashboard.hpp)
+  calls `clearPersisted()` (false without it); `prosdk::platform::DashPersistenceSupported()` reports the
+  field.
 - Tests: test/prosdk/dashboard/TunablePersistenceTest.cpp (the fake store restores a stored record on
   publish like 5513bb0: synchronous restore with value, onTune and revision; no or mismatching record;
   refused restore erases the record; robust/Selectable/immutable not persistent; other drained writes kept;
   published before ready via FlushPending and Update; republish keeps the run's value or its own;
-  ClearPersistedTunables), test/prosdk/dashboard_legacy/PersistFallbackTest.cpp (own executable, field
-  null: no flag, one warning per tunable, DS tunes still work), Cancel and Preferences mirrors not
-  PERSISTENT, CoreOpsTest (no-core and fake defaults), FakeCore.hpp leaves ABI 6 null. A single-TU compile
-  of CoreBridge.hpp detects persistence against 5513bb0 and not against `feat/small-items`.
+  ClearPersistedTunables, also before a republish; refused restore on the before-ready path; republish with
+  another type takes core's record), test/prosdk/dashboard_legacy/PersistFallbackTest.cpp (own executable,
+  field null: no flag, one warning per path also across a republish, DS tunes still work), Cancel and
+  Preferences mirrors not PERSISTENT, CoreOpsTest (no-core and fake defaults), FakeCore.hpp leaves ABI 6
+  null. A single-TU compile of CoreBridge.hpp detects persistence against 5513bb0 (and 25a34e8) and not
+  against `feat/small-items`.

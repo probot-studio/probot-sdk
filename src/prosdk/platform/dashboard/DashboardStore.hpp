@@ -144,6 +144,12 @@ bool PersistenceSupported() noexcept;
  */
 bool ClearPersisted() noexcept;
 
+/**
+ * Number of ClearPersisted() calls so far. The tunable backend compares it to forget the values
+ * it remembered for republishing persistent tunables, so a clear is not undone by a republish.
+ */
+uint32_t PersistClearCount() noexcept;
+
 /** Reports a store limit once per boot through the console. */
 void ReportLimitOnce(Limit limit, std::string_view path) noexcept;
 

@@ -21,6 +21,7 @@ namespace {
 constexpr size_t kMaxName = 255;  // core: name and type strings are at most 255 bytes
 
 std::atomic<bool> gReported[static_cast<size_t>(Limit::kCount)];
+std::atomic<uint32_t> gPersistClears{0};
 
 struct SchemaState {
   struct Pending {
@@ -222,7 +223,13 @@ bool PersistenceSupported() noexcept {
 }
 
 bool ClearPersisted() noexcept {
-  return GetCoreOps().dashClearPersisted();
+  bool cleared = GetCoreOps().dashClearPersisted();
+  gPersistClears.fetch_add(1, std::memory_order_acq_rel);
+  return cleared;
+}
+
+uint32_t PersistClearCount() noexcept {
+  return gPersistClears.load(std::memory_order_acquire);
 }
 
 bool HasSchema(std::string_view name) noexcept {
