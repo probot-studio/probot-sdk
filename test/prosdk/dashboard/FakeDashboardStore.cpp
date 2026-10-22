@@ -153,9 +153,6 @@ bool Set(uint16_t id, const void* data, size_t len) {
   t->value = std::move(value);
   t->hasValue = true;
   ++t->sets;
-  if (!same) {
-    ++t->valueGen;
-  }
   return true;
 }
 
@@ -177,6 +174,10 @@ bool SetFlags(uint16_t id, uint8_t flags) {
     return false;
   }
   t->flags = flags;
+  if ((flags & kPersistent) == 0) {  // values not stored yet are dropped
+    t->cand.reset();
+    t->tuned.reset();
+  }
   return true;
 }
 
@@ -218,11 +219,23 @@ size_t DrainWrites(void (*fn)(const prosdk::platform::CoreDashboardWrite& write,
       } else {
         S().restoreDelivered.erase(w.id);
       }
+      if (auto t = LiveTopic(w.id)) {
+        if (t->cand) {  // a newer write is drained: the candidate was not refused
+          t->tuned = std::move(t->cand);
+          t->cand.reset();
+        }
+        t->dsDelivered = !w.restore;
+      }
     }
     prosdk::platform::CoreDashboardWrite write{w.id, w.valueType,
                                                static_cast<uint16_t>(w.data.size()),
                                                w.data.data()};
     fn(write, ctx);
+    std::scoped_lock lock{S().mutex};
+    if (auto t = LiveTopic(w.id); kPersistence && t && (t->flags & kPersistent) != 0 &&
+                                  t->dsDelivered) {
+      t->cand = w.data;  // not refused during fn: the candidate to store
+    }
   }
   return writes.size();
 }
@@ -237,15 +250,21 @@ void RejectWrite(uint16_t id, uint8_t reason) {
     ++s.restoreErases;
     return;
   }
+  if (t && t->dsDelivered) {  // a refused Driver Station write is not stored
+    t->dsDelivered = false;
+    t->cand.reset();
+  }
   s.rejects.emplace_back(t ? t->path : std::string{"<unknown>"}, reason);
 }
 
 bool ClearPersisted() {
   std::scoped_lock lock{S().mutex};
   S().persisted.clear();
-  // core: savedGen = valueGen for every slot, so a topic is stored again only once it changes
+  // core also drops the accepted values not stored yet; the next Driver Station write is stored
   for (auto& t : S().topics) {
-    t.savedGen = t.valueGen;
+    t.cand.reset();
+    t.tuned.reset();
+    t.dsDelivered = false;
   }
   return true;
 }
@@ -455,9 +474,16 @@ void PersistValues() {
     return;
   }
   for (auto& t : s.topics) {
-    if (t.live && t.hasValue && (t.flags & kPersistent) != 0 && t.savedGen != t.valueGen) {
-      s.persisted[t.path] = Persisted{t.valueType, t.typeString, t.value};
-      t.savedGen = t.valueGen;
+    if (!t.live || (t.flags & kPersistent) == 0) {
+      continue;
+    }
+    if (t.cand) {  // not refused within the 2 s window: accepted
+      t.tuned = std::move(t.cand);
+      t.cand.reset();
+    }
+    if (t.tuned) {
+      s.persisted[t.path] = Persisted{t.valueType, t.typeString, std::move(*t.tuned)};
+      t.tuned.reset();
     }
   }
 }

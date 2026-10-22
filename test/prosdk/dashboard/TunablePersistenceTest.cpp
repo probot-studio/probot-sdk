@@ -4,9 +4,10 @@
 // addition: a mutable tunable with TunableConfig::properties {"persistent": true} is published
 // with core's PERSISTENT flag; core queues its stored value when the topic is created, and the
 // backend applies it before Publish() returns (published before the store is ready: when it is
-// published). Robust alone is not persistence. Published again in the same run, a tunable gets
-// the last value set on its path (core stores the topic's current value, whoever set it). The fake
-// store plays core's flash (fake::SetPersisted / PersistValues) and restore.
+// published). Robust alone is not persistence. Core stores only Driver Station writes the robot
+// accepted, never a value the robot sets; published again in the same run, a tunable gets the last
+// value core accepted on its path (a tune or core's restore). The fake store plays core's flash
+// (fake::SetPersisted / PersistValues) and restore.
 
 #include <string>
 #include <vector>
@@ -255,35 +256,61 @@ TEST_CASE_METHOD(DashboardFixture,
   // a new object on the same path in the same run gets it too
   Arm again{&onTune};
   CHECK(again.gainSeenInConstructor == 9.0);
-  // core's record was not refused (refusing would erase it)
+  // core's record was not refused (refusing would erase it); core dropped the tune with the
+  // removed topic before it could save it (the robot was running), so a reboot restores 7.5
+  fake::PersistValues();
   CHECK(fake::GetPersisted("/Tunables/arm/gain") == fake::EncodeDouble(7.5));
   CHECK(fake::Rejects().empty());
   CHECK(fake::RestoreErases() == 0);
 }
 
-TEST_CASE_METHOD(DashboardFixture,
-                 "Persistent tunable republished with its own last value is not tuned",
+TEST_CASE_METHOD(DashboardFixture, "A value the robot sets is neither stored nor remembered",
                  "[prosdk][dashboard][tunable][persist]") {
   int onTune = 0;
   tunables::TunableDouble value{1.0, PersistentConfig(&onTune)};
   REQUIRE(tunables::Publish("value", value));
   value.Set(2.0);
   tunables::TunableRegistry::Update();
-  fake::PersistValues();  // core stored the robot's value
+  CHECK(fake::GetDouble("/Tunables/value") == 2.0);
+  fake::PersistValues();
+  CHECK_FALSE(fake::GetPersisted("/Tunables/value"));
+
+  // republished: nothing was tuned on the path, so it keeps its own value, no onTune
   value.Set(3.0);
   tunables::TunableRegistry::Update();
-
-  // the last value set on the path is the tunable's own: nothing to apply, no onTune
   tunables::Remove("value");
   REQUIRE(tunables::Publish("value", value));
   CHECK(value.Get() == 3.0);
   CHECK(onTune == 0);
   CHECK(tunables::TunableRegistry::GetTuneRevision(value) == 0);
-  CHECK(fake::GetPersisted("/Tunables/value") == fake::EncodeDouble(2.0));  // not dropped
+  tunables::Remove("value");
+
+  // a new object on the path starts from its code value (as after a reboot)
+  tunables::TunableDouble next{1.0, PersistentConfig(&onTune)};
+  REQUIRE(tunables::Publish("value", next));
+  CHECK(next.Get() == 1.0);
+  CHECK(onTune == 0);
+
+  // an always-get tunable: what its update publishes is the robot's value too
+  auto config = PersistentConfig(&onTune);
+  config.polling = tunables::TunableConfig::Polling::kAlwaysGet;
+  {
+    tunables::TunableDouble polled{1.0, config};
+    REQUIRE(tunables::Publish("polled", polled));
+    polled.Set(6.0);
+    tunables::TunableRegistry::Update();
+    CHECK(fake::GetDouble("/Tunables/polled") == 6.0);
+    fake::PersistValues();
+  }
+  tunables::TunableDouble polled{1.0, config};
+  REQUIRE(tunables::Publish("polled", polled));
+  CHECK(polled.Get() == 1.0);
+  CHECK(onTune == 0);
+  CHECK_FALSE(fake::GetPersisted("/Tunables/polled"));
 }
 
 TEST_CASE_METHOD(DashboardFixture,
-                 "Persistent tunable published again gets the last value set on its path",
+                 "Persistent tunable published again gets the last tune, not a later robot Set()",
                  "[prosdk][dashboard][tunable][persist]") {
   StoreDouble("/Tunables/arm/gain", 7.5);
   int onTune = 0;
@@ -294,62 +321,49 @@ TEST_CASE_METHOD(DashboardFixture,
                     fake::EncodeDouble(9.0));
     DashboardFixture::Cycle();
     CHECK(arm.gain.Get() == 9.0);
-    // the robot program sets it after the tune; the update publishes it (core's topic value)
+    // the robot program sets it after the tune; the update publishes it
     arm.gain.Set(4.0);
     tunables::TunableRegistry::Update();
     CHECK(fake::GetDouble("/Tunables/arm/gain") == 4.0);
     CHECK(onTune == 2);
+    // core stores the tune, not the robot's value: that is what a reboot restores
+    fake::PersistValues();
+    CHECK(fake::GetPersisted("/Tunables/arm/gain") == fake::EncodeDouble(9.0));
   }
-  // the next OpMode's object, before core saved (2 s debounce, idle only): the robot's value,
-  // not the earlier tune and not core's older record
-  CHECK(fake::GetPersisted("/Tunables/arm/gain") == fake::EncodeDouble(7.5));
+  // the next OpMode's object gets the same value
   Arm again{&onTune};
-  CHECK(again.gainSeenInConstructor == 4.0);
+  CHECK(again.gainSeenInConstructor == 9.0);
   CHECK(onTune == 3);
   CHECK(tunables::TunableRegistry::GetTuneRevision(again.gain) == 1);
-  CHECK(fake::GetDouble("/Tunables/arm/gain") == 4.0);
-  // what core then stores, i.e. what a reboot restores, is the same value
-  fake::PersistValues();
-  CHECK(fake::GetPersisted("/Tunables/arm/gain") == fake::EncodeDouble(4.0));
+  CHECK(fake::GetDouble("/Tunables/arm/gain") == 9.0);
   CHECK(fake::Rejects().empty());
   CHECK(fake::RestoreErases() == 0);
 }
 
-TEST_CASE_METHOD(DashboardFixture,
-                 "An always-get persistent tunable remembers the value its update publishes",
+TEST_CASE_METHOD(DashboardFixture, "A Driver Station write the robot refuses is not stored",
                  "[prosdk][dashboard][tunable][persist]") {
+  const prosdk::math::Translation2d initial{1.25_m, 2.5_m};
   int onTune = 0;
-  auto config = PersistentConfig(&onTune);
-  config.polling = tunables::TunableConfig::Polling::kAlwaysGet;
-  {
-    tunables::TunableDouble value{1.0, config};
-    REQUIRE(tunables::Publish("value", value));
-    value.Set(6.0);
-    tunables::TunableRegistry::Update();
-    CHECK(fake::GetDouble("/Tunables/value") == 6.0);
-  }
-  tunables::TunableDouble next{1.0, config};
-  REQUIRE(tunables::Publish("value", next));
-  CHECK(next.Get() == 6.0);
-  CHECK(onTune == 1);
-}
+  tunables::Tunable<prosdk::math::Translation2d> target{PersistentConfig(&onTune), initial};
+  REQUIRE(tunables::Publish("target", target));
+  tunables::TunableDouble gain{1.0, PersistentConfig(&onTune)};
+  REQUIRE(tunables::Publish("gain", gain));
 
-TEST_CASE_METHOD(DashboardFixture,
-                 "A Set() the update has not published yet is not on the path",
-                 "[prosdk][dashboard][tunable][persist]") {
-  int onTune = 0;
-  tunables::TunableDouble value{1.0, PersistentConfig(&onTune)};
-  REQUIRE(tunables::Publish("value", value));
-  value.Set(2.0);
-  tunables::TunableRegistry::Update();
-  // removed before an update published it: core's topic still holds 2.0, so does the republish
-  value.Set(3.0);
-  tunables::Remove("value");
-  REQUIRE(tunables::Publish("value", value));
-  CHECK(value.Get() == 2.0);
-  CHECK(onTune == 1);
+  // refused by the update after the drain (does not decode) and during the drain (wrong type)
+  fake::PushWrite("/Tunables/target", VT(dash::ValueType::kRaw), std::vector<uint8_t>{1, 2, 3});
+  fake::PushWrite("/Tunables/gain", VT(dash::ValueType::kInt), fake::EncodeInt(3));
+  DashboardFixture::Cycle();
+  CHECK(fake::Rejects().size() == 2u);
+  CHECK(onTune == 0);
   fake::PersistValues();
-  CHECK(fake::GetPersisted("/Tunables/value") == fake::EncodeDouble(2.0));
+  CHECK_FALSE(fake::GetPersisted("/Tunables/target"));
+  CHECK_FALSE(fake::GetPersisted("/Tunables/gain"));
+
+  // nor remembered for a republish
+  tunables::Remove("gain");
+  REQUIRE(tunables::Publish("gain", gain));
+  CHECK(gain.Get() == 1.0);
+  CHECK(onTune == 0);
 }
 
 TEST_CASE_METHOD(DashboardFixture, "ClearPersistedTunables erases the stored values",
@@ -384,7 +398,7 @@ TEST_CASE_METHOD(DashboardFixture,
   CHECK(onTune == 1);
   CHECK(fake::GetDouble("/Tunables/arm/gain") == 1.0);
   fake::PersistValues();
-  CHECK(fake::GetPersisted("/Tunables/arm/gain") != fake::EncodeDouble(9.0));
+  CHECK_FALSE(fake::GetPersisted("/Tunables/arm/gain"));
 
   // a tune after the clear is remembered for the next republish again
   fake::PushWrite("/Tunables/arm/gain", VT(dash::ValueType::kDouble), fake::EncodeDouble(4.0));
@@ -395,30 +409,28 @@ TEST_CASE_METHOD(DashboardFixture,
 }
 
 TEST_CASE_METHOD(DashboardFixture,
-                 "A value set after ClearPersistedTunables is what the next object gets",
+                 "ClearPersistedTunables drops a tune core has not stored yet",
                  "[prosdk][dashboard][tunable][persist]") {
   int onTune = 0;
   {
     Arm arm{&onTune};
+    // tuned while running: core has not stored it when the clear runs
     fake::PushWrite("/Tunables/arm/gain", VT(dash::ValueType::kDouble),
                     fake::EncodeDouble(9.0));
     DashboardFixture::Cycle();
     CHECK(arm.gain.Get() == 9.0);
     CHECK(prosdk::platform::ClearPersistedTunables());
-    // core stores a topic again only once its value changes
     fake::PersistValues();
     CHECK_FALSE(fake::GetPersisted("/Tunables/arm/gain"));
-    // set after the clear (the update that publishes it sees the clear first), never republished
-    // before the object goes away
+    // a value the robot sets after the clear is not stored either
     arm.gain.Set(5.0);
     tunables::TunableRegistry::Update();
-    CHECK(fake::GetDouble("/Tunables/arm/gain") == 5.0);
+    fake::PersistValues();
+    CHECK_FALSE(fake::GetPersisted("/Tunables/arm/gain"));
   }
   Arm again{&onTune};
-  CHECK(again.gainSeenInConstructor == 5.0);
-  CHECK(onTune == 2);
-  fake::PersistValues();
-  CHECK(fake::GetPersisted("/Tunables/arm/gain") == fake::EncodeDouble(5.0));
+  CHECK(again.gainSeenInConstructor == 1.0);
+  CHECK(onTune == 1);
 }
 
 TEST_CASE_METHOD(DashboardFixture, "A stored value equal to the code value is not a tune",
@@ -433,6 +445,13 @@ TEST_CASE_METHOD(DashboardFixture, "A stored value equal to the code value is no
   CHECK(fake::GetPersisted("/Tunables/arm/gain") == fake::EncodeDouble(1.0));
   CHECK(fake::Rejects().empty());
   CHECK(fake::RestoreErases() == 0);
+
+  // and it is still what the path gets: an object with another default published again
+  tunables::Remove("arm/gain");
+  tunables::TunableDouble other{2.0, PersistentConfig(&onTune)};
+  REQUIRE(tunables::Publish("arm/gain", other));
+  CHECK(other.Get() == 1.0);
+  CHECK(onTune == 1);
 }
 
 TEST_CASE_METHOD(DashboardFixture,

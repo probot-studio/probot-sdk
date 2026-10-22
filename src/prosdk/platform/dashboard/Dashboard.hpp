@@ -30,13 +30,13 @@ void RegisterDashboardBackends();
 /**
  * Erases every tunable value probot-core keeps across reboots (tunables published with
  * TunableConfig::properties {"persistent": true}; core's probot::dashboard::clearPersisted()).
- * Core stores a tunable's value, whoever set it, and the stored value wins over the code default
- * after a reboot: call this once after changing a persistent tunable's default in code. The
- * tunables keep their current values; core stores each again once it changes. A persistent
- * tunable published again afterwards (OpMode change) keeps its own value, not one set before the
- * clear, until a value is set on its path again. Writes flash
- * (stalls both cores briefly): call it while the robot is stopped. Returns false when core has no
- * dashboard persistence (probot-core R12, CoreOps ABI 6) or the erase failed.
+ * Core stores the Driver Station tunes the robot applied, and a stored value wins over the code
+ * default after a reboot: call this once after changing a persistent tunable's default in code.
+ * The tunables keep their current values; core stores the next Driver Station write again. A
+ * persistent tunable published again afterwards (OpMode change) keeps its own value, not one
+ * tuned before the clear, until it is tuned again. Writes flash (stalls both cores briefly): call
+ * it while the robot is stopped. Returns false when core has no dashboard
+ * persistence (probot-core R12, CoreOps ABI 6) or the erase failed.
  */
 bool ClearPersistedTunables();
 

@@ -21,9 +21,11 @@
 //     value is re-sent afterwards. Core allows one draining task at a time; prosdk serializes its
 //     drains with the routing lock, so DrainWrites() may run on any task (core's user task every
 //     cycle, a tunable's publishing task for a persistent tunable);
-//   - persistence (probot-core R12, CoreOps ABI 6): a PERSISTENT topic's value is kept across
-//     reboots; publish() of a new topic queues the stored value as a write for the next
-//     drainWrites(), and rejectWrite() on it erases the record (no frame to the Driver Station).
+//   - persistence (probot-core R12, CoreOps ABI 6): a Driver Station write to a PERSISTENT topic
+//     that the robot did not refuse (rejectWrite() before the next write for the topic is
+//     drained, within about 2 s) is kept across reboots; values the robot sets are not. publish()
+//     of a new topic queues the stored value as a write for the next drainWrites(), and
+//     rejectWrite() on it erases the record (no frame to the Driver Station).
 // Before the store is ready, topics, values and schemas are kept here and flushed by
 // FlushPending() (run every cycle by RegisterDashboardBackends()). On a limit the store reports
 // once through the console (prosdk::platform::ConsoleWrite) and the robot keeps running.
@@ -126,8 +128,9 @@ bool SetTopicProperties(uint16_t id, const std::string& properties,
 bool SetTopicFlags(uint16_t id, uint8_t flags) noexcept;
 
 /**
- * Tells the Driver Station a drained write was not applied ('K' frame). For a value core restored
- * from its persistent storage no frame is sent; core erases the stored value instead.
+ * Tells the Driver Station a drained write was not applied ('K' frame); core does not store a
+ * refused write to a PERSISTENT topic. For a value core restored from its persistent storage no
+ * frame is sent; core erases the stored value instead.
  */
 void RejectWrite(uint16_t id, WriteStatus status) noexcept;
 
@@ -138,9 +141,10 @@ void RejectWrite(uint16_t id, WriteStatus status) noexcept;
 bool PersistenceSupported() noexcept;
 
 /**
- * Erases every stored PERSISTENT value (core's clearPersisted(); topics keep their current
- * values and are stored again once they change). Writes flash: call it while the robot is
- * stopped. False without persistence support or when the erase failed.
+ * Erases every stored PERSISTENT value and the accepted writes not stored yet (core's
+ * clearPersisted(); topics keep their current values, the next Driver Station write is stored
+ * again). Writes flash: call it while the robot is stopped. False without
+ * persistence support or when the erase failed.
  */
 bool ClearPersisted() noexcept;
 

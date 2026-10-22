@@ -38,9 +38,11 @@
 //   - R13 schema size limit (dashboard::Limits::maxSchemaBytes, no new header: detected on the type
 //     at compile time). Without it the archive reports a refused schema against
 //     PROBOT_DASH_MAX_VALUE.
-//   - R12 dashboard persistence (probot::dashboard::clearPersisted(), no new public header:
-//     detected with a requires-check on the call, kCoreHasDashPersist; core's intended check, it
-//     adds no feature macro). The PERSISTENT flag value
+//   - R12 dashboard persistence (PROBOT_HAS_DASH_PERSIST from <probot/dashboard/dashboard.hpp>,
+//     and a requires-check on probot::dashboard::clearPersisted(): kCoreHasDashPersist). The
+//     macro marks core's final rule (only Driver Station writes the robot accepted are stored);
+//     earlier drafts of core PR #39 had clearPersisted() but stored the robot's own values too,
+//     which the tunable backend's republish rule does not follow. The PERSISTENT flag value
 //     existed before (core stored it and did nothing), so it is not what is detected. Without it
 //     dashClearPersisted stays null and the archive publishes no tunable PERSISTENT.
 //   - R15 grid restarts (probot::loopGridRestarts() in <probot/core/loop_timing.hpp>, which older
@@ -398,7 +400,11 @@ inline constexpr bool kHasClearPersisted = requires(A... a) {
 }  // namespace persist_probe
 
 /** True when the sketch's probot-core keeps PERSISTENT dashboard values across reboots. */
+#if defined(PROBOT_HAS_DASH_PERSIST)
 inline constexpr bool kCoreHasDashPersist = persist_probe::kHasClearPersisted<>;
+#else
+inline constexpr bool kCoreHasDashPersist = false;
+#endif
 
 constexpr bool (*DashClearPersistedOp())() {
   if constexpr (kCoreHasDashPersist) {

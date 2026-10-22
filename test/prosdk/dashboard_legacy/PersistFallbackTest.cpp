@@ -1,10 +1,10 @@
 // Copyright (c) Probot Studio. Hand-written; see LICENSE.
 //
 // Tunable persistence with a probot-core that has no dashboard persistence (CoreOps ABI 6
-// dashClearPersisted null, as CoreBridge.hpp leaves it for a core before feat/dash-persist). Own
-// executable: the fake store is built with PROSDK_FAKE_CORE_NO_PERSIST (CoreOps is installed once
-// per process). The opt-in is a no-op with one console warning per path (not repeated on a
-// republish).
+// dashClearPersisted null, as CoreBridge.hpp leaves it for a core without
+// PROBOT_HAS_DASH_PERSIST). Own executable: the fake store is built with
+// PROSDK_FAKE_CORE_NO_PERSIST (CoreOps is installed once per process). The opt-in is a no-op with
+// one console warning per path (not repeated on a republish).
 
 #include <catch2/catch_test_macros.hpp>
 

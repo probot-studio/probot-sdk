@@ -530,24 +530,38 @@ TEST_CASE("RobotHost re-aligns after a late one-shot pass", "[robothost]") {
   // does not count an overrun (a one-shot pass)
   gGrid.next += 2400000;
   CoreLatePass(true);
-  if (!kGridRestarts) {
-    // a core without R15 shows nothing: the schedule stays on the old grid until a counted
-    // overrun, which re-aligns it the same way
-    CoreLatePass(false);
-  }
   // then passes start up to 1.5 ms late (less than half a pass, but more than the 0.1 ms left
   // between half a pass and the old grid's 2.4 ms offset)
-  const uint64_t first = gGrid.index + 1;
   const int64_t lateNs[] = {0, 1500000, 700000, 0};
-  for (int i = 0; i < 40; ++i) {
-    gGrid.Pass(lateNs[i % 4]);
+  auto run = [&](int passes) {
+    const uint64_t first = gGrid.index + 1;
+    for (int i = 0; i < passes; ++i) {
+      gGrid.Pass(lateNs[i % 4]);
+    }
+    return first;
+  };
+  auto passesWithoutOneLoop = [&](uint64_t first) {
+    size_t wrong = 0;
+    for (uint64_t pass = first; pass <= gGrid.index; ++pass) {
+      wrong += robot->LoopsInPass(pass) == 1u ? 0 : 1;
+    }
+    return wrong;
+  };
+  uint64_t first = run(40);
+  if (kGridRestarts) {
+    // re-aligned on the restart: one loop per pass, and a one-shot restart is no overrun
+    CHECK(passesWithoutOneLoop(first) == 0u);
+    CHECK(Console().find("overrun") == std::string::npos);
+  } else {
+    // a core without R15 shows nothing: the schedule keeps the old grid's phase, so a pass more
+    // than half a pass minus the 2.4 ms offset late takes in the next loop too (PORT.md)
+    CHECK(passesWithoutOneLoop(first) > 0u);
+    // until a counted overrun, which re-aligns it
+    CoreLatePass(false);
+    first = run(40);
+    CHECK(passesWithoutOneLoop(first) == 0u);
+    CHECK(Console().find("overrun") != std::string::npos);
   }
-  for (uint64_t pass = first; pass <= gGrid.index; ++pass) {
-    INFO("pass " << pass);
-    CHECK(robot->LoopsInPass(pass) == 1u);
-  }
-  // a one-shot restart is no overrun: nothing reported (with R15)
-  CHECK((Console().find("overrun") == std::string::npos) == kGridRestarts);
   uint32_t restarts = 99;
   CHECK(pf::GetLoopGridRestarts(&restarts) == kGridRestarts);
   CHECK(restarts == (kGridRestarts ? gCore.restarts : 99u));

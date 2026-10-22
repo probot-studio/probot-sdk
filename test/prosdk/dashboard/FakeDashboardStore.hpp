@@ -9,14 +9,16 @@
 // (core R13: PROBOT_DASH_MAX_SCHEMA_BYTES, 4096; SetMaxSchemaBytes(0) plays a core without R13,
 // whose schemas are limited by the value limit).
 //
-// Persistence (core R12 part 2, feat/dash-persist): a "flash" of stored values by path. publish()
-// of a new topic whose initial flags have PERSISTENT queues the stored value (same value type and
-// type string) as a write for the next drain; rejectWrite() on that delivered write erases the
-// record and sends no frame (nothing in Rejects()); clearPersisted() erases all and, like core's
-// savedGen = valueGen, a topic is stored again only once its value changes. Values are stored
-// only by PersistValues() (core's debounced idle save), each only when it changed since. Built
-// with PROSDK_FAKE_CORE_NO_PERSIST the table plays a core without persistence (dashClearPersisted
-// null, no restore).
+// Persistence (core R12 part 2, feat/dash-persist 3e9189b): a "flash" of stored values by path.
+// publish() of a new topic whose initial flags have PERSISTENT queues the stored value (same
+// value type and type string) as a write for the next drain; rejectWrite() on that delivered write
+// erases the record and sends no frame (nothing in Rejects()). Only Driver Station writes the
+// robot accepted are stored, never a value set(): a drained write to a PERSISTENT topic is the
+// candidate until rejectWrite() drops it or a newer write for the topic is drained (which
+// accepts it); PersistValues() plays core's idle save once the 2 s refusal window passed (accepts
+// the candidate, stores the accepted value). unpublish() drops values not stored yet;
+// clearPersisted() erases the records and those values. Built with PROSDK_FAKE_CORE_NO_PERSIST the
+// table plays a core without persistence (dashClearPersisted null, no restore).
 
 #pragma once
 
@@ -40,8 +42,10 @@ struct Topic {
   std::vector<uint8_t> value;
   bool hasValue = false;
   int sets = 0;  // values stored (duplicates dropped by the store are not counted)
-  uint32_t valueGen = 0;  // value changes (core's valueGen: a kept duplicate does not count)
-  uint32_t savedGen = 0;  // valueGen last stored by PersistValues() or marked by a clear
+  // persistence: the drained Driver Station write still open to refusal, the accepted one not
+  // stored yet, and whether the last drained write came from the Driver Station
+  std::optional<std::vector<uint8_t>> cand, tuned;
+  bool dsDelivered = false;
   bool live = false;
 };
 
@@ -78,7 +82,10 @@ void SetPersisted(std::string_view path, uint8_t valueType, std::string_view typ
                   std::span<const uint8_t> data);
 /** The stored value for path, if any. */
 std::optional<std::vector<uint8_t>> GetPersisted(std::string_view path);
-/** Stores the current value of every live PERSISTENT topic (core's save while idle). */
+/**
+ * Core's save while idle, after the 2 s refusal window: stores the Driver Station write each live
+ * PERSISTENT topic accepted since the last save (values the robot set are never stored).
+ */
 void PersistValues();
 /** Stored values erased by rejectWrite() of a restored value. */
 int RestoreErases();

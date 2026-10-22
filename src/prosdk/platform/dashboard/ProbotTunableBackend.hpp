@@ -27,23 +27,22 @@
 //     RecordTuneApplied, onRemoteSet, then onTune after the initial publish, as upstream applies a
 //     robust tunable's retained value); a stored value that does not decode is refused, which
 //     erases it. A tunable published before the store is ready gets its stored value when it is
-//     published (FlushPending() or Update()). Core stores the topic's current value, whoever set
-//     it (the robot program's Set(), a getter, a Driver Station write once applied and echoed, a
-//     restore), like an NT persistent topic; so a stored value wins over the code default after a
-//     reboot (ClearPersistedTunables() after changing a default). Core saves a published topic
-//     2 s after its last change and only while no OpMode runs, nothing on removal: a value set on
-//     a tunable removed at OpMode end is stored only if the path is published again and stays
-//     published while idle. Published again in the same run (Remove and Publish, or a new tunable
-//     object on the same path), it gets the last value set on that path in this run (the value
-//     core's topic last held), not core's possibly older record; it keeps its own value if nothing
-//     was set on the path since ClearPersistedTunables(); a tunable of another value type or type
-//     string than the remembered one takes core's record instead. Restored or remembered, the
-//     value goes through the Driver Station write path whoever set it (a robot Set() comes back as
-//     a tune with onRemoteSet/onTune, and it overwrites a Set() made while unpublished, as after a
-//     reboot); one equal to the tunable's own value is not applied (no tune, record kept). A value
-//     reaches the path when the backend publishes it (the next Update() after a Set()): a Set()
-//     not yet published when the tunable is removed is not on the path, for core or for the
-//     republish. A core without persistence: one warning per path, the flag is not set;
+//     published (FlushPending() or Update()). Core stores only Driver Station writes the robot
+//     code accepted (not refused with dashRejectWrite before the next write for the topic is
+//     drained or within about 2 s; the backend refuses only in OfferWrite or in the Update()
+//     that follows the drain), never a value the robot program sets (Set(), a getter): so a
+//     stored tune wins over the code default after a reboot (ClearPersistedTunables() after
+//     changing a default). Core saves an accepted write only while no OpMode runs and drops it
+//     when the topic is removed first: a tune of an OpMode's tunable removed when the OpMode
+//     ends may not reach the next reboot. Published again in the same run (Remove and
+//     Publish, or a new tunable object on the same path), it gets the last value core accepted
+//     on that path in this run (a tune the robot applied, or core's restore), not core's possibly
+//     older record; it keeps its own value if nothing was tuned or restored on the path since
+//     ClearPersistedTunables(); a tunable of another value type or type string than the
+//     remembered one takes core's record instead. Restored or remembered, the value goes through
+//     the Driver Station write path (onRemoteSet/onTune, and it overwrites a Set() made while
+//     unpublished, as after a reboot); one equal to the tunable's own value is not applied (no
+//     tune, record kept). A core without persistence: one warning per path, the flag is not set;
 //   - before probot-core's runtime_setup() ran, Publish() succeeds and the topic waits; it is
 //     published by the next Update() or FlushPending();
 //   - a topic the store refuses (topic table, pool, name length) makes Publish() return false
@@ -114,13 +113,13 @@ class ProbotTunableBackend final : public prosdk::tunables::TunableBackend,
     uint16_t id;
     std::vector<uint8_t> data;
   };
-  // a persistent tunable published by this backend (by path), and the last value set on its
-  // topic in this run (robot Set(), getter, echoed Driver Station write or restore), which is
+  // a persistent tunable published by this backend (by path), and the last value core accepted
+  // for its topic in this run (a restore, or a Driver Station write the robot applied), which is
   // what core stores; reset by ClearPersistedTunables()
   struct PersistedTunable {
     prosdk::platform::dashboard::ValueType valueType;
     std::string typeString;
-    std::optional<std::vector<uint8_t>> lastValue;
+    std::optional<std::vector<uint8_t>> lastTune;
   };
 
   std::optional<prosdk::platform::dashboard::WriteStatus> OfferWrite(
@@ -130,8 +129,7 @@ class ProbotTunableBackend final : public prosdk::tunables::TunableBackend,
 
   void PublishWaiting();
   bool ApplyRestoredValue(const std::shared_ptr<Entry>& entry);
-  void RememberValue(const Entry& entry, std::span<const uint8_t> data);
-  void RememberValueLocked(const Entry& entry, std::span<const uint8_t> data);
+  void RememberTune(const Entry& entry, std::span<const uint8_t> data);
   void SyncPersistClears();
   void WarnIfNotPersistent(const Entry& entry);
   void TrackEntry(const std::shared_ptr<Entry>& entry,
