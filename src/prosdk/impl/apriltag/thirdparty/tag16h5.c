@@ -28,7 +28,9 @@ either expressed or implied, of the Regents of The University of Michigan.
 #include <stdlib.h>
 #include "prosdk/thirdparty/apriltag/tag16h5.h"
 
-static uint64_t codedata[30] = {
+// prosdk: const, so the table stays in flash instead of being copied to RAM (design/size.md);
+// the detector only reads apriltag_family_t::codes
+static const uint64_t codedata[30] = {
    0x00000000000027c8UL,
    0x00000000000031b6UL,
    0x0000000000003859UL,
@@ -66,7 +68,7 @@ apriltag_family_t *tag16h5_create(void)
    tf->name = strdup("tag16h5");
    tf->h = 5;
    tf->ncodes = 30;
-   tf->codes = codedata;
+   tf->codes = (uint64_t *)codedata;  // prosdk: read-only table
    tf->nbits = 16;
    tf->bit_x = calloc(16, sizeof(uint32_t));
    tf->bit_y = calloc(16, sizeof(uint32_t));

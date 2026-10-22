@@ -1,0 +1,48 @@
+diff --git a/src/prosdk/impl/apriltag/thirdparty/tag16h5.c b/src/prosdk/impl/apriltag/thirdparty/tag16h5.c
+index 171adc7..b0d323f 100644
+--- a/src/prosdk/impl/apriltag/thirdparty/tag16h5.c
++++ b/src/prosdk/impl/apriltag/thirdparty/tag16h5.c
+@@ -28,7 +28,9 @@ either expressed or implied, of the Regents of The University of Michigan.
+ #include <stdlib.h>
+ #include "prosdk/thirdparty/apriltag/tag16h5.h"
+ 
+-static uint64_t codedata[30] = {
++// prosdk: const, so the table stays in flash instead of being copied to RAM (design/size.md);
++// the detector only reads apriltag_family_t::codes
++static const uint64_t codedata[30] = {
+    0x00000000000027c8UL,
+    0x00000000000031b6UL,
+    0x0000000000003859UL,
+@@ -66,7 +68,7 @@ apriltag_family_t *tag16h5_create(void)
+    tf->name = strdup("tag16h5");
+    tf->h = 5;
+    tf->ncodes = 30;
+-   tf->codes = codedata;
++   tf->codes = (uint64_t *)codedata;  // prosdk: read-only table
+    tf->nbits = 16;
+    tf->bit_x = calloc(16, sizeof(uint32_t));
+    tf->bit_y = calloc(16, sizeof(uint32_t));
+diff --git a/src/prosdk/impl/apriltag/thirdparty/tag36h11.c b/src/prosdk/impl/apriltag/thirdparty/tag36h11.c
+index 5a36268..8ecc730 100644
+--- a/src/prosdk/impl/apriltag/thirdparty/tag36h11.c
++++ b/src/prosdk/impl/apriltag/thirdparty/tag36h11.c
+@@ -28,7 +28,9 @@ either expressed or implied, of the Regents of The University of Michigan.
+ #include <stdlib.h>
+ #include "prosdk/thirdparty/apriltag/tag36h11.h"
+ 
+-static uint64_t codedata[587] = {
++// prosdk: const, so the table stays in flash instead of being copied to RAM (design/size.md);
++// the detector only reads apriltag_family_t::codes
++static const uint64_t codedata[587] = {
+    0x0000000d7e00984bUL,
+    0x0000000dda664ca7UL,
+    0x0000000dc4a1c821UL,
+@@ -623,7 +625,7 @@ apriltag_family_t *tag36h11_create(void)
+    tf->name = strdup("tag36h11");
+    tf->h = 11;
+    tf->ncodes = 587;
+-   tf->codes = codedata;
++   tf->codes = (uint64_t *)codedata;  // prosdk: read-only table
+    tf->nbits = 36;
+    tf->bit_x = calloc(36, sizeof(uint32_t));
+    tf->bit_y = calloc(36, sizeof(uint32_t));
