@@ -43,7 +43,8 @@ PROSDK_ROBOT_MAIN(Robot)
   disabled until reboot. An e-stop always turns the outputs off.
 - Examples: `examples/TimedRobotDifferential`, `examples/OpModeRobotExample`,
   `examples/TimesliceRobotExample`, `examples/CommandBasedRobot` (command-based, `prosdk::cmd`),
-  `examples/DriversShowcase` (every driver in `prosdk/drivers`, design/drivers.md). Details: [design/PORT.md](design/PORT.md) section 8.1.
+  `examples/DriversShowcase` (every driver in `prosdk/drivers`, design/drivers.md),
+  `examples/AprilTagFieldPose` (robot pose from an AprilTag on the built-in field layout). Details: [design/PORT.md](design/PORT.md) section 8.1.
 
 ## Developer quick start
 
@@ -53,6 +54,7 @@ python3 tools/upstream/wpilib.py --check      # verify the tree matches the scri
 tools/build/build.sh esp32s3                  # build src/esp32s3/libprosdk.a
 tools/build/build.sh esp32s3 header_check     # compile every public header after <Arduino.h>
 tools/build/build.sh host --test              # build and run host unit tests
+tools/build/build.sh examples                 # compile examples/* (huge_app) against the archive
 ```
 
 ## License

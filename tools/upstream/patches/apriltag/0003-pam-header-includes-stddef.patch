@@ -1,0 +1,12 @@
+diff --git a/src/prosdk/thirdparty/apriltag/common/pam.h b/src/prosdk/thirdparty/apriltag/common/pam.h
+index 5e03a13..2bebf32 100644
+--- a/src/prosdk/thirdparty/apriltag/common/pam.h
++++ b/src/prosdk/thirdparty/apriltag/common/pam.h
+@@ -27,6 +27,7 @@ either expressed or implied, of the Regents of The University of Michigan.
+ 
+ #pragma once
+ 
++#include <stddef.h>  // prosdk: size_t (the header is compiled on its own)
+ #include <stdint.h>
+ 
+ enum { PAM_GRAYSCALE_ALPHA = 5000, PAM_RGB_ALPHA, PAM_RGB, PAM_GRAYSCALE };

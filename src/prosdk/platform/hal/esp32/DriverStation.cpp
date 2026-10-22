@@ -331,9 +331,9 @@ ProbotCoreDs::ProbotCoreDs() {
 HAL_ControlWord ProbotCoreDs::MakeControlWord(const CoreOps& ops) {
   const bool attached = ops.isAttached();
   if (!attached) {
-    HAL_ControlWord word;
-    word.value = 0;
-    return word;
+    HAL_ControlWord controlWord;
+    controlWord.value = 0;
+    return controlWord;
   }
   const uint8_t phase = ops.phase();
   const HAL_RobotMode mode = RobotModeFromCore(ops, phase);
@@ -353,16 +353,16 @@ void ProbotCoreDs::Poll() {
   }
   const CoreOps& ops = GetCoreOps();
   const uint32_t seq = ops.packetSeq();
-  const HAL_ControlWord word = MakeControlWord(ops);
-  if (seq == m_lastSeq && word.value == m_lastWord) {
+  const HAL_ControlWord controlWord = MakeControlWord(ops);
+  if (seq == m_lastSeq && controlWord.value == m_lastWord) {
     return;
   }
   m_lastSeq = seq;
-  m_lastWord = word.value;
+  m_lastWord = controlWord.value;
 
   Snapshot& next = m_scratch;
   std::memset(&next, 0, sizeof(next));
-  next.controlWord = word;
+  next.controlWord = controlWord;
   next.matchTime = ops.matchTimeSeconds();
   for (int i = 0; i < HAL_MAX_JOYSTICKS; ++i) {
     CoreGamepad pad;

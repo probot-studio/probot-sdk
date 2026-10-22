@@ -52,6 +52,10 @@ WPILib wpilibc            BSD 3-Clause (WPILib)                src/prosdk/{backe
                                                                src/prosdk/impl/wpilibc, test/wpilibc
 WPILib commandsv2         BSD 3-Clause (WPILib)                src/prosdk/commands2,
                                                                src/prosdk/impl/commandsv2, test/commandsv2
+WPILib drivers            BSD 3-Clause (WPILib)                src/prosdk/drivers/motor/{Koors40,PWM*,
+                                                               Spark,SparkMini}.hpp,
+                                                               src/prosdk/drivers/odometry,
+                                                               src/prosdk/impl/drivers, test/drivers
 WPILib fields             BSD 3-Clause (WPILib)                src/prosdk/fields, src/prosdk/impl/fields
                                                                (incl. the field JSON data), test/fields
 WPILib apriltag           BSD 3-Clause (WPILib)                src/prosdk/apriltag,

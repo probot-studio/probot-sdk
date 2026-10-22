@@ -90,24 +90,24 @@ HAL_Status CheckPinUsable(int32_t gpio, std::string_view what) {
                      std::format("{}: GPIO {} does not exist on the ESP32-S3 (GPIO 0-21, 26-48)",
                                  what, gpio));
   }
-  uint64_t bit = Bit(gpio);
-  if ((bit & kUsbPins) != 0) {
+  uint64_t pinMask = Bit(gpio);
+  if ((pinMask & kUsbPins) != 0) {
     return MakeError(HAL_RESOURCE_IS_ALLOCATED,
                      std::format("{}: GPIO {} is reserved for USB (D-/D+: flashing and the USB "
                                  "console)",
                                  what, gpio));
   }
-  if ((bit & kConsolePins) != 0) {
+  if ((pinMask & kConsolePins) != 0) {
     return MakeError(HAL_RESOURCE_IS_ALLOCATED,
                      std::format("{}: GPIO {} is reserved for UART0 (Serial, the console)", what,
                                  gpio));
   }
-  if (esp_gpio_is_reserved(bit)) {
+  if (esp_gpio_is_reserved(pinMask)) {
     return MakeError(HAL_RESOURCE_IS_ALLOCATED,
                      std::format("{}: GPIO {} is reserved by this module's flash or PSRAM", what,
                                  gpio));
   }
-  if ((bit & platform::GetCoreReservedPins()) != 0) {
+  if ((pinMask & platform::GetCoreReservedPins()) != 0) {
     return MakeErrorPreviouslyAllocated(
         HAL_RESOURCE_IS_ALLOCATED, what, gpio,
         "probot-core (NEOPIXEL_PIN, PROBOT_RSL_PIN, PROBOT_ESTOP_ENABLE_PIN or a battery sensor "
