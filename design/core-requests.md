@@ -100,6 +100,9 @@ part of the state. `UTILITY` as a third mode next to AUTO/TELEOP (replaces WPILi
 Up to 6 gamepads (port index in the reserved byte of `'J'`), analog triggers, 8-way POV, gamepad
 name/type string. Rumble (robot to DS, Gamepad `vibrationActuator`) is nice to have.
 
+Status: delivered as draft PR #31 (see "P1 R8 delivered" below); prosdk uses it (CoreOps ABI 3).
+Rumble is still open.
+
 ### R9. Console
 
 Larger configurable telemetry text buffer, levels (error/warning/info), no 127-char printf limit.
@@ -269,9 +272,11 @@ Held like #26-#30. API:
   keyboard/touch source is port 0, the selected gamepad takes a port 1-5; a gamepad waiting for a port never moves
   to a higher port.
 - prosdk use: HAL DS joysticks 0-5 from `ds::rawGamepad(port)`, analog triggers, 8-way POV, joystick name and
-  standard-mapping flag into the HAL joystick descriptor. The build clone moves to #31 after wave 4.
+  standard-mapping flag into the HAL joystick descriptor (wired: CoreOps ABI 3, `CoreGamepad` carries the trigger
+  values, POV, name and flag; prosdk/platform/hal/CoreJoystick.cpp; CI examples job builds against
+  `feat/multi-gamepad`). With a core without R8 the bridge keeps the R2 behaviour (port 0, digital triggers).
 
-### P1 R9 delivered (2026-10-22): draft PR #33 (branch `feat/console`, 78d66ab, stacked on #31 4484a97)
+### P1 R9 delivered (2026-10-22): draft PR #33 (branch `feat/console`, rebased 301f190, stacked on #31 4484a97)
 
 API preview from probot-core (config-free, `<probot/api.hpp>`): `probot::console::info/warning/error(fmt, ...)`,
 `console::write(Level, text, len)`, `console::print(Level, text)`; `enum Level { Info = 0, Warning = 1, Error = 2 }`.
@@ -279,3 +284,11 @@ Callable from any task (not an ISR). Lines up to 512 bytes; write() splits longe
 UTF-8 character. prosdk use: ConsoleWrite moves from `telemetry::writeBytes` to `console::write` with a level (ReportError -> Error,
 ReportWarning/MathShared warnings -> Warning, everything else Info). Wired once the PR exists. Scheduler widget was
 added to core's R5 remainder (after R12/R13).
+
+### P1 R10 delivered (2026-10-22): draft PR #34 (branch `feat/wall-clock`, 29466db, stacked on #33 301f190)
+
+The DS page sends the browser's UTC time on every WebSocket open; the robot calls settimeofday. The first valid time
+always sets the clock; later ones only while phase STOPPED and status STOP (never mid-match, including the
+auto->teleop TRANSITION). `probot::ds::systemTimeValid()`; `time()`/`gettimeofday()` give UTC (no TZ set).
+prosdk use: HAL_GetSystemTimeValid -> CoreOps systemTimeValid (replaces the time > 2024-01-01 heuristic), so
+DataLogManager gets real file names and systemTime entries. Wired after wave 5 together with R9.
