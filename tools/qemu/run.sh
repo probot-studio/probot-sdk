@@ -17,7 +17,8 @@
 #    app; the rest erased) in .build/qemu/flash.bin
 # 4. writes the QEMU eFuse image (.build/qemu/efuse.bin, see below) and boots QEMU headless N
 #    times (default 2) on the SAME flash image (NVS and LittleFS persist between boots), UART0
-#    to .build/qemu/uart-<n>.log, until "QEMU-SMOKE END", a crash or the timeout
+#    to .build/qemu/uart-<n>.log, until "QEMU-SMOKE END", a crash or the timeout; guest time is
+#    instruction-count time (-icount, see below), independent of the host's load
 # 5. parses the CASE lines: exit 0 only if every boot printed BEGIN/END with the expected boot
 #    number and every case passed.
 #
@@ -89,13 +90,25 @@ echo "== flash image"
 python3 -c 'import sys; b = bytearray(1024); b[0x40] = 1; open(sys.argv[1], "wb").write(b)' \
   "$OUT/efuse.bin"
 
+# Virtual time (QEMU only): -icount shift=2,sleep=off. Without it QEMU's virtual clock follows the
+# host clock, so a guest vCPU thread that the loaded host does not schedule for 30 ms sees 30 ms
+# pass between two instructions: periods are skipped and the timing checks of cases c and d
+# measured host load (case d failed at load 10.5). With it the virtual clock advances 2^2 = 4 ns
+# per executed guest instruction (about 250 MIPS, the order of a 240 MHz LX7) and, with
+# sleep=off, jumps straight to the next timer deadline while both cores wait (waiti). Guest time
+# no longer depends on the host: a boot pinned to one CPU next to seven busy loops took 235 s
+# instead of 29 s and printed the same case c and d numbers. icount runs the two cores
+# round-robin on one TCG thread (no MTTCG). Timing values in the CASE lines are therefore
+# instruction-count time, not ESP32-S3 time (no caches, flash wait states or pipeline stalls).
+ICOUNT=(-icount shift=2,sleep=off)
+
 status=0
 for n in $(seq 1 "$boots"); do
   log="$OUT/uart-$n.log"
   : > "$log"
   echo "== QEMU boot $n (timeout ${timeout_s}s)"
   start=$(date +%s)
-  "$QEMU" -nographic -machine esp32s3 -m 4M \
+  "$QEMU" -nographic -machine esp32s3 -m 4M "${ICOUNT[@]}" \
     -drive "file=$OUT/flash.bin,if=mtd,format=raw" \
     -drive "file=$OUT/efuse.bin,if=none,format=raw,id=efuse" \
     -global driver=nvram.esp32s3.efuse,property=drive,value=efuse \

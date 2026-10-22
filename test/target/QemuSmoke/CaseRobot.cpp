@@ -9,6 +9,8 @@
 // as core does it, and latches: this case runs last.
 
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -262,6 +264,22 @@ void CaseRobot(Ctx& ctx) {
   QCHECK(ctx, gateOpenInAuto && gateClosedWhenStopped);
 
   // ---- timing: robot loop 20 ms, AddPeriodic 10 ms (inside the enabled windows) ----
+  // Guest time is instruction-count time (tools/qemu/run.sh boots QEMU with -icount), so the
+  // host's load does not move it; the bounds come from the scheduling model, not from the host:
+  //   - the passes start on the 1 ms FreeRTOS tick grid every 10 ms (xTaskDelayUntil above); a
+  //     pass that starts late is an overrun, and with instruction-count time that means the
+  //     passes need more than 10 ms of guest instructions: none may happen;
+  //   - without overruns the host runs every callback on the pass of its expiration (it looks
+  //     half a pass ahead), so a stamp is that pass's tick plus a latency L (the pass work before
+  //     the callback, plus up to one tick of round-robin with the priority-1 loopTask on core 1),
+  //     with 0 <= L < pass / 2: two stamps differ from the period by less than half a pass, and a
+  //     skipped or doubled period (a whole period off) fails;
+  //   - the mean of N stamps is (t_last - t_first) / (N - 1) = period + (L_last - L_first) /
+  //     (N - 1), within (pass / 2) / (N - 1) of the period;
+  //   - the window holds window / period stamps, one more or less at its edges, and every loop
+  //     stamp has an AddPeriodic stamp on the same pass (same start time) and one between two
+  //     loop stamps; each window edge can add or cut off one AddPeriodic stamp (the window starts
+  //     inside a pass, between the stamps of that pass).
   int64_t loopDev = 0, fastDev = 0;
   int loopN = 0, fastN = 0;
   double loopMean = MeanSpacing(robot->loop.t, autoFrom, autoTo, &loopDev, 20000, &loopN);
@@ -269,17 +287,35 @@ void CaseRobot(Ctx& ctx) {
   int64_t teleDev = 0;
   int teleN = 0;
   double teleMean = MeanSpacing(robot->loop.t, teleFrom, teleTo, &teleDev, 20000, &teleN);
-  QCHECK_MSG(ctx, loopMean > 19500 && loopMean < 20500, "loop mean {} us", loopMean);
-  QCHECK_MSG(ctx, fastMean > 9750 && fastMean < 10250, "AddPeriodic mean {} us", fastMean);
-  QCHECK_MSG(ctx, teleMean > 19500 && teleMean < 20500, "teleop loop mean {} us", teleMean);
-  QCHECK_MSG(ctx, fastN >= 2 * loopN - 3 && fastN <= 2 * loopN + 3, "fast {} loop {}", fastN,
+  constexpr int64_t kHalfPassUs = 10000 / 2;
+  auto meanOk = [](double mean, double period, int n) {
+    return n > 1 && std::abs(mean - period) <= double(kHalfPassUs) / double(n - 1);
+  };
+  auto countOk = [](int n, int64_t windowUs, int64_t period) {
+    return std::abs(int64_t{n} - windowUs / period) <= 1;
+  };
+  QCHECK_MSG(ctx, core.overruns.load() == 0, "{} late passes", core.overruns.load());
+  QCHECK_MSG(ctx, loopDev < kHalfPassUs && fastDev < kHalfPassUs && teleDev < kHalfPassUs,
+             "spacing off by up to {} / {} / {} us (loop / AddPeriodic / teleop loop)", loopDev,
+             fastDev, teleDev);
+  QCHECK_MSG(ctx, meanOk(loopMean, 20000, loopN), "loop mean {} us over {}", loopMean, loopN);
+  QCHECK_MSG(ctx, meanOk(fastMean, 10000, fastN), "AddPeriodic mean {} us over {}", fastMean,
+             fastN);
+  QCHECK_MSG(ctx, meanOk(teleMean, 20000, teleN), "teleop loop mean {} us over {}", teleMean,
+             teleN);
+  QCHECK_MSG(ctx,
+             countOk(loopN, autoTo - autoFrom, 20000) && countOk(teleN, teleTo - teleFrom, 20000),
+             "loop {} in {} us, teleop loop {} in {} us", loopN, autoTo - autoFrom, teleN,
+             teleTo - teleFrom);
+  QCHECK_MSG(ctx, fastN >= 2 * loopN - 2 && fastN <= 2 * loopN + 2, "fast {} loop {}", fastN,
              loopN);
 
   ctx.Note("boot_us={} passes={} pass_mean_us={} pass_max_us={} overruns={}", bootUs, passes,
            passes ? passSumUs / passes : 0, passMaxUs, core.overruns.load());
-  ctx.Note("loop_mean_us={:.0f} loop_maxdev_us={} addperiodic_mean_us={:.0f} "
-           "addperiodic_maxdev_us={} estop_hook_us={}",
-           loopMean, loopDev, fastMean, fastDev, run.us);
+  ctx.Note("loop_n={} loop_mean_us={:.0f} loop_maxdev_us={} addperiodic_n={} "
+           "addperiodic_mean_us={:.0f} addperiodic_maxdev_us={} teleop_n={} teleop_mean_us={:.0f} "
+           "teleop_maxdev_us={} estop_hook_us={}",
+           loopN, loopMean, loopDev, fastN, fastMean, fastDev, teleN, teleMean, teleDev, run.us);
   ctx.Note("dash_topics={} dash_sets={}", core.topics.load(), core.sets.load());
 }
 

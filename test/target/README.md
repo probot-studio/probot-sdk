@@ -37,6 +37,17 @@ library adds. No libraries folder is passed: probot-core cannot leak in.
   SAR ADC, which QEMU does not model, so the app hangs before `setup()`. The image sets
   `BLK_VERSION_MAJOR = 1` (eFuse BLK2 bit 128), what a production chip carries. Nothing of this
   reaches a real chip.
+- `-icount shift=2,sleep=off`: guest time is instruction-count time. Without it QEMU's virtual
+  clock follows the host clock, so when the loaded host does not schedule the vCPU thread for
+  30 ms, 30 ms of guest time pass between two instructions: periods are skipped and the timing
+  checks of cases c and d measure the host's load (case d failed once at load 10.5). With it the
+  clock advances 4 ns per executed guest instruction (about 250 MIPS, the order of a 240 MHz
+  LX7) and jumps to the next timer deadline while both cores wait. The two cores run round-robin
+  on one TCG thread. A boot pinned to one host CPU next to seven busy loops took 235 s instead of
+  29 s and printed the same case c and d numbers; the same boot without `-icount` next to three
+  busy loops failed 2 checks of case c and 5 of case d (26 late passes, loop spacing off by up to
+  31 ms). Small differences between runs remain (a loop spacing of 2 ms instead of 1 ms in one
+  of six boots), far inside the bounds below.
 
 ## Cases
 
@@ -52,8 +63,29 @@ The `CASE` line reports the task's peak stack use and the heap change.
 | e | `prosdk::Preferences` on NVS: boot 1 writes every type, boot 2 reads them back from the same flash image |
 | f | `DataLogManager` on LittleFS (`/littlefs/logs`, the huge_app `spiffs` partition): writer thread, flush, the `.wpilog` read back; boot 2 finds boot 1's log |
 | g | `CommandScheduler`: subsystem periodic, default command, sequence with a 100 ms wait, race, requirement interruption, the disabled rule |
-| d | the hosted `TimedRobot` (`PROSDK_ROBOT_MAIN`, 20 ms loop + 10 ms `AddPeriodic`) through disabled -> autonomous -> disabled -> teleop -> disabled -> e-stop: lifecycle order, `RobotState` in each mode, the HAL output gate (`HAL_GetSystemActive`), loop and `AddPeriodic` spacing on esp_timer, core loop period requested by the robot (10 ms), nothing runs after the e-stop. Runs last (the e-stop latches) |
+| d | the hosted `TimedRobot` (`PROSDK_ROBOT_MAIN`, 20 ms loop + 10 ms `AddPeriodic`) through disabled -> autonomous -> disabled -> teleop -> disabled -> e-stop: lifecycle order, `RobotState` in each mode, the HAL output gate (`HAL_GetSystemActive`), core loop period requested by the robot (10 ms), timing (below), nothing runs after the e-stop. Runs last (the e-stop latches) |
 | h | every FreeRTOS task: priority, core, stack high-water mark; prosdk threads must be below priority 4 and no thread may use the default pthread config; the static TLS block (at most 64 bytes, see below); heap free / minimum / largest block |
+
+### Case d timing
+
+The fake core runs a pass every 10 ms on the 1 ms FreeRTOS tick grid (`xTaskDelayUntil`), as core
+does. The bounds follow from that schedule, not from the host:
+
+- no late pass (`overruns == 0`): in instruction-count time a late pass means the passes need
+  more than 10 ms of guest instructions;
+- without late passes the robot host runs every callback on the pass of its expiration (it looks
+  half a pass ahead), so a stamp is that pass's tick plus a latency below half a pass (the pass
+  work before the callback, plus up to a tick of round-robin with the priority-1 `loopTask` on
+  core 1). Two consecutive stamps differ from the period by less than 5 ms; a skipped or doubled
+  period is a whole period off;
+- the mean over N stamps is then within 5 ms / (N - 1) of the period (about 110 us for the
+  45 loop stamps of a window, 56 us for the 90 `AddPeriodic` stamps);
+- a window holds window / period loop stamps, plus or minus one, and twice as many
+  `AddPeriodic` stamps, plus or minus two.
+
+Measured: loop 45 stamps, mean 20020 us, largest deviation 998 us (2011 us in one boot of six);
+`AddPeriodic` 90 stamps, mean 10007 us; teleop loop mean 19998 us; 281 passes, the longest
+2.4 ms; no late pass.
 
 ## Measured (2026-10-22, `tools/qemu/run.sh --boots 2`, both boots `pass=8 fail=0`)
 
@@ -61,18 +93,18 @@ Peak stack of the 24576-byte case task and heap change per case (boot 1 / boot 2
 
 | case | stack used (bytes) | heap change (bytes) |
 |------|--------------------|---------------------|
-| a math | 12648 / 12520 | -260 |
-| b exceptions, format, HAL init | 3688 / 3688 | -23336 (HAL initialized, stays) |
-| c threads, Notifier | 2636 / 2636 (worker 1220 of 6144) | -264 |
-| e Preferences | 2504 / 3116 | -924 |
-| f DataLog | 3320 / 3384 | -3440 |
-| g CommandScheduler | 3752 / 3752 | -9472 |
-| d hosted TimedRobot | 5308 / 5308 | -21060 (robot stays registered) |
+| a math | 12512 / 12512 | -260 |
+| b exceptions, format, HAL init | 3692 / 3692 | -16652 (HAL initialized, stays) |
+| c threads, Notifier | 2640 / 2640 (worker 1220 of 6144) | -260 |
+| e Preferences | 2412 / 3120 | -916 |
+| f DataLog | 3372 / 3280 | -3360 |
+| g CommandScheduler | 3756 / 3756 | -9436 |
+| d hosted TimedRobot | 5628 / 5628 | -19344 (robot stays registered) |
 
-Heap free 327452 bytes at start, 269172 after every case, minimum ever 237032, largest free block
-196596. Minimum free stack of the remaining tasks: `prosdk` (HAL notifier) 2800, `watchdog` 2924,
-`esp_timer` 7740, `ipc0`/`ipc1` 240/248, `IDLE0`/`IDLE1` 184 to 224. Static TLS 16 bytes. The
-timing numbers in the `CASE` lines are QEMU numbers, not ESP32-S3 numbers.
+Heap free 329032 bytes at start, 279524 after every case, minimum ever 238620, largest free block
+208884. Minimum free stack of the remaining tasks: `prosdk` (HAL notifier) 2800, `watchdog` 4652,
+`esp_timer` 7836, `ipc0`/`ipc1` 248/240, `IDLE0`/`IDLE1` 228/220. Static TLS 16 bytes. The
+timing numbers in the `CASE` lines are instruction-count numbers, not ESP32-S3 numbers.
 
 ## Found by this test: thread_local in the archive overflowed the IPC tasks at boot
 
@@ -104,8 +136,9 @@ Not proven (QEMU does not emulate these, or not faithfully; they still need a bo
   show that register writes do not crash.
 - probot-core itself: WiFi AP, Driver Station WebSocket, gamepads, dashboard store, the real
   framework hooks, e-stop line and RSL, battery sensor. The `CoreOps` table here is a fake.
-- real timing: QEMU's virtual clock follows the host clock and the guest runs at emulation speed,
-  so the `*_us` numbers (pass time, Sleipnir solve time) are not ESP32-S3 numbers, and jitter
-  depends on the load of the host. The timing checks use generous tolerances.
+- real timing: guest time counts instructions at 4 ns each, without caches, flash wait states,
+  pipeline stalls or interrupt latency, so the `*_us` numbers (pass time, Sleipnir solve time)
+  are not ESP32-S3 numbers. The timing checks prove the schedule (which pass runs which
+  callback), not how long the code takes on the chip.
 - PSRAM, dual-core contention under real interrupts, brownout, flash wear, power loss during an
   NVS or LittleFS write.
