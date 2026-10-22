@@ -176,6 +176,59 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   probot-core agent (`bp msg probot-core`). prosdk code is written against that contract and is compiled
   out (`#if`) until core provides it, so prosdk builds against core 0.4.0 at every step.
 
+### 8.1 Hosted robot program (StartRobot on the robot)
+
+- **Entry point.** A sketch ends with `PROSDK_ROBOT_MAIN(Robot)` (`prosdk/platform/RobotMain.hpp`,
+  included by `<prosdk.h>`) instead of `int main() { return StartRobot<Robot>(); }`. On the robot it
+  registers a factory during static initialization (`platform::SetRobotMain`, a second one is refused
+  and a second macro is a link error); on the host it defines `main()` with upstream `StartRobot`.
+  Several sketch files may include `<prosdk.h>`; only one has the macro.
+- **Boot** (core's boot hook, once, on core's user task before its first pass; never during static
+  init, never on a new task): install the robot host hooks (`RegisterDashboardBackends` at
+  `RobotBase` construction, dashboard flush every loop), `RunHALInitialization()` once, construct
+  the robot, `RobotBase::StartHosted()` (everything `StartCompetition()` does before its loop:
+  `SimulationInit` on the host, the startup banner, `ObserveUserProgramStarting`), set core's loop
+  period, then register the robot pass as the last pre-cycle callback (after the HAL output gate,
+  the Driver Station pump and the dashboard).
+- **Exceptions.** Constructor, startup and loop exceptions are reported as upstream `StartRobot`
+  does (`RuntimeError::Report` + "The robot program quit unexpectedly...", or `what()` through
+  `HAL_SendError`; anything else is reported too instead of terminating). The program then
+  **halts**: its pass callback is removed, the HAL output gate stays closed
+  (`platform::RobotProgramHalted()`), core keeps running so the Driver Station shows the error.
+  A robot class that derives from `RobotBase` directly (blocking `StartCompetition()`) and a main
+  loop period outside 1..1000 ms are reported and halt the same way.
+- **Schedule.** The robot's `PeriodicPriorityQueue` keeps the upstream schedule (main loop,
+  `AddPeriodic`, `TimesliceRobot` slots, `PeriodicOpMode` callbacks). Core's pass period is the
+  greatest common divisor, in whole milliseconds (at most 1000), of the callback periods and of their
+  phases relative to the robot's start time; it follows `AddPeriodic`/opmode changes
+  (`SetLoopPeriodMs`, R6). A callback whose phase is not whole milliseconds (a `PeriodicOpMode`
+  callback is timed from the opmode's construction) is moved to the nearest pass instead of
+  shrinking the period; one below 1 ms runs once per pass (reported). The schedule is aligned with
+  core's passes (start time and expirations shifted by less than half a pass) at the first pass,
+  after a period change and after a late pass (core restarts its grid). Each pass runs
+  `PeriodicPriorityQueue::RunDue(now, half a pass)`: every callback due by the middle of the next
+  pass, earliest first, rescheduled exactly as `RunCallbacks()` (skips the periods it is behind),
+  so jitter of the earlier pre-cycle callbacks never makes a callback miss its pass. Upstream
+  watchdogs (`IterativeRobotBase`, `OpModeRobot`) still report loop overruns; core's late-pass
+  count is reported as a warning (at most once per second).
+- **Modes and opmodes** come only from the HAL Driver Station layer (`hal-esp32.md`): enabled = core
+  `outputsEnabled()`, robot mode from the phase, the active opmode id in INIT/RUN and the selected
+  one while idle (R7). `OpModeRobot::PublishOpModes()` sends the opmode list to core
+  (`HAL_SetOpModeOptions` -> `SetOpModeOptions`, ids = WPILib opmode ids, stable per mode + name).
+- **E-stop.** The HAL closes the output gate from core's e-stop callback. Core then deletes the user
+  task, so the robot object is never touched again; the robot host's pass checks
+  `EmergencyStopped()` and stops as well (host tests). Threads the program started itself
+  (`Notifier`, `MotorSafety`, `Watchdog`) keep running, but every output they write is refused by
+  the gate.
+- **Driver Station display.** `DriverStationDisplay` frames go to the Driver Station console with
+  the ANSI sequences removed and repeated frames dropped (the page has no display panel).
+- **Tests.** `test/prosdk/robot` (own executable): the robot host on the HAL sim with a fake core
+  table, driving core's hooks on simulated time (disabled -> auto -> teleop -> utility -> e-stop,
+  callback order, `AddPeriodic`/timeslice timing, jitter, late pass, opmode selection, halts).
+- **Examples** (`esp32:esp32:esp32s3:PartitionScheme=huge_app`, 2026-10-22; flash / static RAM):
+  `TimedRobotDifferential` 1926441 / 65764 bytes, `OpModeRobotExample` 1904333 / 65772,
+  `TimesliceRobotExample` 1902981 / 65708 (of 3145728 / 327680).
+
 ## 9. Build (incremental, low load)
 
 - Out-of-Arduino CMake build of `libprosdk.a` with a toolchain file that reproduces the Arduino recipe

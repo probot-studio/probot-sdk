@@ -117,7 +117,9 @@ DS lists and downloads files that prosdk writes to LittleFS/SD (WPILib DataLog `
 
 ### R12. Small items
 
-- `probot::requestStop()`: cooperative stop from code.
+- `probot::requestStop()`: cooperative stop from code. The prosdk robot host would call it when the robot
+  program halts (constructor or loop exception, unsupported period): today it only keeps prosdk's outputs
+  disabled and prints the error, and the DS still shows the robot as enableable.
 - `battery::currentAmps()` declared in every configuration (NaN when there is no sensor); brownout or
   low-battery flag.
 - Optional persistence of DS-written tunables in NVS (robust tunables), separate namespace.
