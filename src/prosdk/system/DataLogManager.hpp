@@ -47,6 +47,13 @@ namespace prosdk {
  * overflow is counted in a "bytes dropped" line. As upstream it starts by
  * default only on the robot (RobotBase::IsReal()); LogConsoleOutput(true) also
  * starts it on the host.
+ *
+ * prosdk: with a probot-core that shares files (R11), the log directory is
+ * offered on the Driver Station as "logs" once it exists (Logs page,
+ * "Dosyalar" card: listed and downloaded while the robot is idle). A share
+ * named "logs" made by the sketch is replaced. Stop() takes it back, waiting
+ * at most 1 s for a running download to stop, so the file system may be
+ * unmounted afterwards. With an older core nothing is shared.
  */
 class DataLogManager final {
  public:
@@ -67,6 +74,8 @@ class DataLogManager final {
 
   /**
    * Stop data log manager.
+   * prosdk: also stops offering the log directory on the Driver Station (see
+   * the class comment); this may wait up to 1 s for a running download.
    */
   static void Stop();
 

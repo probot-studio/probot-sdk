@@ -38,3 +38,14 @@ prosdk_add_test(prosdk_robot_legacy_tests SOURCES ${_robot_tests})
 if(TARGET prosdk_robot_legacy_tests)
   target_compile_definitions(prosdk_robot_legacy_tests PRIVATE PROSDK_FAKE_CORE_NO_GRID_RESTARTS=1)
 endif()
+
+# own executable: DataLogManager sharing its log folder through a fake core that records
+# share()/unshare() (CoreOps is installed once per process), and the same tests against a core
+# without file sharing (a probot-core before R11: CoreOps ABI 8 filesShare/filesUnshare null)
+file(GLOB _files_tests CONFIGURE_DEPENDS "${PROSDK_ROOT}/test/prosdk/files/*.cpp")
+prosdk_add_test(prosdk_files_tests SOURCES "${PROSDK_ROOT}/test/prosdk/main.cpp" ${_files_tests})
+prosdk_add_test(prosdk_files_legacy_tests SOURCES "${PROSDK_ROOT}/test/prosdk/main.cpp"
+  ${_files_tests})
+if(TARGET prosdk_files_legacy_tests)
+  target_compile_definitions(prosdk_files_legacy_tests PRIVATE PROSDK_FAKE_CORE_NO_FILES_SHARE=1)
+endif()

@@ -15,6 +15,9 @@
 //
 // Without a card (or on the simulation) the log goes to /littlefs/logs when LittleFS is mounted,
 // and is discarded otherwise. Old logs on the card are not deleted automatically.
+//
+// While the robot is idle the .wpilog files in the log folder can be downloaded from the Driver
+// Station's Logs page, "Dosyalar" card ("logs"); no card reader needed.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

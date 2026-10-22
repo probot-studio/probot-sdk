@@ -24,6 +24,7 @@
 #include "prosdk/framework/RobotBase.hpp"
 #include "prosdk/platform/Console.hpp"
 #include "prosdk/platform/ConsoleFormat.hpp"
+#include "prosdk/platform/CoreOps.hpp"
 #include "prosdk/platform/Random.hpp"
 #include "prosdk/platform/Storage.hpp"
 #include "prosdk/platform/WpilibcConfig.hpp"
@@ -55,6 +56,9 @@ std::string FileTimestamp(std::chrono::system_clock::time_point now) {
   return buf;
 }
 
+// prosdk: name of the log folder's share on the Driver Station ("Dosyalar" card, probot-core R11)
+constexpr const char* kLogShareName = "logs";
+
 struct Thread final : public prosdk::util::SafeThread {
   Thread(std::string_view dir, std::string_view filename, double period);
   ~Thread() override;
@@ -69,6 +73,8 @@ struct Thread final : public prosdk::util::SafeThread {
   void StopConsoleLog();
   // prosdk: moves the complete console lines captured so far into the "console" entry
   void DrainConsoleLog(bool all);
+  // prosdk: offers m_logDir on the Driver Station once it exists (this thread only)
+  void ShareLogDir();
 
   std::string m_logDir;
   bool m_filenameOverride;
@@ -81,6 +87,10 @@ struct Thread final : public prosdk::util::SafeThread {
   std::mutex m_consoleLogMutex;
   prosdk::log::StringLogEntry m_consoleLog;
   prosdk::log::StringLogEntry m_messageLog;
+  // prosdk: the log folder's Driver Station share. Written by this thread, read by ~Thread after
+  // Main() returned.
+  enum class LogShare { kWaiting, kShared, kOff };
+  LogShare m_logShare = LogShare::kWaiting;
 };
 
 struct Instance {
@@ -203,6 +213,36 @@ Thread::Thread(std::string_view dir, std::string_view filename, double period)
 Thread::~Thread() {
   StopNTLog();
   StopConsoleLog();
+  // prosdk: take the folder off the Driver Station; this waits (at most 1 s) for a running
+  // download to stop, so the file system may be unmounted after Stop()
+  if (m_logShare == LogShare::kShared) {
+    prosdk::platform::UnshareFiles(kLogShareName);
+  }
+}
+
+void Thread::ShareLogDir() {
+  if (m_logShare != LogShare::kWaiting) {
+    return;
+  }
+  // no folder, or a probot-core without file sharing: nothing to offer, nothing to report
+  if (m_logDir.empty() || !prosdk::platform::FileSharingSupported()) {
+    m_logShare = LogShare::kOff;
+    return;
+  }
+  std::error_code ec;
+  if (!prosdk::fs::is_directory(m_logDir, ec)) {
+    return;  // tried again later
+  }
+  if (prosdk::platform::ShareFiles(kLogShareName, m_logDir.c_str())) {
+    m_logShare = LogShare::kShared;
+  } else {
+    m_logShare = LogShare::kOff;
+    prosdk::platform::ConsolePrint(
+        prosdk::platform::ConsoleLevel::kWarning,
+        "DataLogManager: the Driver Station cannot offer the logs in {} (probot-core shares an "
+        "absolute path of at most 95 bytes without . or .., and at most 4 folders)\n",
+        m_logDir);
+  }
 }
 
 void Thread::Main() {
@@ -280,6 +320,11 @@ void Thread::Main() {
     }
   }
 
+  // prosdk: offer the folder on the Driver Station; while it does not exist, look again once a
+  // second
+  ShareLogDir();
+  uint64_t shareTry = prosdk::util::Now();
+
   int timeoutCount = 0;
   bool paused = false;
   int dsAttachCount = 0;
@@ -303,6 +348,10 @@ void Thread::Main() {
       break;
     }
     DrainConsoleLog(false);
+    if (m_logShare == LogShare::kWaiting && prosdk::util::Now() - shareTry >= 1000000) {
+      shareTry = prosdk::util::Now();
+      ShareLogDir();
+    }
     if (!newData) {
       ++timeoutCount;
       // pause logging after being disconnected for 10 seconds

@@ -16,6 +16,8 @@
 // tests; left bumper + the same buttons runs them for the shooter.
 // The SysId log goes to the DataLog: on the robot to /littlefs/logs when LittleFS is mounted,
 // otherwise it is discarded with a console line (design/API-DIFFERENCES.md, DataLogManager).
+// While the robot is idle the .wpilog files can be downloaded from the Driver Station's Logs page,
+// "Dosyalar" card ("logs").
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6
