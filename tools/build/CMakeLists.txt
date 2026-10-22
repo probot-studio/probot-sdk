@@ -138,6 +138,13 @@ if(CMAKE_CROSSCOMPILING)
     COMMAND "${PROSDK_SIZE}" -t "${_prosdk_archive}"
     DEPENDS prosdk VERBATIM USES_TERMINAL)
 else()
+  # Host objects carry -g, so a regular archive is over 1 GB and rewritten on every relink. A thin
+  # archive (ar T) only stores paths to the objects in this build tree; the test binaries link it
+  # from here.
+  foreach(lang C CXX)
+    set(CMAKE_${lang}_ARCHIVE_CREATE "<CMAKE_AR> qcT <TARGET> <LINK_FLAGS> <OBJECTS>")
+    set(CMAKE_${lang}_ARCHIVE_APPEND "<CMAKE_AR> qT <TARGET> <LINK_FLAGS> <OBJECTS>")
+  endforeach()
   add_library(prosdk STATIC ${_objects})
   target_link_libraries(prosdk PUBLIC prosdk_options)
   set_target_properties(prosdk PROPERTIES OUTPUT_NAME prosdk)
