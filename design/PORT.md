@@ -106,7 +106,11 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   (own implementation, always, never an alias to `std::expected`), `std::print`/`std::println` to
   `prosdk::cxx::print`/`println` (on top of `std::format` + `fwrite`), `std::byteswap`, `std::to_underlying`,
   `std::invoke_r`, `std::unreachable`, and whatever else the gnu++20 build reports.
-- `if consteval` is accepted by GCC 14 in C++20 mode as an extension; it stays.
+- `if consteval` / `if !consteval` (C++23) are rewritten by the script (`cxx23` transform) to
+  `if (std::is_constant_evaluated())` / `if (!std::is_constant_evaluated())`, adding `<type_traits>`
+  where it is missing. GCC 14 accepts `if consteval` in C++20 mode as an extension, but warns
+  (`-Wc++23-extensions`) in every sketch TU that includes such a header once the user turns on
+  warnings; every use upstream is a plain constant-evaluation test, so the rewrite has the same meaning.
 - If a C++23 *language* feature that GCC 14 rejects in C++20 mode appears, patch it at the use site.
 - Multidimensional subscript (`m[i, j]`, C++23) is the exception: gnu++20 does not reject the use, it
   compiles it as a comma expression (`m[j]`), and rejects only multi-parameter `operator[]` declarations.
@@ -157,7 +161,8 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   libstdc++ (`std::format`) and header templates. Wave 2 (wpimath): a smoke sketch using units,
   geometry, kinematics/odometry, TrapezoidProfile, PID, feedforwards, LQR, KalmanFilter, spline
   trajectory generation and ArmFeedforward (Sleipnir) links to 1,837,133 B flash / 51,468 B RAM
-  (core alone 1,083,849 / 45,764). Size is measured after every wave.
+  (core alone 1,083,849 / 45,764). Size is measured after every wave. Where the flash and RAM of a
+  robot sketch go, and what was reduced: `design/size.md`.
 
 ## 8. probot-core integration
 
@@ -281,7 +286,9 @@ builds them only for its GUI). `examples/AprilTagFieldPose`: 2,102,184 B flash (
 Re-implemented for this platform: `NetworkButton` and `NetworkBooleanEvent` over tunables
 (`wpilibc/0011`); Preferences on the DS as robust tunables `/Preferences/<key>` written back to NVS
 (`src/prosdk/platform/dashboard/DashboardPreferences.*`); `DataLogManager` console capture through a
-console tee and old-log deletion from esp_littlefs space (`wpilibc/0012`); DataLog sink to flash/SD and to the DS;
+console tee and old-log deletion from esp_littlefs space (`wpilibc/0012`); DataLog sink to flash/SD (the DS
+sink, downloading `.wpilog` files from the Driver Station, is pending core R11: until then a log is read by
+dumping the LittleFS partition);
 telemetry and tunables backends over probot-core; Servo; prosdk drivers carried over from the old SDK
 (BTS7960, VNH5019, MPU6050 gyro, ProHub PCA9685 + UART encoder).
 
@@ -302,6 +309,19 @@ reader and upb (desktop tool side), argparse, Romi/XRP vendordeps (other robots)
   `halsim_ws_client` (HAL state over WebSockets for web simulators), `halsim_xrp` (XRP robot over UDP).
   They are dynamically loaded desktop plugins (`HALSIM_EXTENSIONS`, wpinet sockets); the robot has no
   dynamic loading and its Driver Station is probot-core's. Host tests use the plain sim backend.
+
+- Desktop applications and build infrastructure, which are not robot libraries: `glass` (dashboard
+  and the simulator GUI's widgets), `wpigui` and `thirdparty/imgui_suite` (Dear ImGui/GLFW/OpenGL GUI
+  toolkit), `tools/sysid` (SysId log analysis and gain fitting on the desktop; the robot side,
+  `SysIdRoutineLog` and commandsv2 `SysIdRoutine`, is ported), `tools/wpical` (camera/field
+  calibration with OpenCV), `tools/datalogtool` (log download/conversion; needs the DataLog reader),
+  `tools/outlineviewer` (NetworkTables viewer), `benchmark` (google-benchmark runs of wpimath on a desktop
+  CPU), `developerRobot` (upstream developer scratch robot) and `shared/singlelib` (a Gradle helper
+  that links the upstream libraries into one desktop library). All need a desktop OS (windowing, OpenGL,
+  OpenCV, files, processes) or exist only for upstream's own build.
+- Java-only libraries with no C++ to port: `epilogue-runtime` and `epilogue-processor` (Java annotation
+  processor that generates logging code; the C++ side logs with `telemetry::Log`), `wpiunits` (Java
+  units; C++ uses `units`, ported with wpimath) and `wpiannotations` (Java annotations).
 
 Every exclusion is listed in `design/API-DIFFERENCES.md`.
 
