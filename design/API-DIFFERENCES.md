@@ -355,13 +355,21 @@ value, whoever set it (the robot program's `Set()`, a getter, a Driver Station w
 echoed), 2 s after it last changed and only while no OpMode runs, like an NT persistent topic or
 `Preferences`: after a reboot a persistent tunable's stored value wins over its code default, so
 changing the default in code has no effect on a robot that stored a value; call
-`ClearPersistedTunables()` once after changing a default. Published again in the same run (`Remove`
-and `Publish`, or a new tunable object on the same path), a persistent tunable gets the last value
-set on that path in this run, which is what a reboot restores once core has saved it (core's record
-can be older: debounce, idle-only save); a value equal to the tunable's own is not applied (no
-`onTune`), and a tunable of another value type or type string takes core's record. A value is on the
-path once the backend publishes it, at the next `TunableRegistry::Update()` after a `Set()`; a `Set()`
-not yet published when the tunable is removed is lost, for core and for the republish.
+`ClearPersistedTunables()` once after changing a default. Core saves only published topics and not
+on removal: a value set or tuned during an OpMode on a tunable removed when the OpMode ends (an
+OpMode-scoped object) is stored only if the path is published again in this run and stays published
+while the robot is idle for 2 s; otherwise a reboot restores the older record. Published again in
+the same run (`Remove` and `Publish`, or a new tunable object on the same path), a persistent
+tunable gets the last value set on that path in this run, the value core's topic last held (core's
+record can be older: debounce, idle-only save, or never saved as above). Restored or remembered, the
+value is applied as a Driver Station write whoever set it: a value the robot program set comes back
+with a tune revision, `onRemoteSet` and `onTune`, and it overwrites a `Set()` made while the tunable
+was not published (between `Remove` and `Publish`, or a new object's `Set()` before its `Publish()`),
+as after a reboot. A restored or remembered value equal to the tunable's own is not applied (no tune
+revision, no `onTune`; core's record stays), and a tunable of another value type or type string takes
+core's record. A value is on the path once the backend publishes it, at the next
+`TunableRegistry::Update()` after a `Set()`; a `Set()` not yet published when the tunable is removed
+is lost, for core and for the republish.
 `prosdk::platform::ClearPersistedTunables()` (`<prosdk.h>`) erases every stored value (core's
 `clearPersisted()`; flash write: call it while the robot is stopped) and also what the backend
 remembers for republishing (core stores a topic again only once its value changes), so a tunable

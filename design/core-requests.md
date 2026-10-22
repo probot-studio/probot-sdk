@@ -540,10 +540,15 @@ Core's answer to prosdk's two questions (final, 2026-10-22):
   or a new tunable object on the same path), the tunable gets the last value set on that path in this run,
   whoever set it: the backend remembers every value the store took for a persistent topic (the robot
   program's `Set()` or a getter, published by the next `Update()`; a DS write once applied and echoed; a
-  restore), under its value type and type string. So a republish applies what a reboot would restore once
-  core has saved it; core's record can be older (2 s debounce, saved only while idle), so core's restored
-  write is then dropped without `rejectWrite()` (the record is not erased). A value equal to the tunable's
-  own is not applied (no onTune or tune revision, e.g. Remove and Publish of the same object); a `Set()`
+  restore), under its value type and type string. So a republish applies the value core's topic last
+  held; core's record can be older (2 s debounce, saved only while idle and only for a live topic: core
+  does not save on unpublish, so a value set on an OpMode-scoped tunable removed at OpMode end is never
+  stored unless the path is published again and stays published while idle), so core's restored write is
+  then dropped without `rejectWrite()` (the record is not erased). Like a restore, the remembered value is
+  applied through the DS write path whoever set it: a robot-set value comes back with a tune revision,
+  onRemoteSet and onTune, and it overwrites a `Set()` made while the tunable was not published. A restored
+  or remembered value equal to the tunable's own is not applied (no onTune or tune revision, the record
+  stays; e.g. Remove and Publish of the same object, or a stored value equal to the code default); a `Set()`
   not yet published by an update when the tunable is removed is not on the path, for core or for the
   republish; a tunable of another value type or type string on the path takes core's record.
   `ClearPersistedTunables()` also forgets the remembered values (a counter the backend compares under its
@@ -561,8 +566,10 @@ Core's answer to prosdk's two questions (final, 2026-10-22):
   refused restore erases the record; robust/Selectable/immutable not persistent; other drained writes kept;
   published before ready via FlushPending and Update; republish keeps the run's value; a robot `Set()`
   after a tune is what the republish applies and what core then stores; an always-get tunable; a `Set()`
-  not yet published is not on the path; republish with its own last value is not tuned;
-  ClearPersistedTunables, also before a republish; refused restore on the before-ready path; republish with
+  not yet published is not on the path; republish with its own last value is not tuned; a stored value
+  equal to the code value is not a tune; ClearPersistedTunables, also before a republish, and a value set
+  after the clear is remembered (the fake stores a topic again after a clear only once it changes, like
+  core's `savedGen = valueGen`); refused restore on the before-ready path; republish with
   another type takes core's record), test/prosdk/dashboard_legacy/PersistFallbackTest.cpp (own executable,
   field null: no flag, one warning per path also across a republish, DS tunes still work), Cancel and
   Preferences mirrors not PERSISTENT, CoreOpsTest (no-core and fake defaults), FakeCore.hpp leaves ABI 6

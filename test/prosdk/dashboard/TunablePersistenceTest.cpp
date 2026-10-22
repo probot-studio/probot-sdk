@@ -395,6 +395,47 @@ TEST_CASE_METHOD(DashboardFixture,
 }
 
 TEST_CASE_METHOD(DashboardFixture,
+                 "A value set after ClearPersistedTunables is what the next object gets",
+                 "[prosdk][dashboard][tunable][persist]") {
+  int onTune = 0;
+  {
+    Arm arm{&onTune};
+    fake::PushWrite("/Tunables/arm/gain", VT(dash::ValueType::kDouble),
+                    fake::EncodeDouble(9.0));
+    DashboardFixture::Cycle();
+    CHECK(arm.gain.Get() == 9.0);
+    CHECK(prosdk::platform::ClearPersistedTunables());
+    // core stores a topic again only once its value changes
+    fake::PersistValues();
+    CHECK_FALSE(fake::GetPersisted("/Tunables/arm/gain"));
+    // set after the clear (the update that publishes it sees the clear first), never republished
+    // before the object goes away
+    arm.gain.Set(5.0);
+    tunables::TunableRegistry::Update();
+    CHECK(fake::GetDouble("/Tunables/arm/gain") == 5.0);
+  }
+  Arm again{&onTune};
+  CHECK(again.gainSeenInConstructor == 5.0);
+  CHECK(onTune == 2);
+  fake::PersistValues();
+  CHECK(fake::GetPersisted("/Tunables/arm/gain") == fake::EncodeDouble(5.0));
+}
+
+TEST_CASE_METHOD(DashboardFixture, "A stored value equal to the code value is not a tune",
+                 "[prosdk][dashboard][tunable][persist]") {
+  StoreDouble("/Tunables/arm/gain", 1.0);
+  int onTune = 0;
+  Arm arm{&onTune};
+  CHECK(arm.gainSeenInConstructor == 1.0);
+  CHECK(onTune == 0);
+  CHECK(tunables::TunableRegistry::GetTuneRevision(arm.gain) == 0);
+  // dropped, not refused: the record stays
+  CHECK(fake::GetPersisted("/Tunables/arm/gain") == fake::EncodeDouble(1.0));
+  CHECK(fake::Rejects().empty());
+  CHECK(fake::RestoreErases() == 0);
+}
+
+TEST_CASE_METHOD(DashboardFixture,
                  "A stored value that does not decode is erased when a waiting topic publishes",
                  "[prosdk][dashboard][tunable][persist]") {
   const prosdk::math::Translation2d initial{1.25_m, 2.5_m};

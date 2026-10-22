@@ -920,8 +920,9 @@ bool ProbotTunableBackend::ApplyRestoredValue(const std::shared_ptr<Entry>& entr
   if (!value) {
     return false;
   }
-  if (!fromCore && valueEntry->HoldsValue(*value)) {
-    // republished with the value it already has (e.g. its own last set value): nothing to tune
+  if (valueEntry->HoldsValue(*value)) {
+    // the stored or remembered value is the one it already has (e.g. its own last set value or
+    // its code default): nothing to tune, no onTune (core's restore is dropped, not refused)
     return false;
   }
   // the Driver Station write path: decode, set, RecordTuneApplied, onRemoteSet (the store gets
@@ -955,7 +956,13 @@ void ProbotTunableBackend::RememberValueLocked(const Entry& entry,
   if (auto it = m_persisted.find(entry.GetKey());
       it != m_persisted.end() && it->second.valueType == entry.GetValueType() &&
       it->second.typeString == entry.GetTypeString()) {
-    it->second.lastValue.emplace(data.begin(), data.end());
+    // assigned in place: a getter that changes every loop reuses the buffer
+    auto& last = it->second.lastValue;
+    if (last) {
+      last->assign(data.begin(), data.end());
+    } else {
+      last.emplace(data.begin(), data.end());
+    }
   }
 }
 

@@ -30,13 +30,17 @@
 //     published (FlushPending() or Update()). Core stores the topic's current value, whoever set
 //     it (the robot program's Set(), a getter, a Driver Station write once applied and echoed, a
 //     restore), like an NT persistent topic; so a stored value wins over the code default after a
-//     reboot (ClearPersistedTunables() after changing a default). Published again in the same run
-//     (Remove and Publish, or a new tunable object on the same path), it gets the last value set
-//     on that path in this run, which is what a reboot would restore once core has saved it (core
-//     saves 2 s after the last change and only while no OpMode runs), not core's possibly older
-//     record; it keeps its own value if that is the same (no tune) or if nothing was set on the
-//     path since ClearPersistedTunables(); a tunable of another value type or type string than
-//     the remembered one takes core's record instead. A value
+//     reboot (ClearPersistedTunables() after changing a default). Core saves a published topic
+//     2 s after its last change and only while no OpMode runs, nothing on removal: a value set on
+//     a tunable removed at OpMode end is stored only if the path is published again and stays
+//     published while idle. Published again in the same run (Remove and Publish, or a new tunable
+//     object on the same path), it gets the last value set on that path in this run (the value
+//     core's topic last held), not core's possibly older record; it keeps its own value if nothing
+//     was set on the path since ClearPersistedTunables(); a tunable of another value type or type
+//     string than the remembered one takes core's record instead. Restored or remembered, the
+//     value goes through the Driver Station write path whoever set it (a robot Set() comes back as
+//     a tune with onRemoteSet/onTune, and it overwrites a Set() made while unpublished, as after a
+//     reboot); one equal to the tunable's own value is not applied (no tune, record kept). A value
 //     reaches the path when the backend publishes it (the next Update() after a Set()): a Set()
 //     not yet published when the tunable is removed is not on the path, for core or for the
 //     republish. A core without persistence: one warning per path, the flag is not set;

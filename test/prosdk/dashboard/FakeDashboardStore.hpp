@@ -12,9 +12,11 @@
 // Persistence (core R12 part 2, feat/dash-persist): a "flash" of stored values by path. publish()
 // of a new topic whose initial flags have PERSISTENT queues the stored value (same value type and
 // type string) as a write for the next drain; rejectWrite() on that delivered write erases the
-// record and sends no frame (nothing in Rejects()); clearPersisted() erases all. Values are stored
-// only by PersistValues() (core's debounced idle save). Built with PROSDK_FAKE_CORE_NO_PERSIST the
-// table plays a core without persistence (dashClearPersisted null, no restore).
+// record and sends no frame (nothing in Rejects()); clearPersisted() erases all and, like core's
+// savedGen = valueGen, a topic is stored again only once its value changes. Values are stored
+// only by PersistValues() (core's debounced idle save), each only when it changed since. Built
+// with PROSDK_FAKE_CORE_NO_PERSIST the table plays a core without persistence (dashClearPersisted
+// null, no restore).
 
 #pragma once
 
@@ -38,6 +40,8 @@ struct Topic {
   std::vector<uint8_t> value;
   bool hasValue = false;
   int sets = 0;  // values stored (duplicates dropped by the store are not counted)
+  uint32_t valueGen = 0;  // value changes (core's valueGen: a kept duplicate does not count)
+  uint32_t savedGen = 0;  // valueGen last stored by PersistValues() or marked by a clear
   bool live = false;
 };
 

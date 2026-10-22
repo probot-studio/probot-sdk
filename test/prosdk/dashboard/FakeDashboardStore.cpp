@@ -146,12 +146,16 @@ bool Set(uint16_t id, const void* data, size_t len) {
   }
   auto bytes = static_cast<const uint8_t*>(data);
   std::vector<uint8_t> value{bytes, bytes + len};
-  if (t->hasValue && t->value == value && (t->flags & kKeepDuplicates) == 0) {
+  const bool same = t->hasValue && t->value == value;
+  if (same && (t->flags & kKeepDuplicates) == 0) {
     return true;
   }
   t->value = std::move(value);
   t->hasValue = true;
   ++t->sets;
+  if (!same) {
+    ++t->valueGen;
+  }
   return true;
 }
 
@@ -239,6 +243,10 @@ void RejectWrite(uint16_t id, uint8_t reason) {
 bool ClearPersisted() {
   std::scoped_lock lock{S().mutex};
   S().persisted.clear();
+  // core: savedGen = valueGen for every slot, so a topic is stored again only once it changes
+  for (auto& t : S().topics) {
+    t.savedGen = t.valueGen;
+  }
   return true;
 }
 
@@ -447,8 +455,9 @@ void PersistValues() {
     return;
   }
   for (auto& t : s.topics) {
-    if (t.live && t.hasValue && (t.flags & kPersistent) != 0) {
+    if (t.live && t.hasValue && (t.flags & kPersistent) != 0 && t.savedGen != t.valueGen) {
       s.persisted[t.path] = Persisted{t.valueType, t.typeString, t.value};
+      t.savedGen = t.valueGen;
     }
   }
 }
