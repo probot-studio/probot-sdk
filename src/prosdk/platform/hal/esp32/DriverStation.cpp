@@ -323,7 +323,8 @@ int32_t ProbotCoreDs::setOpModeOptions(const struct HAL_OpModeOption* options, i
         HAL_OpMode_GetHash(o.id) == 0) {
       esp32::Log(std::format("Driver Station: opmode \"{}\" has no robot mode or name hash "
                              "(id {:#x}); not listed",
-                             st.name, o.id));
+                             st.name, o.id),
+                 prosdk::platform::ConsoleLevel::kWarning);
       continue;
     }
     list.push_back(prosdk::platform::CoreOpModeOption{

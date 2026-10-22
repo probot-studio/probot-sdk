@@ -155,7 +155,7 @@ void FreeSmartIo(HAL_DigitalHandle handle, HAL_HandleEnum type,
   auto start = monotonic_clock::now();
   while (port.use_count() != 1) {
     if (start + std::chrono::seconds(1) < monotonic_clock::now()) {
-      Log(std::format("{} handle free timeout", what));
+      Log(std::format("{} handle free timeout", what), platform::ConsoleLevel::kWarning);
       break;
     }
     std::this_thread::yield();
