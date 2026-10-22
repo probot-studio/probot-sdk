@@ -94,6 +94,7 @@ spelled in a sketch, because the Xtensa header `xtensa/config/specreg.h` (includ
 | `prosdk::Notifier`, `prosdk::Watchdog`, `prosdk::internal::DriverStationModeThread` | threads started through `ScopedThreadConfig` (names `notifier`, `watchdog`, `dsmode`; stacks `PROSDK_NOTIFIER_THREAD_STACK_SIZE` 8192, `PROSDK_WATCHDOG_THREAD_STACK_SIZE` 6144, `PROSDK_DS_MODE_THREAD_STACK_SIZE` 6144 in `prosdk/platform/WpilibcConfig.hpp`) | `wpilibc/0008` |
 | Pneumatics (`Solenoid`, `DoubleSolenoid`, `Compressor`, `PneumaticsControlModule`, `PneumaticHub`, `PneumaticsBase`), `PowerDistribution`, `OnboardIMU`, CAN (`CAN`, CAN motor/device APIs) and their `*Sim` classes | API vendored unchanged and compiled. ESP32: the kit has no PCM/PH/PDP/PDH, no onboard IMU and no CAN bus; the ESP32 HAL backend reports an error when one is constructed (`design/hal-esp32.md`), so they fail at run time, not at compile time. Host: the simulation backend implements them as upstream (the upstream tests run) | HAL stubs |
 | `GetWPILibVersion()` | returns `prosdk 2027.0.0-alpha.1 (WPILib b68effca)` (upstream: generated from the Gradle version) | hand-written `src/prosdk/platform/WPILibVersion.cpp` |
+| `prosdk::DigitalOutput::EnablePWM()`, `UpdateDutyCycle()`, `SetPWMRate()` (digital PWM generators) | ESP32: implemented on the LEDC peripheral (systemcore stubs them): 6 generators, each on one DIO output, one rate for all (5 Hz to 40 kHz, default 500 Hz, at most 14 bits of duty). The duty is forced to 0 while the output gate is closed (the roboRIO does not gate them) and the emergency stop drives their pins low. `EnablePPS()` and `Pulse()` report `HAL_HANDLE_ERROR`. Host: simulation as upstream (`design/hal-esp32.md`, DIO) | HAL backend |
 | Robot program entry point | `PROSDK_ROBOT_MAIN(Robot)` (`prosdk/platform/RobotMain.hpp`, via `<prosdk.h>`) replaces `int main() { return wpi::StartRobot<Robot>(); }`. Robot: the class is constructed on probot-core's user task at boot (not during static initialization, not on a new thread) and its loop runs from core's loop passes (design/PORT.md 8.1). Host: expands to `main()` with `StartRobot`. Only `TimedRobot`, `TimesliceRobot` and `OpModeRobot` run on the robot; a class deriving from `RobotBase` directly is reported and the program halts | hand-written `src/prosdk/platform/RobotMain.*` |
 | `RobotBase::StartHosted()` (new, virtual), `TimedRobot` / `OpModeRobotBase::StartCompetition()` | `StartHosted()` does what `StartCompetition()` did before its loop and returns the callback queue; `StartCompetition()` calls it and then loops as upstream. `PeriodicPriorityQueue` gains `RunDue(now, lookahead)` (non-blocking `RunCallbacks`, same order and rescheduling), `Update(func)` and `GetVersion()` | `wpilibc/0010` |
 | Robot loop timing on the robot | callbacks run only on core's loop passes. The pass period is the GCD (whole ms, 1..1000) of the callback periods and phases and follows `AddPeriodic`; a period below 1 ms runs once per pass, a phase that is not whole ms (e.g. `PeriodicOpMode::AddPeriodic`) moves to the nearest pass, a non-whole-ms period runs up to one pass late; a loop period outside 1..1000 ms is refused (reported, program halts). A late core pass restarts core's grid; the schedule is re-aligned (no catch-up, like upstream) and a warning is printed at most once per second | hand-written `src/prosdk/platform/RobotMain.cpp` |
@@ -204,6 +205,12 @@ Whole upstream trees not vendored:
 | `fields/src/main/java`, `fields/src/main/python`, `apriltag/src/main/java`, `apriltag/src/main/python` | Java API and Python bindings |
 | `apriltag/src/dev` | desktop development executable |
 | `apriltag/AprilTag.json` | vendordep descriptor for the desktop/roboRIO build system |
+| `drivers/src/main/native/cpp/empty.cpp` | empty translation unit (upstream build placeholder) |
+| `drivers/src/generate`, `drivers/generate_pwm_motor_controllers.py` | Jinja templates, `pwm_motor_controllers.json` and their generator; the output (`drivers/src/generated`) is committed upstream and vendored instead |
+| `drivers/src/main/java`, `drivers/src/generated/main/java`, `drivers/src/test/java` | Java API, generated Java motor controllers and Java tests (no JVM on the MCU) |
+| `drivers/src/main/python`, `drivers/src/test/python` | Python bindings (robotpy) and tests |
+| `drivers/src/dev` | upstream developer scratch executables |
+| `drivers/BUILD.bazel`, `build.gradle`, `CMakeLists.txt`, `drivers-config.cmake.in`, `generate.bzl`, `robotpy_*.bzl` | upstream build files (prosdk builds with `tools/build`) |
 
 The source of truth for these lists is the module data in `tools/upstream/modules/*.py`; this table is
 updated with it.
@@ -240,5 +247,24 @@ LED, system, sysid, preferences, simulation, smartdashboard), with NetworkTables
 (`PROSDK_ROBOT_MAIN`, hosted loop on probot-core, `wpilibc/0010`) runs robot classes on the robot. commandsv2 (the
 command-based framework, `commandsv2/*` patches) is vendored on top of wpilibc. fields (field metadata and the built-in AprilTag
 layouts, `fields/0001`) and apriltag (detector, pose estimator and the AprilTag C library,
-`apriltag/*`) are vendored on wpimath. Later waves add their
+`apriltag/*`) are vendored on wpimath. drivers (the generated PWM motor controllers and
+GoBildaPinpoint, unchanged) is vendored on wpilibc; the hand-written devices are listed in section 7. Later waves add their
 renames and exclusions here.
+
+## 7. prosdk additions (not in WPILib 2027)
+
+Hand-written classes in `src/prosdk/drivers/` (`design/drivers.md`), tested on the host simulation
+HAL (`test/prosdk/drivers`). They use only prosdk classes (`PWM`, `DigitalOutput`, `I2C`,
+`SerialPort`), no Arduino or probot-core API.
+
+| Class (header) | What it is |
+|---|---|
+| `prosdk::Servo` (`prosdk/drivers/servo/Servo.hpp`) | the WPILib 2026 `frc::Servo` API (removed in 2027) on a GPIO (`prosdk::PWM`, 20 ms) or on a PCA9685 channel. `SetBounds()` takes the 2026 five-argument form and uses only max and min, as 2026 |
+| `prosdk::BTS7960` (`prosdk/drivers/motor/BTS7960.hpp`) | BTS7960/IBT-2 H-bridge on digital PWM (PWM on RPWM/LPWM or on the bridged enable); `MotorController`, `MotorSafety` |
+| `prosdk::VNH5019` (`prosdk/drivers/motor/VNH5019.hpp`) | VNH5019 H-bridge (INA/INB/PWM, optional EN/DIAG), brake or coast at 0; `MotorController`, `MotorSafety` |
+| `prosdk::PCA9685` (`prosdk/drivers/pwm/PCA9685.hpp`) | 16-channel I2C PWM controller with buffered writes and its own output gate (all outputs off while disabled; emergency-stop limitation in `design/drivers.md`) |
+| `prosdk::ProHubMotor` (`prosdk/drivers/motor/ProHubMotor.hpp`), `prosdk::prohub` (`prosdk/drivers/ProHub.hpp`) | ProHub motor port (two PCA9685 channels) and the board constants and pin setup |
+| `prosdk::ProHubEncoders`, `prosdk::ProHubEncoder` (`prosdk/drivers/encoder/ProHubEncoders.hpp`) | ProHub encoder stream (108-byte frames over `SerialPort`) and an `Encoder`-like view of one channel |
+| `prosdk::MPU6050` (`prosdk/drivers/imu/MPU6050.hpp`) | MPU-6050 gyro/accelerometer with the `OnboardIMU` getters, integrated yaw, bias calibration |
+
+ESP32 HAL addition used by BTS7960 and VNH5019: digital PWM generators on LEDC (section 3).

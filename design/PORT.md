@@ -231,7 +231,9 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `TimedRobotDifferential` 1926441 / 65764 bytes, `OpModeRobotExample` 1904333 / 65772,
   `TimesliceRobotExample` 1902981 / 65708, `CommandBasedRobot` (commandsv2: scheduler, drive
   subsystem, `CommandXboxController`, PID command, autonomous `Selectable`, `SysIdRoutine`)
-  2128932 / 69340 (of 3145728 / 327680).
+  2128932 / 69340, `DriversShowcase` (one of each `drivers/` device: Spark, Servo, BTS7960,
+  VNH5019, PCA9685 with ProHubMotor and a servo, MPU6050, GoBildaPinpoint, ProHub encoders)
+  1998064 / 67412 (of 3145728 / 327680).
 
 ## 9. Build (incremental, low load)
 
