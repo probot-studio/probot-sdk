@@ -48,6 +48,9 @@ RULES = [
     dict(kind="test", src="hal/src/test/native/cpp", dst="test/hal/cpp", include=["*"]),
 ]
 
+_UPSTREAM_BUILD = ("upstream build file (Bazel/CMake/Gradle/RobotPy packaging); prosdk builds with "
+                   "tools/build")
+
 # Not vendored at all, with reasons.
 NOT_VENDORED = {
     f"{_N}/systemcore": "SystemCore (Linux) hardware backend; reference for the hand-written ESP32 "
@@ -57,4 +60,15 @@ NOT_VENDORED = {
     "hal/src/dev": "desktop development executable",
     "hal/src/test/java": "Java tests",
     "hal/src/test/python": "Python tests",
+    # upstream build files, generators, documentation and bindings (no rule needed)
+    "hal/BUILD.bazel": _UPSTREAM_BUILD,
+    "hal/CMakeLists.txt": _UPSTREAM_BUILD,
+    "hal/build.gradle": _UPSTREAM_BUILD,
+    "hal/hal-config.cmake.in": _UPSTREAM_BUILD,
+    "hal/robotpy_native_build_info.bzl": _UPSTREAM_BUILD,
+    "hal/robotpy_pybind_build_info.bzl": _UPSTREAM_BUILD,
+    "hal/src/test/native/BUILD.bazel": _UPSTREAM_BUILD,
+    "hal/doc": "documentation, not code",
+    "hal/src/main/native/cpp/jni":
+        "JNI (no JVM on the MCU); the JNI headers, which the cpp/*.cpp rule never selects",
 }

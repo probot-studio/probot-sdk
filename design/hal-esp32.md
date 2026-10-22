@@ -166,7 +166,9 @@ Driver Station (design/PORT.md section 8).
   `prosdk::platform::SetSerialPins(1, rx, tx)`). kUSB1/kUSB2: `HAL_SERIAL_PORT_NOT_FOUND`
   (UART0/USB are the console). A UART that `Serial1`/`Serial2` already opened is refused. The RX
   and TX pins are claimed like DIO pins while the port is open (DIO/PWM on them is refused).
-- 1 KB RX and TX buffers. Defaults 9600 8N1, no flow control, read timeout 0.
+- 1 KB RX and TX buffers, fixed when the port opens: `HAL_SetSerialReadBufferSize` /
+  `HAL_SetSerialWriteBufferSize` (`SerialPort::Set*BufferSize`) validate the handle and change
+  nothing. Defaults 9600 8N1, no flow control, read timeout 0.
 - Supported: baud rate, data bits 5..8, parity none/odd/even (mark/space refused), stop bits
   1/1.5/2, read timeout, termination character (reads stop after it), write buffer flush on
   access or explicit flush, bytes received, clear. Not supported: hardware or software flow
@@ -249,7 +251,8 @@ Driver Station (design/PORT.md section 8).
 - SimDevice and HALSIM_*: inert stubs as on systemcore (SimStubs.cpp, SimDevice.cpp), so the
   device `*Sim` classes link but do nothing on the robot.
 - Runtime type `HAL_RUNTIME_SYSTEMCORE` (the closest real-robot type); serial number from the
-  WiFi MAC.
+  WiFi MAC. `HAL_GetComments` returns an empty string (SystemCore reads the comments of its robot
+  image; the probot has none), so `RobotController::GetComments()` is `""`.
 - `HAL_GetTeamNumber` is always 0: a Probot has no team number; the robot is found through its own
   WiFi access point, not a team-number address.
 - `HAL_GetRSLState` and `HAL_GetCommsDisableCount` report `HAL_HANDLE_ERROR` (as on systemcore)

@@ -35,6 +35,9 @@ RULES = [
          include_base="test/wpimath/include", include=["*"]),
 ]
 
+_UPSTREAM_BUILD = ("upstream build file (Bazel/CMake/Gradle/RobotPy packaging); prosdk builds with "
+                   "tools/build")
+
 # Not vendored at all, with reasons (design/API-DIFFERENCES.md).
 NOT_VENDORED = {
     f"{_N}/cpp/jni": "JNI (no JVM on the MCU)",
@@ -47,4 +50,23 @@ NOT_VENDORED = {
     f"{_W}/dev": "upstream developer scratch executable",
     f"{_W}/main/proto": ".proto sources; the committed nanopb output is vendored instead",
     "wpimath/docs": "design notes (not code); see upstream",
+    # upstream build files, generators, documentation and bindings (no rule needed)
+    "wpimath/BUILD.bazel": _UPSTREAM_BUILD,
+    "wpimath/CMakeLists.txt": _UPSTREAM_BUILD,
+    "wpimath/build.gradle": _UPSTREAM_BUILD,
+    "wpimath/wpimath-config.cmake.in": _UPSTREAM_BUILD,
+    "wpimath/robotpy_native_build_info.bzl": _UPSTREAM_BUILD,
+    "wpimath/robotpy_pybind_build_info.bzl": _UPSTREAM_BUILD,
+    "wpimath/generate.bzl": _UPSTREAM_BUILD,
+    "wpimath/src/test/native/BUILD.bazel": _UPSTREAM_BUILD,
+    "wpimath/README.md": "documentation, not code",
+    "wpimath/generate_nanopb.py":
+        "nanopb generator script; its output is committed upstream and vendored",
+    "wpimath/generate_numbers.py":
+        "generator of the Nat/number headers; its output is committed upstream and vendored",
+    "wpimath/generate_quickbuf.py": "Java protobuf (QuickBuffers) generator",
+    "wpimath/generate_wpimath.py":
+        "upstream code generator driver; its output is committed upstream and vendored",
+    "wpimath/src/test/generate_biquad_fixtures.py":
+        "scipy script that generated test fixture data committed upstream",
 }

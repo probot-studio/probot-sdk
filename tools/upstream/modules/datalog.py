@@ -53,10 +53,26 @@ RULES = [
     dict(kind="test", src=f"{_U}/cpp", dst=f"{_SUPPORT}/cpp", include=["MappedFileRegion.cpp"]),
 ]
 
+_UPSTREAM_BUILD = ("upstream build file (Bazel/CMake/Gradle/RobotPy packaging); prosdk builds with "
+                   "tools/build")
+
 # Not vendored at all, with reasons.
 NOT_VENDORED = {
     "datalog/src/main/java": "Java bindings (no JVM on the MCU)",
     "datalog/src/main/python": "Python bindings",
     "datalog/examples": "desktop example programs (printlog, writelog)",
     "datalog/src/dev": "desktop development executable",
+    # upstream build files, generators, documentation and bindings (no rule needed)
+    "datalog/BUILD.bazel": _UPSTREAM_BUILD,
+    "datalog/CMakeLists.txt": _UPSTREAM_BUILD,
+    "datalog/build.gradle": _UPSTREAM_BUILD,
+    "datalog/datalog-config.cmake.in": _UPSTREAM_BUILD,
+    "datalog/robotpy_native_build_info.bzl": _UPSTREAM_BUILD,
+    "datalog/robotpy_pybind_build_info.bzl": _UPSTREAM_BUILD,
+    "datalog/src/test/native/BUILD.bazel": _UPSTREAM_BUILD,
+    "datalog/README.md": "documentation, not code",
+    "datalog/doc": "documentation, not code (incl. the wpilog format spec wpilog.ksy)",
+    "datalog/src/printlog": "Java printlog example (no JVM on the MCU)",
+    "datalog/src/test/java": "Java tests",
+    "datalog/src/test/python": "Python tests",
 }

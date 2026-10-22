@@ -26,4 +26,7 @@ RULES = [
 NOT_VENDORED = {
     f"{_E}/BUILD.bazel": "Bazel build file",
     f"{_E}/MODULE.bazel": "Bazel build file",
+    # upstream build files, generators, documentation and bindings (no rule needed)
+    "wpimath/src/main/native/thirdparty/eigen/include/.clang-format":
+        "formatter configuration, not code",
 }

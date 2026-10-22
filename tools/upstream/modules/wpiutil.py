@@ -72,6 +72,9 @@ RULES = [
          include_base="test/wpiutil/generated", include=["*"]),
 ]
 
+_UPSTREAM_BUILD = ("upstream build file (Bazel/CMake/Gradle/RobotPy packaging); prosdk builds with "
+                   "tools/build")
+
 # Not vendored at all (whole thirdparty trees), with reasons.
 NOT_VENDORED = {
     f"{_N}/thirdparty/argparse": "command-line parser for desktop tools; uses std::any/RTTI",
@@ -81,4 +84,24 @@ NOT_VENDORED = {
     f"{_N}/thirdparty/nanopb/generator": "protoc plugin; generated .npb files are vendored instead",
     f"{_N}/windows": "Windows only",
     f"{_N}/resources": "desktop GUI icon",
+    # upstream build files, generators, documentation and bindings (no rule needed)
+    "wpiutil/BUILD.bazel": _UPSTREAM_BUILD,
+    "wpiutil/CMakeLists.txt": _UPSTREAM_BUILD,
+    "wpiutil/build.gradle": _UPSTREAM_BUILD,
+    "wpiutil/wpiutil-config.cmake.in": _UPSTREAM_BUILD,
+    "wpiutil/robotpy_native_build_info.bzl": _UPSTREAM_BUILD,
+    "wpiutil/robotpy_pybind_build_info.bzl": _UPSTREAM_BUILD,
+    "wpiutil/generate.bzl": _UPSTREAM_BUILD,
+    "wpiutil/src/test/native/BUILD.bazel": _UPSTREAM_BUILD,
+    "wpiutil/generate_nanopb.py":
+        "nanopb generator script; its output (the .npb files) is committed upstream and vendored",
+    "wpiutil/doc": "documentation, not code",
+    "wpiutil/src/dev": "upstream developer scratch executables (C++ and Java)",
+    "wpiutil/src/main/java": "Java API (no JVM on the MCU)",
+    "wpiutil/src/main/python": "Python bindings",
+    "wpiutil/src/test/java": "Java tests",
+    "wpiutil/src/test/python": "Python tests",
+    "wpiutil/src/test/proto":
+        ".proto source of the test messages; the committed nanopb output is vendored with the "
+        "tests",
 }

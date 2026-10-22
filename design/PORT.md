@@ -239,12 +239,18 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
 
 - Out-of-Arduino CMake build of `libprosdk.a` with a toolchain file that reproduces the Arduino recipe
   (`tools/build/esp32s3.cmake`). One OBJECT library per module; the archive is assembled from them.
-  Build dir `.build/esp32s3` persists; only changed translation units recompile.
+  Build dir `.build/esp32s3` persists; only changed translation units recompile. The full archive
+  (`-ggdb` from the recipe, about 1 GB of DWARF) stays in `.build/esp32s3/libprosdk.a` for
+  `addr2line`; `src/esp32s3/libprosdk.a` is a copy made with `objcopy --strip-debug`, redone only when
+  the full archive changed.
 - Host build (`.build/host`) with system g++ in gnu++20 and the sim HAL, for upstream unit tests.
 - ccache (static binary in `tools/bin`, cache in `.build/ccache`) and ninja (pip venv) are used when present.
 - Every compile runs as `nice -n 19 ionice -c3`, at most `-j2`, under the lock `flock .build/build.lock`, so
   parallel agents never stack compiles on the shared server.
 - Sketch builds: `arduino-cli compile --build-path <persistent dir> --jobs 2`, never `--clean`.
+  `tools/build/build.sh examples [sketch...]` compiles `examples/*` that way (huge_app, build folders
+  `.build/examples/<name>`, probot-core from `$PROBOT_CORE` or `.upstream/probot-core`); CI runs it and
+  `tools/build/hal_link_test.py` against probot-core at `PROBOT_CORE_REF` (`.github/workflows/ci.yml`).
 - Flash/RAM numbers are measured from real sketch builds (`xtensa-esp32s3-elf-size`) and recorded.
 
 ## 10. Scope
@@ -269,14 +275,31 @@ grayscale frames to `Detect()` although the kit has no camera. Detection heap is
 estimate in `design/API-DIFFERENCES.md` section 3). The field images are not vendored (9.3 MB; upstream
 builds them only for its GUI). `examples/AprilTagFieldPose`: 2,102,184 B flash (66 %), 70,836 B RAM.
 
-Re-implemented for this platform: `NetworkButton` over tunables; DataLog sink to flash/SD and to the DS;
+Re-implemented for this platform: `NetworkButton` and `NetworkBooleanEvent` over tunables
+(`wpilibc/0011`); Preferences on the DS as robust tunables `/Preferences/<key>` written back to NVS
+(`src/prosdk/platform/dashboard/DashboardPreferences.*`); `DataLogManager` console capture through a
+console tee and old-log deletion from esp_littlefs space (`wpilibc/0012`); DataLog sink to flash/SD and to the DS;
 telemetry and tunables backends over probot-core; Servo; prosdk drivers carried over from the old SDK
 (BTS7960, VNH5019, MPU6050 gyro, ProHub PCA9685 + UART encoder).
 
 Not ported, with reason: JNI/Java/Python bindings (no JVM), commandsv3 (Java-only, uses JVM
 continuations), ntcore/wpinet (replaced by the probot-core DS link; an NT4-compatible server for
-AdvantageScope/Elastic is a later work item), cscore/cameraserver (no camera on the kit), halsim desktop
-GUI extensions, DataLog reader and upb (desktop tool side), argparse, Romi/XRP vendordeps (other robots).
+AdvantageScope/Elastic is a later work item), cscore/cameraserver (no camera on the kit), DataLog
+reader and upb (desktop tool side), argparse, Romi/XRP vendordeps (other robots), and:
+
+- ExpansionHub (`wpilibc/.../hardware/expansionhub`): drives a REV Expansion Hub through SystemCore's USB
+  `rhsp` server over NetworkTables topics; the probot has no rhsp server, no Expansion Hub and no ntcore.
+  Motors and servos go through the ESP32 HAL and `drivers/` instead.
+- `aos_sdk`, `aosnt`, `ntcoreffi`: `aos_sdk` packages AOS (the event loop/IPC framework, flatbuffers,
+  libuv via wpinet) for CMake desktop/SystemCore builds; `aosnt` bridges AOS channels to NetworkTables;
+  `ntcoreffi` is the C FFI of ntcore plus a C `DataLogManager` for non-WPILib programs. All are
+  Linux/desktop libraries built on ntcore/wpinet, none of which exists on the ESP32.
+- `simulation/halsim_*` extensions: `halsim_gui` (desktop ImGui simulator), `halsim_ds_socket` (lets
+  the FRC Driver Station drive a simulated program over UDP/TCP), `halsim_ws_core`/`halsim_ws_server`/
+  `halsim_ws_client` (HAL state over WebSockets for web simulators), `halsim_xrp` (XRP robot over UDP).
+  They are dynamically loaded desktop plugins (`HALSIM_EXTENSIONS`, wpinet sockets); the robot has no
+  dynamic loading and its Driver Station is probot-core's. Host tests use the plain sim backend.
+
 Every exclusion is listed in `design/API-DIFFERENCES.md`.
 
 ## 11. Evidence
