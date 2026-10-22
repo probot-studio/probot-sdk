@@ -17,8 +17,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 GENERATED = ROOT / "tools" / "upstream" / "generated.txt"
 HEADER_EXTS = {".h", ".hpp", ""}  # "" = extensionless C++ headers (util/scope)
+# Not listed: src/prosdk/platform/hal/esp32/ (backend-internal headers of the archive build) and
+# src/prosdk/probot/ (sketch side; needs <probot.h>, checked by the sketch compiles).
 HAND_WRITTEN_GLOBS = ["src/prosdk.h", "src/prosdk/cxx/*.hpp", "src/prosdk/platform/*.hpp",
-                      "src/prosdk/platform/dashboard/*.hpp", "src/prosdk/drivers/**/*.hpp"]
+                      "src/prosdk/platform/dashboard/*.hpp", "src/prosdk/platform/hal/*.hpp",
+                      "src/prosdk/drivers/**/*.hpp"]
 
 # Headers that are not meant to be compiled on their own (path -> reason).
 NOT_STANDALONE: dict[str, str] = {

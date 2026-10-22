@@ -164,8 +164,11 @@ if(NOT _hc_rc EQUAL 0)
   message(FATAL_ERROR "header_check.py failed")
 endif()
 # re-run configure (and header_check.py) when hand-written headers are added or removed
+# (the same directories as HAND_WRITTEN_GLOBS in header_check.py)
 file(GLOB _hand_headers CONFIGURE_DEPENDS "${PROSDK_ROOT}/src/prosdk.h"
-  "${PROSDK_ROOT}/src/prosdk/cxx/*.hpp" "${PROSDK_ROOT}/src/prosdk/platform/*.hpp")
+  "${PROSDK_ROOT}/src/prosdk/cxx/*.hpp" "${PROSDK_ROOT}/src/prosdk/platform/*.hpp"
+  "${PROSDK_ROOT}/src/prosdk/platform/dashboard/*.hpp" "${PROSDK_ROOT}/src/prosdk/platform/hal/*.hpp")
+file(GLOB_RECURSE _hand_driver_headers CONFIGURE_DEPENDS "${PROSDK_ROOT}/src/prosdk/drivers/*.hpp")
 string(REPLACE "\n" ";" _hc_sources "${_hc_sources}")
 add_library(header_check OBJECT EXCLUDE_FROM_ALL ${_hc_sources})
 target_link_libraries(header_check PRIVATE prosdk_sketch_options)
