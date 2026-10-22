@@ -45,6 +45,8 @@ PROSDK_ROBOT_MAIN(Robot)
   `examples/TimesliceRobotExample`, `examples/CommandBasedRobot` (command-based, `prosdk::cmd`),
   `examples/DriversShowcase` (every driver in `prosdk/drivers`, design/drivers.md),
   `examples/AprilTagFieldPose` (robot pose from an AprilTag on the built-in field layout). Details: [design/PORT.md](design/PORT.md) section 8.1.
+- Ports of WPILib's C++ examples, snippets (`examples/Snippet*`) and project templates
+  (`examples/Template*`): [design/examples.md](design/examples.md).
 
 ## Developer quick start
 

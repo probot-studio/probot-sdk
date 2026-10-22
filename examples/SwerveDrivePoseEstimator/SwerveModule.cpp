@@ -1,0 +1,78 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "SwerveModule.hpp"
+
+#include <numbers>
+
+#include <prosdk/math/geometry/Rotation2d.hpp>
+
+SwerveModule::SwerveModule(const int driveMotorChannel,
+                           const int turningMotorChannel,
+                           const int driveEncoderChannelA,
+                           const int driveEncoderChannelB,
+                           const int turningEncoderChannelA,
+                           const int turningEncoderChannelB)
+    : driveMotor(driveMotorChannel),
+      turningMotor(turningMotorChannel),
+      driveEncoder(driveEncoderChannelA, driveEncoderChannelB),
+      turningEncoder(turningEncoderChannelA, turningEncoderChannelB) {
+  // Set the distance per pulse for the drive encoder. We can simply use the
+  // distance traveled for one rotation of the wheel divided by the encoder
+  // resolution.
+  driveEncoder.SetDistancePerPulse(2 * std::numbers::pi * WHEEL_RADIUS.value() /
+                                   ENCODER_RESOLUTION);
+
+  // Set the distance (in this case, angle) per pulse for the turning encoder.
+  // This is the the angle through an entire rotation (2 * std::numbers::pi)
+  // divided by the encoder resolution.
+  turningEncoder.SetDistancePerPulse(2 * std::numbers::pi / ENCODER_RESOLUTION);
+
+  // Limit the PID Controller's input range between -pi and pi and set the input
+  // to be continuous.
+  turningPIDController.EnableContinuousInput(
+      -prosdk::units::radian_t{std::numbers::pi},
+      prosdk::units::radian_t{std::numbers::pi});
+}
+
+prosdk::math::SwerveModulePosition SwerveModule::GetPosition() const {
+  return {prosdk::units::meter_t{driveEncoder.GetDistance()},
+          prosdk::units::radian_t{turningEncoder.GetDistance()}};
+}
+
+prosdk::math::SwerveModuleVelocity SwerveModule::GetVelocity() const {
+  return {prosdk::units::meters_per_second_t{driveEncoder.GetRate()},
+          prosdk::units::radian_t{turningEncoder.GetDistance()}};
+}
+
+void SwerveModule::SetDesiredVelocity(
+    prosdk::math::SwerveModuleVelocity& desiredVelocity) {
+  prosdk::math::Rotation2d encoderRotation{
+      prosdk::units::radian_t{turningEncoder.GetDistance()}};
+
+  // Optimize the desired velocity to avoid spinning further than 90 degrees,
+  // then scale velocity by cosine of angle error. This scales down movement
+  // perpendicular to the desired direction of travel that can occur when
+  // modules change directions. This results in smoother driving.
+  auto velocity =
+      desiredVelocity.Optimize(encoderRotation).CosineScale(encoderRotation);
+
+  // Calculate the drive output from the drive PID controller and feedforward.
+  const auto driveOutput =
+      prosdk::units::volt_t{drivePIDController.Calculate(
+          driveEncoder.GetRate(), velocity.velocity.value())} +
+      driveFeedforward.Calculate(velocity.velocity);
+
+  // Calculate the turning motor output from the turning PID controller and
+  // feedforward.
+  const auto turnOutput =
+      prosdk::units::volt_t{turningPIDController.Calculate(
+          prosdk::units::radian_t{turningEncoder.GetDistance()},
+          velocity.angle.Radians())} +
+      turnFeedforward.Calculate(turningPIDController.GetSetpoint().velocity);
+
+  // Set the motor outputs.
+  driveMotor.SetVoltage(driveOutput);
+  turningMotor.SetVoltage(turnOutput);
+}

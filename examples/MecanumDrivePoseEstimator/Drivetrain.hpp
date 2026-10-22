@@ -1,0 +1,84 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#pragma once
+
+#include <numbers>
+
+#include <prosdk/drivers/motor/PWMSparkMax.hpp>
+#include <prosdk/drivers/imu/MPU6050.hpp>
+#include <prosdk/hardware/rotation/Encoder.hpp>
+#include <prosdk/math/controller/PIDController.hpp>
+#include <prosdk/math/controller/SimpleMotorFeedforward.hpp>
+#include <prosdk/math/estimator/MecanumDrivePoseEstimator.hpp>
+#include <prosdk/math/geometry/Translation2d.hpp>
+#include <prosdk/math/kinematics/MecanumDriveKinematics.hpp>
+#include <prosdk/math/kinematics/MecanumDriveWheelVelocities.hpp>
+
+/**
+ * Represents a mecanum drive style drivetrain.
+ */
+class Drivetrain {
+ public:
+  Drivetrain() {
+    imu.ResetYaw();
+    // We need to invert one side of the drivetrain so that positive voltages
+    // result in both sides moving forward. Depending on how your robot's
+    // gearbox is constructed, you might have to invert the left side instead.
+    frontRightMotor.SetInverted(true);
+    backRightMotor.SetInverted(true);
+  }
+
+  prosdk::math::MecanumDriveWheelPositions GetCurrentWheelDistances() const;
+  prosdk::math::MecanumDriveWheelVelocities GetCurrentWheelVelocities() const;
+  void SetVelocities(
+      const prosdk::math::MecanumDriveWheelVelocities& wheelVelocities);
+  void Drive(prosdk::units::meters_per_second_t xVelocity,
+             prosdk::units::meters_per_second_t yVelocity,
+             prosdk::units::radians_per_second_t rot, bool fieldRelative,
+             prosdk::units::second_t period);
+  void UpdateOdometry();
+
+  static constexpr auto MAX_VELOCITY = 3.0_mps;  // 3 meters per second
+  static constexpr prosdk::units::radians_per_second_t MAX_ANGULAR_VELOCITY{
+      std::numbers::pi};  // 1/2 rotation per second
+
+ private:
+  prosdk::PWMSparkMax frontLeftMotor{4};
+  prosdk::PWMSparkMax frontRightMotor{5};
+  prosdk::PWMSparkMax backLeftMotor{12};
+  prosdk::PWMSparkMax backRightMotor{13};
+
+  prosdk::Encoder frontLeftEncoder{6, 7};
+  prosdk::Encoder frontRightEncoder{15, 16};
+  prosdk::Encoder backLeftEncoder{38, 39};
+  prosdk::Encoder backRightEncoder{40, 41};
+
+  prosdk::math::Translation2d frontLeftLocation{0.381_m, 0.381_m};
+  prosdk::math::Translation2d frontRightLocation{0.381_m, -0.381_m};
+  prosdk::math::Translation2d backLeftLocation{-0.381_m, 0.381_m};
+  prosdk::math::Translation2d backRightLocation{-0.381_m, -0.381_m};
+
+  prosdk::math::PIDController frontLeftPIDController{1.0, 0.0, 0.0};
+  prosdk::math::PIDController frontRightPIDController{1.0, 0.0, 0.0};
+  prosdk::math::PIDController backLeftPIDController{1.0, 0.0, 0.0};
+  prosdk::math::PIDController backRightPIDController{1.0, 0.0, 0.0};
+
+  prosdk::MPU6050 imu{prosdk::I2C::Port::PORT_0};  // kit IMU (upstream: OnboardIMU)
+
+  prosdk::math::MecanumDriveKinematics kinematics{
+      frontLeftLocation, frontRightLocation, backLeftLocation,
+      backRightLocation};
+
+  // Gains are for example purposes only - must be determined for your own
+  // robot!
+  prosdk::math::SimpleMotorFeedforward<prosdk::units::meters> feedforward{
+      1_V, 3_V / 1_mps};
+
+  // Gains are for example purposes only - must be determined for your own
+  // robot!
+  prosdk::math::MecanumDrivePoseEstimator poseEstimator{
+      kinematics,          imu.GetRotation2d(), GetCurrentWheelDistances(),
+      prosdk::math::Pose2d{}, {0.1, 0.1, 0.1},     {0.1, 0.1, 0.1}};
+};
