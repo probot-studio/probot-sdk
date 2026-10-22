@@ -291,7 +291,9 @@ Unverified (marked in the code too):
 
 ## 9. Tests
 
-Host tests in `prosdk_drivers_tests`, on `test::FakeI2CBus` (F2) and the DIO sim:
+Host tests in `prosdk_drivers_tests`, on `test::FakeI2CBus` (F2) and the DIO sim. Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): 212
+assertions in 19 test cases pass (DRV2605L 57/5, PCF8563 41/3, GP8403 41/4, I2CSwitch 33/3,
+NT3H2111 40/4).
 
 - `DRV2605LTest.cpp` (`[drv2605l]`): "DRV2605L configures the chip for the actuator", "DRV2605L
   sequencer and GO", "DRV2605L real-time playback", "DRV2605L reports a missing or different

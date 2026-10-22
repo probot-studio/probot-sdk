@@ -209,7 +209,8 @@ Unverified (hardware items):
 
 ## Tests
 
-`test/prosdk/drivers/VL53L7CXTest.cpp` (FakeI2CBus, 16-bit register pointer):
+`test/prosdk/drivers/VL53L7CXTest.cpp` (FakeI2CBus, 16-bit register pointer). Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): 60
+assertions in 4 test cases pass.
 - platform layer: index framing, 2500-byte write split into 1024/1024/452 with indexes
   0x1000/0x1400/0x1800, chunked read, single registers, word swap, NACK and abort;
 - ULD identity check and address change (writes at the old address, the last one at the new);

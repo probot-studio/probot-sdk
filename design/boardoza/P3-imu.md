@@ -299,7 +299,8 @@ Unverified:
 
 ## Tests
 
-`prosdk_drivers_tests`, using `FakeI2CBus` (F2) with one device per address:
+`prosdk_drivers_tests`, using `FakeI2CBus` (F2) with one device per address. Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): 145
+assertions in 10 test cases pass (BNO055 91/4, BMI088 26/3, LSM303AGR 28/3).
 
 - `BNO055Test.cpp`:
   - the configuration sequence (with and without the crystal, and CLK_SEL already set);

@@ -192,10 +192,9 @@ Host tests (`prosdk_drivers_tests`):
 - **LoadCell** (`[loadcell]`): a running tare over 4 samples with a poll that brings nothing,
   scale, a negative scale, argument errors.
 
-In this package the files were checked only with `-fsyntax-only` (host, and ESP32-S3 for
-`src/`). The example's robot class was checked the same way with `<prosdk.h>` replaced by the
-telemetry header (probot-core is not on the syntax checker's include path). The tests have not
-been built or run yet, and the example has not been compiled with arduino-cli.
+Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): the three test files pass 126
+assertions in 11 test cases (NAU7802 58/5, HX711 44/4, LoadCell 24/2). The `BoardozaLoadCell`
+example builds with arduino-cli: 1,906,372 B flash, 72,364 B static RAM.
 
 ## 5. Unverified
 

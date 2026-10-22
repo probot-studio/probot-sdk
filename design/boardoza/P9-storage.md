@@ -242,12 +242,11 @@ Verified against the datasheets (sections cited in the source files):
   constants, the FAT options above, and that `libfatfs.a`, `libesp_driver_sdspi.a` and
   `libsdmmc.a` are in the Arduino-ESP32 link line.
 
-Checked by compilation only: every source and header under `src/` (syntax check for the host and
-for the ESP32-S3 target), the two tests (host), and the example (host only, as a .cpp copy; the
-ESP32 build of the example runs in the integration step).
-The host tests (`[w25qflash]`, `[w25nflash]`) run the drivers against command-level models of the
-two chips; they were written but not yet run in this package (the build runs in the integration
-step). Nothing has run on hardware.
+The sources build for the host and the ESP32-S3, and the `BoardozaSdLog` example builds with
+arduino-cli (2,005,393 B flash, 74,664 B static RAM). The host tests (`[w25qflash]`, `[w25nflash]`)
+run the drivers against command-level models of the two chips; run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`)
+they pass 123 assertions in 9 test cases (W25QFlash 58/4, W25NFlash 65/5). Nothing has run on
+hardware.
 
 Unverified (needs hardware or the board schematics' nets):
 - Which nets the 10 kOhm resistors on the W25Q40 and W25N01GV boards connect to.

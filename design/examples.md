@@ -275,7 +275,7 @@ pins of their own. None of them has run on hardware.
 | BoardozaLoRa | E22-900M22S (`SX126x`). Regulatory: 868.1 MHz, 14 dBm, at most 1 % duty cycle (EU 868.0-868.6 MHz sub-band); check local rules before changing them | SPI bus 0: SCK 12, MOSI 11, MISO 13, CS 10; BUSY 4, DIO1 5, NRST 6, RXEN 7, TXEN 15 |
 | BoardozaEveDisplay | FT810 or FT800 board and bundles (`FT8xx`, `ft8xx::kBoardozaFT810Bundle`) | SPI bus 0: SCK 12, MOSI 11, MISO 13, CS 10; PD 4, INT 5 |
 
-They have been syntax-checked only: no arduino-cli build and no size measurement yet.
+All nine build with arduino-cli; their sizes are in the Sizes table below.
 
 ## Sizes
 
@@ -289,11 +289,25 @@ The huge_app partition gives the sketch 3,145,728 bytes of flash; static RAM is 
 bytes. Every sketch also gets probot-core's WiFi AP and Driver Station.
 The same archive against core `feat/multi-gamepad` (no R9/R10) gives TemplateTimed 1,864,712 /
 69,764: core's R9 console and R10 clock add about 7 KB flash and 1.5 KB static RAM to every sketch.
+The nine Boardoza rows were measured later the same day, against the archive of `bd0d149` (with the
+Boardoza drivers) and the same core. That archive gives TemplateTimed 1,871,876 / 71,220 (+132 B
+flash) and DriversShowcase 1,998,728 / 72,828 (+160 B; 1,998,568 in design/PORT.md): no Boardoza
+driver is linked into them, the growth is the six-step e-stop hooks in `SmartIo.cpp` and the
+unwind tables of the SPI pin functions in `HalConfig.cpp` (design/size.md section 8).
 
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|
 | ArcadeDriveGamepad | 1,906,064 | 71,556 |
 | ArmSimulation | 2,000,648 | 74,756 |
+| BoardozaClimate | 1,918,108 | 72,340 |
+| BoardozaEveDisplay | 1,921,260 | 71,872 |
+| BoardozaGnss | 1,923,512 | 72,428 |
+| BoardozaLoadCell | 1,906,372 | 72,364 |
+| BoardozaLoRa | 1,920,648 | 71,872 |
+| BoardozaMultizoneToF | 1,995,000 | 72,372 |
+| BoardozaRotaryArgb | 1,926,612 | 72,544 |
+| BoardozaSdLog | 2,005,393 | 74,664 |
+| BoardozaThermalCamera | 1,905,060 | 72,364 |
 | DifferentialDriveBot | 1,971,912 | 73,348 |
 | DifferentialDrivePoseEstimator | 2,093,956 | 75,844 |
 | DriveDistanceOffboard | 1,952,336 | 71,660 |

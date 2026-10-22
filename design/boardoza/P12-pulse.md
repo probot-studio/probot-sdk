@@ -218,8 +218,9 @@ Unverified (marked in the code):
 - IR board: the TXD default state (LED off when TXD floats) and that the receiver echoes the
   board's own LED.
 - Real remotes, ranges and decoding margins; the RMT timing of the 1 us SERIN pulses.
-- Nothing was built or run: only per-file syntax checks (host and ESP32 for `src/`, host for
-  the tests) were done.
+- Nothing has run on hardware. The host tests ran on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`):
+  `[irtransceiver]` passes 55 assertions in 3 test cases, `[ookreceiver]` 51 in 4, `[pyd1598]`
+  93 in 4.
 
 ## Resource use
 

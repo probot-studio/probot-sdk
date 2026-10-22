@@ -232,5 +232,7 @@ tests rely on (device address, per-address NACK) are [F2](boardoza/F2-sim-i2c.md
   DRV2605L, PCF8563, GP8403, I2CSwitch, NT3H2111; NAU7802, HX711, LoadCell; Nmea, Ubx,
   UbloxGnss, NmeaGnss; TwoPinHBridge, VNH7070AS, DRV8307, DRV8317H; W25QFlash, W25NFlash;
   TMAG5170, ClockedAddressableLED; SX126x; IRTransceiver, OokReceiver, PYD1598; FT8xx;
-  AnalogCurrentSensor. These were syntax-checked only when they were added; they have not yet
-  been built or run.
+  AnalogCurrentSensor. Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check
+  --test`): `prosdk_drivers_tests` passes 7,849 assertions in 198 test cases, of which the 45
+  Boardoza test files are 7,657 assertions in 185 test cases; `drivers_tests` 275 assertions in
+  23 test cases.

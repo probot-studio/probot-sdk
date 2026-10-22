@@ -143,9 +143,8 @@ start-up order, the display-list and co-processor encodings and option values, t
 and fault recovery, the interrupt flag bits, REG_PWM_DUTY 0-128, the 8000h "not touched" value.
 
 Covered by host-simulation tests (`test/prosdk/drivers/FT8xxTest.cpp`, an EVE model behind
-FakeSPIDevice). They are written and syntax-checked but not yet compiled into the test binary or
-run, because no build ran in this package; nothing here counts as verified until they pass. The
-cases: FT810 start-up order
+FakeSPIDevice). Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): `[ft8xx]` passes 113 assertions in 10
+test cases. The cases: FT810 start-up order
 and register values, FT800 memory map, a panel too large for the FT800, frame bytes against
 hand-assembled words, long frames across the ring end, the frame size limit, fault recovery,
 touch and tag, INT gating, calibration (success and a failed result) and a stored transform, a

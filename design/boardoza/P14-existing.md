@@ -569,8 +569,8 @@ Unverified:
 - The WS2812 matrix row order.
 - The VNH5019 channel C meaning.
 - Whether the Pulse I2C pins clash with the probot-core battery I2C pins.
-- The AnalogCurrentSensor test has only been syntax-checked so far. It still has to be linked
-  and run by the integration build.
+- The AnalogCurrentSensor test ran on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`):
+  `[analogcurrent]` passes 28 assertions in 6 test cases. Nothing has run on hardware.
 
 ## 6. Shared edits for the integration step
 

@@ -228,8 +228,9 @@ Verified from the datasheets:
   PCB netlist).
 
 Unverified (needs hardware):
-- None of this ran on hardware: both drivers are syntax-checked for the robot and tested on the
-  host simulation only.
+- None of this ran on hardware: both drivers build for the robot and are tested on the host
+  simulation only. Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): `[tmag5170]` passes 2,065 assertions in 8 test cases,
+  `[clockedled]` 27 assertions in 5 test cases.
 - TMAG5170: whether SDO carries a CRC while CRC_DIS = 1 (the construction write does not check
   its answer for this reason); whether STAT10 clears in the frame right after the AFE_STATUS
   read (the driver also clears its reset flag after a good read-back); writing the configuration

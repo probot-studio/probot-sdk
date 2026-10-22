@@ -83,7 +83,7 @@ transfers with at least one byte), `nack`, and the hooks `onWrite` / `onRead`.
 
 Tests: `test/prosdk/drivers/FakeI2CBusTest.cpp` (raw HAL address and result, two devices plus
 NACK, pointer auto-increment and wrap, 16-bit pointers and words in both byte orders, hooks and
-the general call).
+the general call). Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): 71 assertions in 5 test cases pass.
 
 ## Build: vendored C sources in drivers
 

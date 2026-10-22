@@ -8,14 +8,8 @@ Question: where do the 1.95 MB (`TimedRobotDifferential`) and 2.14 MB (`CommandB
 go, why did the wave-3 robot examples grow by 19-36 KB in wave 4, and what can be removed without
 removing API or features and without a global flag change that recompiles the whole archive?
 
-**Not re-measured after the Boardoza drivers.** The numbers below predate the Boardoza packages
-(`design/boardoza.md`), which added about 40 hand-written driver classes, four platform HAL
-extensions (SPI, timed DIO, pulse I/O, six-step) and two vendored C libraries to the archive. A
-sketch pays only for what it links, but some sketches will grow noticeably: one that uses
-`VL53L7CX` links the ST firmware image (about 84 KiB of flash), and the Melexis API (`MLX90640`,
-`MLX90641`) and `FT8xx` add their own code and tables. The archive size, a sketch per new example
-and the unchanged robot examples (to confirm that unused drivers cost nothing) need a build and a
-new measurement with the method below; none was done when the drivers were added.
+Sections 1-7 predate the Boardoza drivers (`design/boardoza.md`); section 8 measures the archive
+and the sketches with them.
 
 ## 1. Method
 
@@ -258,3 +252,47 @@ comparing the object sizes (code + literals + rodata + `.eh_frame` + `.gcc_excep
 - The large remaining items are outside prosdk's flags: the linker script's `.eh_frame` placement
   (section 3, 113-150 KB), probot-core's uncompressed DS page (R14, 99 KB) and libstdc++'s `std::format`
   support (to_chars tables and locale facets, 250 KB, linked once).
+
+## 8. Boardoza drivers (measured 2026-10-22)
+
+Archive and sketches at `bd0d149` (the Boardoza merge `7174b6f` plus three test/sim fixes), probot-core
+`.upstream/probot-core` `sdk-target` at `b46069e` (`feat/wall-clock`), `tools/build/build.sh examples
+<name>`.
+
+- **Archive** (`tools/build/build.sh esp32s3 size`, Berkeley `size -t` on `src/esp32s3/libprosdk.a`;
+  text includes rodata and unwind tables, and a COMDAT instantiation counts once per member that
+  holds it): 561 members, text 10,400,574 B, data 3,663 B, bss 28,563 B; the stripped file is 60 MB.
+  The 57 members added by the Boardoza packages (drivers, SPI, timed DIO, pulse I/O, six-step, SD
+  card, the Melexis API and the ST ULD) are 1,652,689 / 372 / 6,283 B of that. A sketch links only
+  what it uses.
+- **Unused drivers cost nothing.** Against design/examples.md and PORT.md 8.1 (same core, archive
+  of `a453e67`): TemplateTimed 1,871,744 -> 1,871,876 B flash (+132), DriversShowcase 1,998,568 ->
+  1,998,728 (+160); static RAM unchanged (71,220 and 72,828). `nm` finds no Boardoza symbol in
+  either ELF. Relinking both with the `a453e67` builds of `SmartIo.cpp` and `HalConfig.cpp` (method
+  of section 1) reproduces the old numbers exactly, so the whole growth is those two members, which
+  every sketch links:
+  - `SmartIo.cpp`: +52 B code (+72 in DriversShowcase, alignment) for the three weak
+    `sixstep::ApplyGate` / `sixstep::OnEmergencyStop` checks in the e-stop handler, the gate timer
+    and `UpdateOutputGate`. They are the six-step e-stop path and stay; the weak references link
+    nothing until a sketch opens a six-step motor.
+  - `HalConfig.cpp`: +80 B (+88) of `.eh_frame` for `SetSPIPins` and `GetSPIConfig`.
+    `--gc-sections` drops the functions, but their FDEs stay (section 3). Moving them to their own
+    TU would save these 80 B but split the pin configuration and its mutex; the linker script fix
+    of section 3 removes them with the rest.
+- **Boardoza examples** (flash / static RAM in bytes; the difference to TemplateTimed's 1,871,876 /
+  71,220 is the drivers, their HAL modules and the example's own code and telemetry):
+
+| Example | Flash | Static RAM | Flash over TemplateTimed |
+|---|---:|---:|---:|
+| BoardozaThermalCamera | 1,905,060 | 72,364 | +33,184 |
+| BoardozaLoadCell | 1,906,372 | 72,364 | +34,496 |
+| BoardozaClimate | 1,918,108 | 72,340 | +46,232 |
+| BoardozaLoRa | 1,920,648 | 71,872 | +48,772 |
+| BoardozaEveDisplay | 1,921,260 | 71,872 | +49,384 |
+| BoardozaGnss | 1,923,512 | 72,428 | +51,636 |
+| BoardozaRotaryArgb | 1,926,612 | 72,544 | +54,736 |
+| BoardozaMultizoneToF | 1,995,000 | 72,372 | +123,124 |
+| BoardozaSdLog | 2,005,393 | 74,664 | +133,517 |
+
+BoardozaMultizoneToF carries the ST firmware image (about 84 KiB); BoardozaSdLog links ESP-IDF's
+FATFS and SD SPI drivers and `DataLogManager`. The largest is 64 % of the huge_app partition.

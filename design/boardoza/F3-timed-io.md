@@ -206,7 +206,8 @@ Unverified (no hardware run; marked in the code):
 - That the RMT driver does not re-route a TX pin back to the RMT after the e-stop moved it to
   plain GPIO.
 - The HX711 board's power pin assignment and the PYD1598 SERIN timing (see Wiring).
-- Nothing was built or run: only per-file syntax checks (host and ESP32) were done.
+- Nothing has run on hardware. The host tests ran on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): `[digitalshift]` passes 31
+  assertions in 4 test cases, `[pulseio]` 49 assertions in 6 test cases.
 
 ## Resource use
 

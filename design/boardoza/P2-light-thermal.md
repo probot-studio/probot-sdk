@@ -208,8 +208,9 @@ uncorrectable word (-10) fails the init.
 
 ## 4. Verification
 
-On the host simulation HAL with `FakeI2CBus`; not yet linked and run (later phase), only
-syntax-checked:
+On the host simulation HAL with `FakeI2CBus`. Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): the five test
+files pass 140 assertions in 19 test cases (OPT3001 22/4, OPT4048 28/4, CaliPile 42/4,
+MLX90640 28/4, MLX90641 20/3):
 
 - **OPT3001:** the result decoding against all rows of Table 9; ID check and configuration;
   reconfiguration after a simulated power loss; NACK keeps the last value; a wrong device ID is
@@ -241,8 +242,8 @@ Test vector notes:
   single-bit Hamming error (syndrome 20). The main test uses 0xD847 (same 11 data bits, valid
   check bits); a second test uses 0xF847 to show the corrected word is accepted.
 
-All src files pass the host and ESP32-S3 syntax checks. The example passes a host syntax check of
-its body (with `prosdk.h` replaced, as it needs probot-core); it was not built with arduino-cli.
+The sources build for the host and the ESP32-S3. The `BoardozaThermalCamera` example builds with
+arduino-cli: 1,905,060 B flash, 72,364 B static RAM (design/examples.md, Sizes).
 
 ## 5. Unverified
 

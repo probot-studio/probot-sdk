@@ -160,7 +160,8 @@ Verified against the ESP-IDF 5.5 headers shipped with Arduino-ESP32 3.3.10:
 - The clock divider range (`spi_ll_master_cal_clock`: prescaler 1-16, divider 2-64).
 - The `SPI_TRANS_CS_KEEP_ACTIVE` and acquire-bus requirement (`spi_master.h`).
 
-The code is syntax-checked for the target. It has not been built or run on hardware.
+The code builds for the host and the ESP32-S3. The host tests ran on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): `[spi]` passes 67
+assertions in 6 test cases. Nothing has run on hardware.
 
 Unverified (needs hardware):
 - Clock limits on GPIO-matrix pins. ESP-IDF's note on GPIO-matrix delay applies to the ESP32;

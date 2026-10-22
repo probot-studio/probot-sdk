@@ -233,8 +233,9 @@ Unverified (needs hardware or a document that states it):
   ESP-IDF may busy-wait; longer waits sleep 1 ms per poll.
 - RFM68LCW compatibility (see the top of this file).
 
-The code is syntax-checked for the host and the ESP32-S3; it has not been built into a sketch or
-run on hardware.
+The code builds for the host and the ESP32-S3, and the `BoardozaLoRa` example builds with arduino-cli
+(1,920,648 B flash, 71,872 B static RAM). The host tests ran on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): `[sx126x]` passes 82
+assertions in 5 test cases. Nothing has run on hardware.
 
 ## 6. Resource use
 

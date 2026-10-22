@@ -385,7 +385,8 @@ Unverified:
 ## 6. Tests
 
 Host tests, in the `prosdk_drivers_tests` executable, use the DIO, digital PWM, analog input and
-Driver Station sims:
+Driver Station sims. Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): 129 assertions in 7 test cases
+pass (TwoPinHBridge 34/2, VNH7070AS 47/3, DRV8307 48/2).
 
 - `TwoPinHBridgeTest.cpp` (`[twopinhbridge]`):
   - "TwoPinHBridge direction, brake and coast": direction, H/H brake, the zero behavior setter,

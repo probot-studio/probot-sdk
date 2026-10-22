@@ -265,8 +265,9 @@ under probot-core is a hardware check (plan section 7).
 - Pulse capture: about 5.5 KiB of static RAM for the 4 capture slots, used or not.
 - SPI: a 4092-byte DMA-capable zero buffer on the first read-only segment.
 - `FT8xx`: up to 2 x 8 KiB of heap for the frame under construction and the pending frame.
-- The archive and sketch sizes have not been measured since these drivers were added
-  (design/size.md).
+- Unused drivers cost no flash: TemplateTimed and DriversShowcase link no Boardoza code and grew
+  by 132 and 160 B (shared HAL hooks, design/size.md section 8). The archive and the Boardoza
+  example sizes are in design/size.md section 8 and design/examples.md (Sizes).
 
 ## 5 V hazards
 

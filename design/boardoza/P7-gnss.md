@@ -255,6 +255,9 @@ LEDC or ADC resources are used.
 
 ## 8. Tests
 
+Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): the four test files pass 3,741 assertions in
+18 test cases (Nmea 1,297/5, Ubx 2,305/7, UbloxGnss 94/4, NmeaGnss 45/2).
+
 - `NmeaTest.cpp`: checksums against the u-blox examples, GGA/RMC/GSA decoding (hemispheres,
   empty fields, NMEA 2.1 RMC without a mode field), and the reader split at every byte position
   with garbage, a bad checksum and a sentence without a checksum.

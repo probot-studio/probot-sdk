@@ -208,8 +208,9 @@ Host tests (`prosdk_drivers_tests`, FakeI2CBus from F2):
   limiting, the BME680 variant, the retry and a NACK.
 
 The test expectations were computed with a Python model of the formulas (C-style truncating
-division for the MS5611). In this package the files were checked only with `-fsyntax-only` (host,
-and ESP32-S3 for `src/`); the tests have not been built or run yet.
+division for the MS5611). Run on 2026-10-22 (`bd0d149`, `tools/build/build.sh host all header_check --test`): the six test files pass 191
+assertions in 19 test cases (LM75A 21/3, HIH8000 28/2, ENS210 26/3, MS5611 48/5, DPS310 25/3,
+BME688 43/3). The `BoardozaClimate` example builds with arduino-cli (design/examples.md, Sizes).
 
 ## 5. Unverified
 
