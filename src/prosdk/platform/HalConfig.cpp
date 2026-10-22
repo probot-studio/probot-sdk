@@ -11,6 +11,7 @@ std::mutex gMutex;
 I2CConfig gI2C[kNumI2CPorts] = {{8, 9, 400000}, {-1, -1, 400000}};
 SerialConfig gSerial[kNumSerialPorts] = {{15, 16}, {-1, -1}};
 CanConfig gCan = {-1, -1, 1000000};
+SPIConfig gSPI[kNumSPIBuses] = {{-1, -1, -1}, {-1, -1, -1}};
 
 constexpr int kMaxGpio = 48;
 
@@ -52,6 +53,24 @@ SerialConfig GetSerialConfig(int port) {
   }
   std::scoped_lock lock(gMutex);
   return gSerial[port];
+}
+
+bool SetSPIPins(int bus, int sck, int mosi, int miso) {
+  if (bus < 0 || bus >= kNumSPIBuses || !ValidPin(sck) || !ValidPin(mosi) ||
+      !(miso == -1 || ValidPin(miso)) || sck == mosi || sck == miso || mosi == miso) {
+    return false;
+  }
+  std::scoped_lock lock(gMutex);
+  gSPI[bus] = SPIConfig{sck, mosi, miso};
+  return true;
+}
+
+SPIConfig GetSPIConfig(int bus) {
+  if (bus < 0 || bus >= kNumSPIBuses) {
+    return SPIConfig{-1, -1, -1};
+  }
+  std::scoped_lock lock(gMutex);
+  return gSPI[bus];
 }
 
 bool SetCanConfig(int tx, int rx, uint32_t bitrate) {
