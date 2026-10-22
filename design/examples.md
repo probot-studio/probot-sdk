@@ -4,6 +4,12 @@ prosdk ports of allwpilib's C++ examples, snippets and templates (`wpilibcExampl
 pinned allwpilib `b68effc`) as Arduino sketches in `examples/`. This file records one decision per
 upstream item, the pin map the ports use, what differs from upstream, and the compiled sizes.
 
+`tools/upstream/examples.json` records, for each ported sketch and test, its upstream folders or files
+and their git blob ids at the pin, and the blob ids of the four upstream lists.
+`tools/upstream/examples.py --check` (CI, host job) reports every upstream change to review when the
+pin moves, and any sketch folder that is neither in the manifest nor hand-written; `--write`
+refreshes the ids once the ports follow upstream (design/PORT.md section 2).
+
 The hand-written prosdk examples that existed before this port (HalSmoke, TimedRobotDifferential,
 OpModeRobotExample, TimesliceRobotExample, CommandBasedRobot, DriversShowcase, AprilTagFieldPose)
 are unchanged.
@@ -53,7 +59,7 @@ They also stay inside the hardware limits:
 |---|---|
 | PWM motor controllers | 4, 5, 12, 13 (more: 14, 21, 47, 48) |
 | Quadrature encoders A/B | 6/7, 15/16, 38/39, 40/41 |
-| Digital inputs/outputs, duty cycle | 17, 18, 42, 11 |
+| Digital inputs/outputs, duty cycle | 17, 18, 10, 11 |
 | Analog inputs | 1, 2 |
 | Addressable LED strip | 21 |
 | I2C port 0 (HAL default) | SDA 8, SCL 9 |
@@ -233,14 +239,19 @@ All eight are merged into one sketch, **TemplateCommandItems**.
 
 ## Example tests
 
-Upstream has three example tests (`wpilibcExamples/src/test/cpp/examples`):
+Upstream has five example tests: three in `wpilibcExamples/src/test/cpp/examples` and two in
+`wpilibcExamples/src/test/cpp/snippets`.
 
-- **ArmSimulation** and **ElevatorSimulation** are ported to `test/examples/<Name>/`.
+- **ArmSimulation** and **ElevatorSimulation** are ported to `test/examples/<Name>/`, and the
+  **DigitalCommunication** and **I2CCommunication** snippet tests to
+  `test/examples/Snippet<Name>/` (file name kept as upstream, `<Name>Test.cpp`).
   - They share upstream's `main.cpp` (`test/examples/main.cpp`).
   - Each is its own host executable, `example_<Name>_tests` (`tools/build/modules/examples.cmake`).
   - Each executable is built from the example's `.cpp` tabs with `RUNNING_WPILIB_TESTS=1`. The
     `.ino` is not compiled, since it only holds `PROSDK_ROBOT_MAIN`.
-  - The tests run the robot in the host simulator with paused timing, as upstream does.
+  - The tests run the robot in the host simulator with paused timing, as upstream does. The
+    simulator has alliance and match data, so the snippet tests check them although the probot
+    Driver Station sends none.
 - **UnitTest** is not ported, because the example is not ported (pneumatics).
 
 ## Sizes

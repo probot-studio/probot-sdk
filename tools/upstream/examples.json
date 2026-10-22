@@ -1,0 +1,678 @@
+{
+  "comment": "Ported WPILib examples: upstream sources and blob ids at the pinned commit. Edit the upstream lists by hand; tools/upstream/examples.py --write fills commit, lists and files.",
+  "commit": "b68effca4ddc9742ac208daa7dd1d11816137882",
+  "lists": {
+    "wpilibcExamples/src/main/cpp/commands/commands.json": "3ed21b62509aa6af0905c18440048f9dc358a34a",
+    "wpilibcExamples/src/main/cpp/examples/examples.json": "a03952555d98878f0f4c802a4e3e4f2df86cf685",
+    "wpilibcExamples/src/main/cpp/snippets/snippets.json": "3fba99d315f8f2e1452253cb41282b878032e32d",
+    "wpilibcExamples/src/main/cpp/templates/templates.json": "a0da28236b9cc9c5953598af6435a664890dbd79"
+  },
+  "handwritten": [
+    "AprilTagFieldPose",
+    "CommandBasedRobot",
+    "DriversShowcase",
+    "HalSmoke",
+    "OpModeRobotExample",
+    "TimedRobotDifferential",
+    "TimesliceRobotExample"
+  ],
+  "ported": {
+    "examples/ArcadeDriveGamepad": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/ArcadeDriveGamepad"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/ArcadeDriveGamepad/cpp/Robot.cpp": "acde597b7b8e094a9e2b989060f6b2ab18ddb224"
+      }
+    },
+    "examples/ArmSimulation": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/ArmSimulation"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/ArmSimulation/cpp/Robot.cpp": "612235f61f0d03605dad6e14d23276bfcd4dee73",
+        "wpilibcExamples/src/main/cpp/examples/ArmSimulation/cpp/subsystems/Arm.cpp": "2d0a15e140d5ad46c62234de8ade74e7e41bdadb",
+        "wpilibcExamples/src/main/cpp/examples/ArmSimulation/include/Constants.hpp": "bcd3361287069d970305eb7d83ae30ad48aca8c0",
+        "wpilibcExamples/src/main/cpp/examples/ArmSimulation/include/Robot.hpp": "37ac557f0b0ac94ec9122bdf25c0a8fb32fddf05",
+        "wpilibcExamples/src/main/cpp/examples/ArmSimulation/include/subsystems/Arm.hpp": "968bb3adbd9c0169c240b4e3ed03b5c6ffbb0baf"
+      }
+    },
+    "examples/DSGamepadChooser": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/DSGamepadChooser"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/DSGamepadChooser/cpp/Robot.cpp": "f0bef8b1d3b64911cf94ad0cec0f590a743a854c",
+        "wpilibcExamples/src/main/cpp/examples/DSGamepadChooser/cpp/opmode/BalanceAuto.cpp": "7da53d6984e3e6c5d599ade6847be88cdc0e25cb",
+        "wpilibcExamples/src/main/cpp/examples/DSGamepadChooser/cpp/opmode/ScoreAuto.cpp": "043996900292f2d90a2633a9e090cf99ad9dc2d0",
+        "wpilibcExamples/src/main/cpp/examples/DSGamepadChooser/include/Robot.hpp": "8a0cfbd07e8f9158c68d37a42899fe04da3276f9",
+        "wpilibcExamples/src/main/cpp/examples/DSGamepadChooser/include/opmode/BalanceAuto.hpp": "a3a9992064da3831f378dd1d13daceabd0900156",
+        "wpilibcExamples/src/main/cpp/examples/DSGamepadChooser/include/opmode/DoNothingTeleop.hpp": "e5d72b2f4d1338f6124aec81b4c45d1353323312",
+        "wpilibcExamples/src/main/cpp/examples/DSGamepadChooser/include/opmode/ScoreAuto.hpp": "a39f71630288bd7cdc4d81684f2c19474ed2baa3"
+      }
+    },
+    "examples/DifferentialDriveBot": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/DifferentialDriveBot"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/DifferentialDriveBot/cpp/Drivetrain.cpp": "130e3913f9bdcc8680b9487b60c72f028529c8bd",
+        "wpilibcExamples/src/main/cpp/examples/DifferentialDriveBot/cpp/Robot.cpp": "914d9950db3a346676d64cbf6c28f55a1c6a4712",
+        "wpilibcExamples/src/main/cpp/examples/DifferentialDriveBot/include/Drivetrain.hpp": "4b46a8d4e1610be82b32293bc9ffffb7306c513e"
+      }
+    },
+    "examples/DifferentialDrivePoseEstimator": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/DifferentialDrivePoseEstimator"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/DifferentialDrivePoseEstimator/cpp/Drivetrain.cpp": "cf34141c9a208a81885751594fb530fb55a527bf",
+        "wpilibcExamples/src/main/cpp/examples/DifferentialDrivePoseEstimator/cpp/Robot.cpp": "baa48e7f59c29484905112034fe86e5c7a30d8cb",
+        "wpilibcExamples/src/main/cpp/examples/DifferentialDrivePoseEstimator/include/Drivetrain.hpp": "6672a895ccfabf985f028065ab38b83e3fc7afb9",
+        "wpilibcExamples/src/main/cpp/examples/DifferentialDrivePoseEstimator/include/ExampleGlobalMeasurementSensor.hpp": "a004c8e5df13cbb1f56bef0370b94687de58ec84"
+      }
+    },
+    "examples/DriveDistanceOffboard": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/DriveDistanceOffboard"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/DriveDistanceOffboard/cpp/Robot.cpp": "91ec79b6ca7593626827d474639262bafe230cdc",
+        "wpilibcExamples/src/main/cpp/examples/DriveDistanceOffboard/cpp/RobotContainer.cpp": "6eaa3684113f20b24fcd1fa0327d75432319b7a6",
+        "wpilibcExamples/src/main/cpp/examples/DriveDistanceOffboard/cpp/subsystems/DriveSubsystem.cpp": "2b67cae4fe1886752fbcbcce1bf2fbe6ca92c783",
+        "wpilibcExamples/src/main/cpp/examples/DriveDistanceOffboard/include/Constants.hpp": "e7947a8ee6cb45bde91de7c641c46a71c6043cad",
+        "wpilibcExamples/src/main/cpp/examples/DriveDistanceOffboard/include/ExampleSmartMotorController.hpp": "77458ff5be176b3d034e44b6780a80a78153d85a",
+        "wpilibcExamples/src/main/cpp/examples/DriveDistanceOffboard/include/Robot.hpp": "4cc2b5022cecd0343851dfae0a29f88bf892434f",
+        "wpilibcExamples/src/main/cpp/examples/DriveDistanceOffboard/include/RobotContainer.hpp": "63504e9c97814d9f622e017d938029f2bf6f29af",
+        "wpilibcExamples/src/main/cpp/examples/DriveDistanceOffboard/include/subsystems/DriveSubsystem.hpp": "fef5f484911b2b85be504a95710d097477314d15"
+      }
+    },
+    "examples/DriverStationDisplayAnsi": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/DriverStationDisplayAnsi"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/DriverStationDisplayAnsi/cpp/Robot.cpp": "39cfbcc0ccb08eb8a9174f4f670def51aa4943c2",
+        "wpilibcExamples/src/main/cpp/examples/DriverStationDisplayAnsi/cpp/opmode/DefaultTeleop.cpp": "a8fed32d30114e94d3dfbe830f126f9d7944b4e5",
+        "wpilibcExamples/src/main/cpp/examples/DriverStationDisplayAnsi/include/Robot.hpp": "8a0cfbd07e8f9158c68d37a42899fe04da3276f9",
+        "wpilibcExamples/src/main/cpp/examples/DriverStationDisplayAnsi/include/opmode/DefaultTeleop.hpp": "0427747aeedde2f357023bd7945ca44418d65c1a"
+      }
+    },
+    "examples/DriverStationDisplayLines": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/DriverStationDisplayLines"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/DriverStationDisplayLines/cpp/Robot.cpp": "39cfbcc0ccb08eb8a9174f4f670def51aa4943c2",
+        "wpilibcExamples/src/main/cpp/examples/DriverStationDisplayLines/cpp/opmode/DefaultTeleop.cpp": "7ffde8a400d65d22c8ada2e225fc0b1a475bfdd4",
+        "wpilibcExamples/src/main/cpp/examples/DriverStationDisplayLines/include/Robot.hpp": "8a0cfbd07e8f9158c68d37a42899fe04da3276f9",
+        "wpilibcExamples/src/main/cpp/examples/DriverStationDisplayLines/include/opmode/DefaultTeleop.hpp": "9333684bec067df31b9188e8e2361c8e26d1178b"
+      }
+    },
+    "examples/DutyCycleEncoder": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/DutyCycleEncoder"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/DutyCycleEncoder/cpp/Robot.cpp": "3c009ceff415abecef7f1e6ca01101fe09981f55"
+      }
+    },
+    "examples/ElevatorExponentialProfile": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/ElevatorExponentialProfile"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/ElevatorExponentialProfile/cpp/Robot.cpp": "f646b6f1ff459829751b4098b8d72a9c9307935a",
+        "wpilibcExamples/src/main/cpp/examples/ElevatorExponentialProfile/include/ExampleSmartMotorController.hpp": "d9061ec540b1fbd7d4b6af2b08e61814278a5b6a"
+      }
+    },
+    "examples/ElevatorExponentialSimulation": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/ElevatorExponentialSimulation"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/ElevatorExponentialSimulation/cpp/Robot.cpp": "9ee94b03185f656d6392b6a960000f0ba5d9026a",
+        "wpilibcExamples/src/main/cpp/examples/ElevatorExponentialSimulation/cpp/subsystems/Elevator.cpp": "4851f6f350dedbe9761e8001f2f9025d8aa297fb",
+        "wpilibcExamples/src/main/cpp/examples/ElevatorExponentialSimulation/include/Constants.hpp": "4233f410e4fbb9b4b58cb7fb680a3ff4b705c56f",
+        "wpilibcExamples/src/main/cpp/examples/ElevatorExponentialSimulation/include/Robot.hpp": "4f5f10cc1531b9759032f9513e1474ce735db83c",
+        "wpilibcExamples/src/main/cpp/examples/ElevatorExponentialSimulation/include/subsystems/Elevator.hpp": "f2c6de3035dafe27fba7294b9a98358ad68e5ef6"
+      }
+    },
+    "examples/ElevatorProfiledPID": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/ElevatorProfiledPID"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/ElevatorProfiledPID/cpp/Robot.cpp": "aad0f975cf0167cf67c3c66cecfb0132b79ab7f1"
+      }
+    },
+    "examples/ElevatorSimulation": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/ElevatorSimulation"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/ElevatorSimulation/cpp/Robot.cpp": "9fa08f0195ce91287aff8c5c8bb7959fc82a1ea5",
+        "wpilibcExamples/src/main/cpp/examples/ElevatorSimulation/cpp/subsystems/Elevator.cpp": "6d5cb8b539d9c90a5c83cc4ffcda6a96c7dbc2fa",
+        "wpilibcExamples/src/main/cpp/examples/ElevatorSimulation/include/Constants.hpp": "df3a8440fe35d9d8cfce5adc106f143b07a5dd90",
+        "wpilibcExamples/src/main/cpp/examples/ElevatorSimulation/include/Robot.hpp": "1668b2204c04fbcc1ac2334e6803d050e99a9129",
+        "wpilibcExamples/src/main/cpp/examples/ElevatorSimulation/include/subsystems/Elevator.hpp": "c06095a430323636957d12c437085a9cfcda3ca8"
+      }
+    },
+    "examples/ElevatorTrapezoidProfile": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/ElevatorTrapezoidProfile"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/ElevatorTrapezoidProfile/cpp/Robot.cpp": "b5b63654d3c82826ea4823722d42403fcbcbedcf",
+        "wpilibcExamples/src/main/cpp/examples/ElevatorTrapezoidProfile/include/ExampleSmartMotorController.hpp": "d9061ec540b1fbd7d4b6af2b08e61814278a5b6a"
+      }
+    },
+    "examples/Encoder": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/Encoder"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/Encoder/cpp/Robot.cpp": "8e0aa1bac9ccc2b1c6b451ac63f9e54757ebd5ee"
+      }
+    },
+    "examples/GettingStarted": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/GettingStarted"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/GettingStarted/cpp/Robot.cpp": "e0adbe71641ba49fe8787ec107ebf6aaf20858a5"
+      }
+    },
+    "examples/Gyro": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/Gyro"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/Gyro/cpp/Robot.cpp": "a6d8ac14068856cd09c45791d8e090f34045d15b"
+      }
+    },
+    "examples/MecanumBot": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/MecanumBot"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/MecanumBot/cpp/Drivetrain.cpp": "19660e1b87239ac738cb4c492787db5b86f34122",
+        "wpilibcExamples/src/main/cpp/examples/MecanumBot/cpp/Robot.cpp": "2eb98a114d4f41c67b05bdd06fa05703f2f82be5",
+        "wpilibcExamples/src/main/cpp/examples/MecanumBot/include/Drivetrain.hpp": "14399adc66f3bd74ec1d61d0ee9d636aea02dfb1"
+      }
+    },
+    "examples/MecanumDrive": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/MecanumDrive"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/MecanumDrive/cpp/Robot.cpp": "aaa382abb8b9b011d609586f1168bf7b11750dcf"
+      }
+    },
+    "examples/MecanumDrivePoseEstimator": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/MecanumDrivePoseEstimator"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/MecanumDrivePoseEstimator/cpp/Drivetrain.cpp": "ddc41bc01a84fbb13f07b410e1f63c5f5b2f0d2f",
+        "wpilibcExamples/src/main/cpp/examples/MecanumDrivePoseEstimator/cpp/Robot.cpp": "2eb98a114d4f41c67b05bdd06fa05703f2f82be5",
+        "wpilibcExamples/src/main/cpp/examples/MecanumDrivePoseEstimator/include/Drivetrain.hpp": "367c1890c15a1d5021829321507137804355741c",
+        "wpilibcExamples/src/main/cpp/examples/MecanumDrivePoseEstimator/include/ExampleGlobalMeasurementSensor.hpp": "a004c8e5df13cbb1f56bef0370b94687de58ec84"
+      }
+    },
+    "examples/Mechanism2d": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/Mechanism2d"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/Mechanism2d/cpp/Robot.cpp": "ff1bee89e5b354bbb25cfdccb8f2219e608794b6"
+      }
+    },
+    "examples/SimpleDifferentialDriveSimulation": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/SimpleDifferentialDriveSimulation"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/SimpleDifferentialDriveSimulation/cpp/Drivetrain.cpp": "a27c816042e0428a2ac26aa7185dc72b543e451f",
+        "wpilibcExamples/src/main/cpp/examples/SimpleDifferentialDriveSimulation/cpp/Robot.cpp": "26b7250e6e1454ebef0116b2cb9e5d1d983b7f18",
+        "wpilibcExamples/src/main/cpp/examples/SimpleDifferentialDriveSimulation/include/Drivetrain.hpp": "c87ab945444326e19378cf053a4329402ad49b61"
+      }
+    },
+    "examples/SnippetADXLAccelerometers": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/ADXLAccelerometers"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/ADXLAccelerometers/cpp/Robot.cpp": "875e6dd3bae2e0068eada4e574383929a6306576"
+      }
+    },
+    "examples/SnippetAccelerometerCollision": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/AccelerometerCollision"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/AccelerometerCollision/cpp/Robot.cpp": "ba094d8b6c81873b1d27712c230d29eb27fbae33"
+      }
+    },
+    "examples/SnippetAccelerometerFilter": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/AccelerometerFilter"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/AccelerometerFilter/cpp/Robot.cpp": "583713775062cf9f2df6638b9fcd7c8ea88281ac"
+      }
+    },
+    "examples/SnippetAddressableLED": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/AddressableLED"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/AddressableLED/cpp/Robot.cpp": "7ca5246385aaffa56bb9bb27baaf4ce0297fd255",
+        "wpilibcExamples/src/main/cpp/snippets/AddressableLED/include/Robot.hpp": "63316d96060fdb626de51840d3df9685cbe3e542"
+      }
+    },
+    "examples/SnippetAnalogAccelerometer": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/AnalogAccelerometer"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/AnalogAccelerometer/cpp/Robot.cpp": "1401d5fc4634e14fbc22b7eee6464f72b5d31aad"
+      }
+    },
+    "examples/SnippetAnalogEncoder": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/AnalogEncoder"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/AnalogEncoder/cpp/Robot.cpp": "40e06ebe83f74cef25458083781c97c3859b97fd"
+      }
+    },
+    "examples/SnippetAnalogInput": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/AnalogInput"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/AnalogInput/cpp/Robot.cpp": "f2e06eb6568ba299bf6c759b560dd6a00f20ff81"
+      }
+    },
+    "examples/SnippetAnalogPotentiometer": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/AnalogPotentiometer"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/AnalogPotentiometer/cpp/Robot.cpp": "cd71d80fd615964a8168d73a08e57af1310bd51b"
+      }
+    },
+    "examples/SnippetDifferentialDrive": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/DifferentialDrive"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/DifferentialDrive/cpp/Robot.cpp": "b8e3f32f6ed71aaf829a5bc12cfdb65d8ca75763"
+      }
+    },
+    "examples/SnippetDigitalCommunication": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/DigitalCommunication"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/DigitalCommunication/cpp/Robot.cpp": "bdb04f0094ed813d3b74cbbb2f56db6bf5c23ff3",
+        "wpilibcExamples/src/main/cpp/snippets/DigitalCommunication/include/Robot.hpp": "276bd6aa8ba87d37cc9ffa0b6615610a3175b00e"
+      }
+    },
+    "examples/SnippetDigitalInput": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/DigitalInput"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/DigitalInput/cpp/Robot.cpp": "293f3fb16272c0580893cadacd12f79d1ff0017c"
+      }
+    },
+    "examples/SnippetDutyCycleEncoder": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/DutyCycleEncoder"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/DutyCycleEncoder/cpp/Robot.cpp": "79b55bf5997a02c3aa16d4356bdc7a5dddc0066f"
+      }
+    },
+    "examples/SnippetDutyCycleInput": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/DutyCycleInput"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/DutyCycleInput/cpp/Robot.cpp": "9b1bc23dd9b8aa3a96ece09852cc398dbb87623b"
+      }
+    },
+    "examples/SnippetEncoder": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/Encoder"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/Encoder/cpp/Robot.cpp": "122d711a553dffcb56d488c2a944cb509584c6b0"
+      }
+    },
+    "examples/SnippetEncoderDrive": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/EncoderDrive"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/EncoderDrive/cpp/Robot.cpp": "ac906f4fc4e4dc21ac4298584cbd81e5b02253e0"
+      }
+    },
+    "examples/SnippetEncoderHoming": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/EncoderHoming"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/EncoderHoming/cpp/Robot.cpp": "3ee1fe2570be7ce1c9ef51242fef728f49e1617b"
+      }
+    },
+    "examples/SnippetEventLoop": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/EventLoop"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/EventLoop/cpp/Robot.cpp": "505a75a4e0d692120540660dca771672ab4534b8"
+      }
+    },
+    "examples/SnippetFlywheelBangBangController": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/FlywheelBangBangController"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/FlywheelBangBangController/cpp/Robot.cpp": "a15f0a2b5017b0fea29101ecf971a9b62120964b"
+      }
+    },
+    "examples/SnippetI2CCommunication": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/I2CCommunication"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/I2CCommunication/cpp/Robot.cpp": "169c4b9d6ae547824829cacd6f6874467adb3f3f",
+        "wpilibcExamples/src/main/cpp/snippets/I2CCommunication/include/Robot.hpp": "bc29b22921613e8c13e308655693734a06fbc052"
+      }
+    },
+    "examples/SnippetLimitSwitch": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/LimitSwitch"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/LimitSwitch/cpp/Robot.cpp": "fd138b9926d020ccf0e56f24c38ef58c53eafe9a"
+      }
+    },
+    "examples/SnippetMecanumDrive": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/MecanumDrive"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/MecanumDrive/cpp/Robot.cpp": "d1b838464d9d450c08f3d4ace4df6ceb08cceb64"
+      }
+    },
+    "examples/SnippetMotorControl": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/MotorControl"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/MotorControl/cpp/Robot.cpp": "f1dc4bb4553003c18c3e8e9affa3e10a28f455bc"
+      }
+    },
+    "examples/SnippetOnboardIMU": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/OnboardIMU"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/OnboardIMU/cpp/Robot.cpp": "8edacebec154318e776efac8367992c90f1f4526"
+      }
+    },
+    "examples/SnippetProfiledPIDFeedforward": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/ProfiledPIDFeedforward"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/ProfiledPIDFeedforward/cpp/Robot.cpp": "037c223b3635d1d7105c55f08232597b981117d1"
+      }
+    },
+    "examples/SnippetSelectCommand": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/snippets/SelectCommand"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/snippets/SelectCommand/cpp/Robot.cpp": "df0a01d4e1918a538542b8687454f01bda092adb",
+        "wpilibcExamples/src/main/cpp/snippets/SelectCommand/cpp/RobotContainer.cpp": "5fcb86d71665dfbbf586c6fb63c9ea039a7758a6",
+        "wpilibcExamples/src/main/cpp/snippets/SelectCommand/include/Constants.hpp": "715ba4aa461b1447cfe14364caa59730b31570c9",
+        "wpilibcExamples/src/main/cpp/snippets/SelectCommand/include/Robot.hpp": "b658cb0f607ea001d470b5088e74118d962a71a4",
+        "wpilibcExamples/src/main/cpp/snippets/SelectCommand/include/RobotContainer.hpp": "0530c05d52f5f6382a3c8d9e8d51c8e3340ca731"
+      }
+    },
+    "examples/StateSpaceArm": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/StateSpaceArm"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/StateSpaceArm/cpp/Robot.cpp": "630928f37b7ed084ba4287a72bfcc61b24a553fc"
+      }
+    },
+    "examples/StateSpaceElevator": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/StateSpaceElevator"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/StateSpaceElevator/cpp/Robot.cpp": "2f9013bf9e8e28165489a3fb7fcbf8f6ade49a04"
+      }
+    },
+    "examples/StateSpaceFlywheel": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/StateSpaceFlywheel"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/StateSpaceFlywheel/cpp/Robot.cpp": "548fc4ad7ab28f72d98371a58789f29c79058a41"
+      }
+    },
+    "examples/StateSpaceFlywheelSysId": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/StateSpaceFlywheelSysId"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/StateSpaceFlywheelSysId/cpp/Robot.cpp": "5692265b2ded4ea29a9cc81a8c2c0a7938e29e52"
+      }
+    },
+    "examples/SwerveBot": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/SwerveBot"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/SwerveBot/cpp/Drivetrain.cpp": "e60fb8bffb10837cb6fe17bfa36051a30f70a277",
+        "wpilibcExamples/src/main/cpp/examples/SwerveBot/cpp/Robot.cpp": "0ab185d023cef3b52586917193445c78e217be82",
+        "wpilibcExamples/src/main/cpp/examples/SwerveBot/cpp/SwerveModule.cpp": "c36dd3aae24b491329ad762913eb114ca77a68e7",
+        "wpilibcExamples/src/main/cpp/examples/SwerveBot/include/Drivetrain.hpp": "df8c39f0eec2d6d3df8eb26ba3abbbe4b8837c1b",
+        "wpilibcExamples/src/main/cpp/examples/SwerveBot/include/SwerveModule.hpp": "e1acde7d46d36b4481a95c99e927e6f2ab7c8c20"
+      }
+    },
+    "examples/SwerveDrivePoseEstimator": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/SwerveDrivePoseEstimator"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/SwerveDrivePoseEstimator/cpp/Drivetrain.cpp": "be45832097c7a0e557f3d4100a45e24e702c28b2",
+        "wpilibcExamples/src/main/cpp/examples/SwerveDrivePoseEstimator/cpp/Robot.cpp": "5b289f097c801d29a3a0ade778dd15b3fa309b43",
+        "wpilibcExamples/src/main/cpp/examples/SwerveDrivePoseEstimator/cpp/SwerveModule.cpp": "023b92f0bf81a460a9a7d25a0d0a5fbead01c9e3",
+        "wpilibcExamples/src/main/cpp/examples/SwerveDrivePoseEstimator/include/Drivetrain.hpp": "4431ed738e2f8799299cf19cff24e51e56e1e61d",
+        "wpilibcExamples/src/main/cpp/examples/SwerveDrivePoseEstimator/include/ExampleGlobalMeasurementSensor.hpp": "a004c8e5df13cbb1f56bef0370b94687de58ec84",
+        "wpilibcExamples/src/main/cpp/examples/SwerveDrivePoseEstimator/include/SwerveModule.hpp": "17378abdf289d9e3f8bf67163e46404a2d3a85cb"
+      }
+    },
+    "examples/SysIdRoutine": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/SysIdRoutine"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/SysIdRoutine/cpp/Robot.cpp": "716ec550ffea3ad2ad1cfe43631e26023e3ff309",
+        "wpilibcExamples/src/main/cpp/examples/SysIdRoutine/cpp/SysIdRoutineBot.cpp": "09684281b44b57bfc4787932da9e7533e41801b2",
+        "wpilibcExamples/src/main/cpp/examples/SysIdRoutine/cpp/subsystems/Drive.cpp": "f5abef19fd2e3f43dd0f287d3e6670dddb318ab2",
+        "wpilibcExamples/src/main/cpp/examples/SysIdRoutine/cpp/subsystems/Shooter.cpp": "5451a8fe266ab0adcb4140af1ea8707805d81ebc",
+        "wpilibcExamples/src/main/cpp/examples/SysIdRoutine/include/Constants.hpp": "45287f3e673c36a8ce96c4780623c95073a71894",
+        "wpilibcExamples/src/main/cpp/examples/SysIdRoutine/include/Robot.hpp": "0998e52c1c08c35c8ed5b12aaa721e9f06c5c950",
+        "wpilibcExamples/src/main/cpp/examples/SysIdRoutine/include/SysIdRoutineBot.hpp": "0d1698de4ae866af8005e7f9db1e382f8f3846e2",
+        "wpilibcExamples/src/main/cpp/examples/SysIdRoutine/include/subsystems/Drive.hpp": "c46c31847a97516de874498c1cdc584dfdced0ef",
+        "wpilibcExamples/src/main/cpp/examples/SysIdRoutine/include/subsystems/Shooter.hpp": "66df0c0ab2c7cfe94005508066ff84386ead067c"
+      }
+    },
+    "examples/TankDriveGamepad": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/examples/TankDriveGamepad"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/examples/TankDriveGamepad/cpp/Robot.cpp": "c97e044ca8acb1daf91a9910ba70789763440569"
+      }
+    },
+    "examples/TemplateCommandItems": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/commands/emptyclass",
+        "wpilibcExamples/src/main/cpp/commands/command2",
+        "wpilibcExamples/src/main/cpp/commands/instantcommand",
+        "wpilibcExamples/src/main/cpp/commands/parallelcommandgroup",
+        "wpilibcExamples/src/main/cpp/commands/paralleldeadlinegroup",
+        "wpilibcExamples/src/main/cpp/commands/parallelracegroup",
+        "wpilibcExamples/src/main/cpp/commands/sequentialcommandgroup",
+        "wpilibcExamples/src/main/cpp/commands/subsystem2"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/commands/command2/ReplaceMeCommand2.cpp": "fb306b6df2d767ab8240189429ceaee1a079d973",
+        "wpilibcExamples/src/main/cpp/commands/command2/ReplaceMeCommand2.hpp": "b8dec100c5a4f9e2dbc02607b0773f0a550708c2",
+        "wpilibcExamples/src/main/cpp/commands/emptyclass/ReplaceMeEmptyClass.cpp": "a6afe3b9cc03a204c1bd1408eace684aea068c50",
+        "wpilibcExamples/src/main/cpp/commands/emptyclass/ReplaceMeEmptyClass.hpp": "e6a733cc10b56fd37b18cbf7ea3709a51774c15b",
+        "wpilibcExamples/src/main/cpp/commands/instantcommand/ReplaceMeInstantCommand2.cpp": "14fcc676581b4b2cd95815288f3033851863a8ce",
+        "wpilibcExamples/src/main/cpp/commands/instantcommand/ReplaceMeInstantCommand2.hpp": "f12a7e5e1b63215a658e46d9dcf0daa9c9885f06",
+        "wpilibcExamples/src/main/cpp/commands/parallelcommandgroup/ReplaceMeParallelCommandGroup.cpp": "4e8f2c94b200b1149190c5a9ec0c0a42da4531ac",
+        "wpilibcExamples/src/main/cpp/commands/parallelcommandgroup/ReplaceMeParallelCommandGroup.hpp": "0e4bffa28072480c3bb0c15eb3714c541daa0645",
+        "wpilibcExamples/src/main/cpp/commands/paralleldeadlinegroup/ReplaceMeParallelDeadlineGroup.cpp": "6fc0db194699a1ea40df2c5784abafa4e925eb7e",
+        "wpilibcExamples/src/main/cpp/commands/paralleldeadlinegroup/ReplaceMeParallelDeadlineGroup.hpp": "bbbfaeaa8c241aea150f5272d3cb462a2159c091",
+        "wpilibcExamples/src/main/cpp/commands/parallelracegroup/ReplaceMeParallelRaceGroup.cpp": "264c56c97465e6ccd7d73b2759382751f47804ac",
+        "wpilibcExamples/src/main/cpp/commands/parallelracegroup/ReplaceMeParallelRaceGroup.hpp": "54ba9883bacfb329d18a5c301c0d87f32c88940d",
+        "wpilibcExamples/src/main/cpp/commands/sequentialcommandgroup/ReplaceMeSequentialCommandGroup.cpp": "6a7b46948ac756553fdc91a7636b38894fea1095",
+        "wpilibcExamples/src/main/cpp/commands/sequentialcommandgroup/ReplaceMeSequentialCommandGroup.hpp": "c4c0c54bca33c7b37f04772a4621e3f2b271cdf0",
+        "wpilibcExamples/src/main/cpp/commands/subsystem2/ReplaceMeSubsystem2.cpp": "254517e1f6f3e2a98c6dea2ca740d8a42ea8fa07",
+        "wpilibcExamples/src/main/cpp/commands/subsystem2/ReplaceMeSubsystem2.hpp": "4ce07afd13132513eda8058427118ff1ade2fedc"
+      }
+    },
+    "examples/TemplateCommandV2": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/templates/commandv2"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/templates/commandv2/cpp/Robot.cpp": "b47c2de8d5d0bc8de970cd5b24c99a380ee0e3ed",
+        "wpilibcExamples/src/main/cpp/templates/commandv2/cpp/RobotContainer.cpp": "68ea9aa1c25c666cd4ceaf9d68b64d11552c0179",
+        "wpilibcExamples/src/main/cpp/templates/commandv2/cpp/commands/Autos.cpp": "192d75ab7433b3726d46959d94b83ec423fc2885",
+        "wpilibcExamples/src/main/cpp/templates/commandv2/cpp/commands/ExampleCommand.cpp": "745221cada8b68b1be76dddb4678e2d3be222642",
+        "wpilibcExamples/src/main/cpp/templates/commandv2/cpp/subsystems/ExampleSubsystem.cpp": "69ee3ad5a7ba2f01282c122a17926a00ccfba930",
+        "wpilibcExamples/src/main/cpp/templates/commandv2/include/Constants.hpp": "add81e2c28e4c91f38e55d86efb73bd791c2f505",
+        "wpilibcExamples/src/main/cpp/templates/commandv2/include/Robot.hpp": "ac4ef446520fb2bd4e62599fcea31e3d3dae4330",
+        "wpilibcExamples/src/main/cpp/templates/commandv2/include/RobotContainer.hpp": "e4d77d74c08f43af5886c1a1dc0a6831c4f5c450",
+        "wpilibcExamples/src/main/cpp/templates/commandv2/include/commands/Autos.hpp": "735acbca9bba3c42b03cd9e318b971f5402661c1",
+        "wpilibcExamples/src/main/cpp/templates/commandv2/include/commands/ExampleCommand.hpp": "b24518e17bb6d3d1d3a435ac6d48b325e0fdc2d4",
+        "wpilibcExamples/src/main/cpp/templates/commandv2/include/subsystems/ExampleSubsystem.hpp": "0149abecefb2bf4190f6dccd20f86c7af45c7e4e"
+      }
+    },
+    "examples/TemplateCommandV2Skeleton": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/templates/commandv2skeleton"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/templates/commandv2skeleton/cpp/Robot.cpp": "716ec550ffea3ad2ad1cfe43631e26023e3ff309",
+        "wpilibcExamples/src/main/cpp/templates/commandv2skeleton/cpp/RobotContainer.cpp": "25edad49f20b302b30d2c7201a63f9c201c651be",
+        "wpilibcExamples/src/main/cpp/templates/commandv2skeleton/include/Robot.hpp": "08022568cb2c91a5a8e8170f7fa2e1b1c7afb9de",
+        "wpilibcExamples/src/main/cpp/templates/commandv2skeleton/include/RobotContainer.hpp": "1b205288cb81a9c319ba196cf4ddbfb5730db171"
+      }
+    },
+    "examples/TemplateOpMode": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/templates/opmode"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/templates/opmode/cpp/Robot.cpp": "ebe37518a14397f0f9ad8f17621326a4052fcb8b",
+        "wpilibcExamples/src/main/cpp/templates/opmode/cpp/opmode/MyAuto.cpp": "3d107a1ed4f80cee6ee6648c93238df4352b20a0",
+        "wpilibcExamples/src/main/cpp/templates/opmode/cpp/opmode/MyTeleop.cpp": "31bc38535fe262788f301926578e65afbfa0d6b6",
+        "wpilibcExamples/src/main/cpp/templates/opmode/include/Robot.hpp": "5ebd2fdedeacf892a7e8afb146bd0e999dc2d6ba",
+        "wpilibcExamples/src/main/cpp/templates/opmode/include/opmode/MyAuto.hpp": "9d259d14e459c7e5358e6381f3c8954c6feeb931",
+        "wpilibcExamples/src/main/cpp/templates/opmode/include/opmode/MyTeleop.hpp": "05ba1d0938bde8991f46ec1dac960010f92b9d95"
+      }
+    },
+    "examples/TemplateTimed": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/templates/timed"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/templates/timed/cpp/Robot.cpp": "7b08d87cc74e2d30a3de333db00fb67fc9ee8a5f",
+        "wpilibcExamples/src/main/cpp/templates/timed/include/Robot.hpp": "37444165ca713d87038e9ae0f57ee6e13c9eb157"
+      }
+    },
+    "examples/TemplateTimedSkeleton": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/templates/timedskeleton"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/templates/timedskeleton/cpp/Robot.cpp": "39337d3456471e336ee6f31e5fdf14edb46f8e28",
+        "wpilibcExamples/src/main/cpp/templates/timedskeleton/include/Robot.hpp": "db14d9db480ae9bd26877f4dc74d012a34c4b447"
+      }
+    },
+    "examples/TemplateTimeslice": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/templates/timeslice"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/templates/timeslice/cpp/Robot.cpp": "825b1b4a762e0386aed52fa7601766b2d10f30e7",
+        "wpilibcExamples/src/main/cpp/templates/timeslice/include/Robot.hpp": "ed244e9aa4ab90fe53b44be47a970afb6018e957"
+      }
+    },
+    "examples/TemplateTimesliceSkeleton": {
+      "upstream": [
+        "wpilibcExamples/src/main/cpp/templates/timesliceskeleton"
+      ],
+      "files": {
+        "wpilibcExamples/src/main/cpp/templates/timesliceskeleton/cpp/Robot.cpp": "f4c966c9a7ff1eb8d0575b70be2804eebe1cfe1a",
+        "wpilibcExamples/src/main/cpp/templates/timesliceskeleton/include/Robot.hpp": "4b6403667237c9d2fc4cad889c40a4eaa7d84bf4"
+      }
+    },
+    "test/examples/ArmSimulation": {
+      "upstream": [
+        "wpilibcExamples/src/test/cpp/examples/ArmSimulation/cpp/ArmSimulationTest.cpp"
+      ],
+      "files": {
+        "wpilibcExamples/src/test/cpp/examples/ArmSimulation/cpp/ArmSimulationTest.cpp": "9022628f5209a586e5613f06648c247536511b4c"
+      }
+    },
+    "test/examples/ElevatorSimulation": {
+      "upstream": [
+        "wpilibcExamples/src/test/cpp/examples/ElevatorSimulation/cpp/ElevatorSimulationTest.cpp"
+      ],
+      "files": {
+        "wpilibcExamples/src/test/cpp/examples/ElevatorSimulation/cpp/ElevatorSimulationTest.cpp": "f3e164e1440bdfa30f85a60c94ef594f0b763db8"
+      }
+    },
+    "test/examples/SnippetDigitalCommunication": {
+      "upstream": [
+        "wpilibcExamples/src/test/cpp/snippets/DigitalCommunication/cpp/DigitalCommunicationTest.cpp"
+      ],
+      "files": {
+        "wpilibcExamples/src/test/cpp/snippets/DigitalCommunication/cpp/DigitalCommunicationTest.cpp": "b3d9567c36a43fe6feb2f83017aca909293c4a56"
+      }
+    },
+    "test/examples/SnippetI2CCommunication": {
+      "upstream": [
+        "wpilibcExamples/src/test/cpp/snippets/I2CCommunication/cpp/I2CCommunicationTest.cpp"
+      ],
+      "files": {
+        "wpilibcExamples/src/test/cpp/snippets/I2CCommunication/cpp/I2CCommunicationTest.cpp": "9143e9a2a3912d341410df42d564c97c8e221cb3"
+      }
+    },
+    "test/examples/main.cpp": {
+      "upstream": [
+        "wpilibcExamples/src/test/cpp/examples/ArmSimulation/cpp/main.cpp"
+      ],
+      "files": {
+        "wpilibcExamples/src/test/cpp/examples/ArmSimulation/cpp/main.cpp": "f74245a939d13d62a7a35877a55f5df6dd2183d4"
+      }
+    }
+  }
+}

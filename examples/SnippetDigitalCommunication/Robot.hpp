@@ -18,7 +18,7 @@ class Robot : public prosdk::TimedRobot {
   // define ports for communication with light controller
   static constexpr int ALLIANCE_PORT = 17;
   static constexpr int ENABLED_PORT = 18;
-  static constexpr int AUTONOMOUS_PORT = 42;
+  static constexpr int AUTONOMOUS_PORT = 10;
   static constexpr int ALERT_PORT = 11;
 
   void RobotPeriodic() override;

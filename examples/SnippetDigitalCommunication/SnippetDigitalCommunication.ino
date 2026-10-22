@@ -7,7 +7,7 @@
 // wpilibcExamples/src/main/cpp/snippets/DigitalCommunication), ported to prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   GPIO 17 alliance (red = high)   GPIO 18 enabled   GPIO 42 autonomous   GPIO 11 match-time alert
+//   GPIO 17 alliance (red = high)   GPIO 18 enabled   GPIO 10 autonomous   GPIO 11 match-time alert
 // The probot Driver Station sends no alliance, so the alliance output stays low; match time
 // comes from probot-core (-1 when unknown).
 
