@@ -17,10 +17,14 @@
 //     expiration by less than half a pass) on the pass start (CycleStartTime(): taken when core
 //     enters its pre-cycle hook, so neither the earlier pre-cycle callbacks nor a construction in
 //     that pass shift the schedule). It aligns at the first pass after the robot's construction
-//     pass, the first one on core's grid: core's first pass after boot starts right after the
-//     boot hook, off its tick grid, and a robot registered after boot is constructed inside a
-//     pass. It re-aligns after a period change and after a late pass (core restarts its grid; no
-//     catch-up, like upstream's "skip the periods it is behind");
+//     pass: a robot registered after boot is constructed inside a pass, and before probot-core
+//     R15 core's first pass after boot started right after the boot hook, off its tick grid
+//     (with R15 it starts on a tick boundary; aligning one pass later is the same grid). It
+//     re-aligns after a period change and whenever core restarts its grid after a late pass (no
+//     catch-up, like upstream's "skip the periods it is behind"): with R15 on every change of
+//     core's grid-restart count, which includes the late one-shot INIT/START/STOP passes; with an
+//     older core on every change of its overrun count, which leaves those out (the schedule then
+//     stays on the old grid until the next counted overrun or period change);
 //   - runs every callback that is due before the middle of the pass (PeriodicPriorityQueue::
 //     RunDue with a horizon of half a pass after the pass start: upstream order and
 //     rescheduling), so that neither the run time of the earlier pre-cycle callbacks nor a pass
@@ -67,6 +71,7 @@ struct Host {
   uint64_t passes = 0;              // passes started
   uint64_t alignPass = 0;           // align the schedule at this pass
   uint32_t overruns = 0;            // core's overrun count at the previous pass
+  uint32_t restarts = 0;            // core's grid-restart count at the previous pass (R15)
   int64_t lastOverrunReport = 0;    // monotonic ns
   bool overrunReported = false;
   bool warnedSubMs = false;
@@ -281,10 +286,14 @@ void RobotPass(void*) {
   const int64_t passStart = CycleStartTime();
   const int64_t now = prosdk::RobotController::GetMonotonicTime();
   const uint32_t overruns = LoopOverruns();
-  const bool late = overruns != gHost.overruns;
-  if (late) {
-    gHost.overruns = overruns;
-    gHost.alignPass = pass;  // core restarted its pass grid with this pass
+  const bool overrun = overruns != gHost.overruns;
+  gHost.overruns = overruns;
+  // core restarted its pass grid with this pass: every late pass with R15, else counted overruns
+  uint32_t restarts = 0;
+  const bool restarted = GetLoopGridRestarts(&restarts) ? restarts != gHost.restarts : overrun;
+  gHost.restarts = restarts;
+  if (restarted) {
+    gHost.alignPass = pass;
   }
   if (pass == gHost.alignPass) {
     AlignSchedule(passStart);
@@ -296,7 +305,7 @@ void RobotPass(void*) {
     Halt("its loop threw an exception");
     return;
   }
-  if (late) {
+  if (overrun) {
     ReportOverruns(passStart, overruns);  // after the loop: the console write does not delay it
   }
 }
@@ -357,10 +366,12 @@ void BootRobot(void*) {
   gHost.startTime = loop.startTime;
   gHost.passes = 0;
   UpdatePassPeriod();
-  // pass 0 is the construction pass (a late registration) or core's first pass, which starts
-  // right after the boot hook, off core's grid: align at the next one
+  // pass 0 is the construction pass (a late registration) or core's first pass, which started
+  // right after the boot hook, off core's grid, before R15: align at the next one
   gHost.alignPass = 1;
   gHost.overruns = LoopOverruns();
+  gHost.restarts = 0;
+  GetLoopGridRestarts(&gHost.restarts);
 
   gState.store(RobotProgramState::kRunning, std::memory_order_release);
   // after the HAL's (output gate, Driver Station pump) and the dashboard's pre-cycle callbacks

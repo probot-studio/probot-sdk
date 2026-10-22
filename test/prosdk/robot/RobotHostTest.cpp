@@ -8,7 +8,9 @@
 // while idle).
 //
 // Own executable: the fake table is installed once per process and the e-stop latches, so the
-// e-stop test case is the last one (main.cpp runs the test cases in declaration order).
+// e-stop test case is the last one (main.cpp runs the test cases in declaration order). Built twice:
+// prosdk_robot_tests with probot-core R15's grid-restart count, prosdk_robot_legacy_tests
+// (PROSDK_FAKE_CORE_NO_GRID_RESTARTS) without it.
 
 #include <stdint.h>
 
@@ -52,6 +54,7 @@ struct FakeCore {
   uint64_t activeId = 0;
   uint32_t period = 20;
   uint32_t overruns = 0;
+  uint32_t restarts = 0;  // R15 loopGridRestarts()
   std::vector<uint32_t> periodRequests;
   int stopRequests = 0;  // probot::requestStop() calls
   int stops = 0;         // ... that stopped an INIT or RUN phase
@@ -76,6 +79,24 @@ bool FakeSetPeriod(uint32_t ms) {
 }
 uint32_t FakePeriod() { return gCore.period; }
 uint32_t FakeOverruns() { return gCore.overruns; }
+uint32_t FakeGridRestarts() { return gCore.restarts; }
+
+// Built with PROSDK_FAKE_CORE_NO_GRID_RESTARTS (prosdk_robot_legacy_tests): a core before R15,
+// whose CoreOps loopGridRestarts is null.
+#ifdef PROSDK_FAKE_CORE_NO_GRID_RESTARTS
+constexpr bool kGridRestarts = false;
+#else
+constexpr bool kGridRestarts = true;
+#endif
+
+// What core's pacer counts for a pass that ended late (the next pass sees it): a restart of its
+// grid, and an overrun unless the pass ran a one-shot INIT/START/STOP hook.
+void CoreLatePass(bool oneShot) {
+  ++gCore.restarts;
+  if (!oneShot) {
+    ++gCore.overruns;
+  }
+}
 uint64_t FakeSelectedId() { return gCore.selectedId; }
 uint64_t FakeActiveId() { return gCore.activeId; }
 // probot::requestStop() (R12): stops an INIT or RUN phase like the DS STOP button
@@ -157,6 +178,7 @@ void InstallOnce() {
     ops.setLoopPeriodMs = FakeSetPeriod;
     ops.loopPeriodMs = FakePeriod;
     ops.loopOverruns = FakeOverruns;
+    ops.loopGridRestarts = kGridRestarts ? FakeGridRestarts : nullptr;
     ops.selectedOpModeId = FakeSelectedId;
     ops.activeOpModeId = FakeActiveId;
     // R12: requestStop only; rslState, commsDisableCount and setLowVoltage stay null (the
@@ -335,7 +357,7 @@ TEST_CASE("RobotHost re-aligns after a late pass", "[robothost]") {
   Passes(4);
   // core ran late by 3 ms and restarted its grid
   prosdk::sim::StepTiming(3_ms);
-  ++gCore.overruns;
+  CoreLatePass(false);
   Passes(6);
   CHECK(Console().find("overrun") != std::string::npos);
   // after the late pass the callbacks keep their periods on the new grid
@@ -493,6 +515,42 @@ TEST_CASE("RobotHost decides what is due from the pass start, not after the pre-
     INFO("pass " << pass);
     CHECK(robot->LoopsInPass(pass) == 1u);
   }
+}
+
+TEST_CASE("RobotHost re-aligns after a late one-shot pass", "[robothost]") {
+  // 5 ms loop on core's grid
+  StartPassRobot(5, 0, 5000000);
+  gGrid.Pass();
+  auto* robot = PassRobot::instance;
+  REQUIRE(robot != nullptr);
+  for (int i = 0; i < 10; ++i) {
+    gGrid.Pass();
+  }
+  // A pass that ran an INIT/START/STOP hook ended 2.4 ms late: core restarts its grid there, and
+  // does not count an overrun (a one-shot pass)
+  gGrid.next += 2400000;
+  CoreLatePass(true);
+  if (!kGridRestarts) {
+    // a core without R15 shows nothing: the schedule stays on the old grid until a counted
+    // overrun, which re-aligns it the same way
+    CoreLatePass(false);
+  }
+  // then passes start up to 1.5 ms late (less than half a pass, but more than the 0.1 ms left
+  // between half a pass and the old grid's 2.4 ms offset)
+  const uint64_t first = gGrid.index + 1;
+  const int64_t lateNs[] = {0, 1500000, 700000, 0};
+  for (int i = 0; i < 40; ++i) {
+    gGrid.Pass(lateNs[i % 4]);
+  }
+  for (uint64_t pass = first; pass <= gGrid.index; ++pass) {
+    INFO("pass " << pass);
+    CHECK(robot->LoopsInPass(pass) == 1u);
+  }
+  // a one-shot restart is no overrun: nothing reported (with R15)
+  CHECK((Console().find("overrun") == std::string::npos) == kGridRestarts);
+  uint32_t restarts = 99;
+  CHECK(pf::GetLoopGridRestarts(&restarts) == kGridRestarts);
+  CHECK(restarts == (kGridRestarts ? gCore.restarts : 99u));
 }
 
 namespace {

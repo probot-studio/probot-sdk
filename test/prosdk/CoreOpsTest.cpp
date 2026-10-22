@@ -120,6 +120,10 @@ TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][plat
     // no core: no dashboard persistence (ABI 6)
     CHECK_FALSE(pf::DashPersistenceSupported());
     CHECK_FALSE(pf::GetCoreOps().dashClearPersisted());
+    // no core: no grid-restart count (ABI 7)
+    uint32_t restarts = 99;
+    CHECK_FALSE(pf::GetLoopGridRestarts(&restarts));
+    CHECK(restarts == 99);
 
     // ---- fake core (unset entries fall back to the defaults) ----
     pf::CoreOps ops{};
@@ -193,6 +197,11 @@ TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][plat
   // ABI 6 left null (a core without dashboard persistence): the default, not supported
   CHECK_FALSE(pf::DashPersistenceSupported());
   CHECK_FALSE(pf::GetCoreOps().dashClearPersisted());
+  // ABI 7 left null (a core without R15): no grid-restart count
+  uint32_t restarts = 99;
+  CHECK_FALSE(pf::GetLoopGridRestarts(&restarts));
+  CHECK(restarts == 99);
+  CHECK_FALSE(pf::GetLoopGridRestarts(nullptr));
 
   SECTION("invalid options are dropped, long strings truncated at a UTF-8 boundary") {
     std::string longName(70, 'a');

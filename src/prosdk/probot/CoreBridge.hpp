@@ -43,6 +43,13 @@
 //     adds no feature macro). The PERSISTENT flag value
 //     existed before (core stored it and did nothing), so it is not what is detected. Without it
 //     dashClearPersisted stays null and the archive publishes no tunable PERSISTENT.
+//   - R15 grid restarts (probot::loopGridRestarts() in <probot/core/loop_timing.hpp>, which older
+//     cores already have: detected with a requires-check on the call, kCoreHasGridRestarts, as core
+//     intends). Without it loopGridRestarts stays null and the robot host re-aligns its schedule
+//     on counted overruns only.
+//   - R15 dashboard limits (probot::dashboard::limits(), same commit, detected the same way):
+//     dashMaxSchemaBytes reads it. Without it the bridge reads the store's limits from
+//     dashboard::detail::g_store under the store's lock, as before.
 //
 // ODR: every function here only calls core's config-free headers, so all definitions are the same
 // in every translation unit. The pin reservation depends on the sketch's configuration macros and
@@ -335,15 +342,35 @@ inline bool SetLowVoltage(float volts) { return probot::io::battery::setLowVolta
 #define PROSDK_CORE_SMALL_ITEMS_OPS nullptr, nullptr, nullptr, nullptr
 #endif
 
-// R13: core has no accessor for its configured limits, so this reads the store's (under its lock,
-// as core's own detail::maxValue() does). L is a template parameter so that a core without
-// Limits::maxSchemaBytes never instantiates it.
+// R15 dashboard limits, looked up like clearPersisted below (persist_probe).
+namespace limits_probe {
+using namespace probot::dashboard;
+template <typename L, typename... A>
+inline L CurrentLimits(A... a) {
+  return limits(a...);
+}
+template <typename... A>
+inline constexpr bool kHasLimits = requires(A... a) {
+  { limits(a...) } -> std::same_as<probot::dashboard::Limits>;
+};
+}  // namespace limits_probe
+
+// R13: the store's per-schema limit as configured, 0 before runtime_setup(). Read on every call
+// (the archive never keeps it), so a zero read before core configured the store does not stick.
+// With R15 from core's dashboard::limits(); an older core has no accessor, so the store's limits
+// are read under its lock, as core's own detail::maxValue() does. L is a template parameter so
+// that a core without Limits::maxSchemaBytes never instantiates it.
 template <typename L>
 inline uint32_t DashMaxSchemaBytes() {
-  auto& st = probot::dashboard::detail::g_store;
-  probot::core::MuxGuard g(st.mux);
-  const L& lim = st.lim;
-  return st.configured ? lim.maxSchemaBytes : 0;
+  if constexpr (limits_probe::kHasLimits<>) {
+    const L lim = limits_probe::CurrentLimits<L>();
+    return lim.maxSchemaBytes;  // all limits are 0 before runtime_setup()
+  } else {
+    auto& st = probot::dashboard::detail::g_store;
+    probot::core::MuxGuard g(st.mux);
+    const L& lim = st.lim;
+    return st.configured ? lim.maxSchemaBytes : 0;
+  }
 }
 template <typename L>
 constexpr uint32_t (*DashMaxSchemaBytesOp())() {
@@ -439,6 +466,31 @@ inline uint32_t LoopOverruns() { return probot::loopOverruns(); }
 #define PROSDK_CORE_LOOP_RATE_OPS nullptr, nullptr, nullptr
 #endif
 
+// R15 grid restarts, looked up like clearPersisted (persist_probe). probot::loopGridRestarts() is
+// in <probot/core/loop_timing.hpp>, included above when core has it.
+namespace grid_probe {
+using namespace probot;
+template <typename... A>
+inline uint32_t LoopGridRestarts(A... a) {
+  return loopGridRestarts(a...);
+}
+template <typename... A>
+inline constexpr bool kHasLoopGridRestarts = requires(A... a) {
+  { loopGridRestarts(a...) } -> std::same_as<uint32_t>;
+};
+}  // namespace grid_probe
+
+/** True when the sketch's probot-core counts every restart of its pass grid (R15). */
+inline constexpr bool kCoreHasGridRestarts = grid_probe::kHasLoopGridRestarts<>;
+
+constexpr uint32_t (*LoopGridRestartsOp())() {
+  if constexpr (kCoreHasGridRestarts) {
+    return &grid_probe::LoopGridRestarts<>;
+  } else {
+    return nullptr;
+  }
+}
+
 #if PROSDK_CORE_HAS_OPMODES
 inline bool SetOpModeOptions(const pf::CoreOpModeOption* options, size_t count) {
   if (count > pf::kCoreOpModeMaxOptions || (count != 0 && options == nullptr)) {
@@ -486,6 +538,7 @@ inline bool Install() {
       PROSDK_CORE_SMALL_ITEMS_OPS,
       DashMaxSchemaBytesOp<probot::dashboard::Limits>(),
       DashClearPersistedOp(),
+      LoopGridRestartsOp(),
   };
   bool ok = pf::InstallCoreOps(&kOps);
   bool hooks = probot::framework::install(probot::framework::Hooks{

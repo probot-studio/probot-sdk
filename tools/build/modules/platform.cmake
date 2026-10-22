@@ -31,3 +31,10 @@ endif()
 # installed once per process, and the e-stop latches)
 file(GLOB _robot_tests CONFIGURE_DEPENDS "${PROSDK_ROOT}/test/prosdk/robot/*.cpp")
 prosdk_add_test(prosdk_robot_tests SOURCES ${_robot_tests})
+
+# own executable: the same robot host tests against a fake core without grid restarts (a
+# probot-core before R15: CoreOps ABI 7 loopGridRestarts null)
+prosdk_add_test(prosdk_robot_legacy_tests SOURCES ${_robot_tests})
+if(TARGET prosdk_robot_legacy_tests)
+  target_compile_definitions(prosdk_robot_legacy_tests PRIVATE PROSDK_FAKE_CORE_NO_GRID_RESTARTS=1)
+endif()

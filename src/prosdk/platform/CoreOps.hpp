@@ -21,7 +21,8 @@
 // system time counts as valid once the clock is past 2024-01-01 (SystemTimeValid()). Without R12
 // (small items) RequestStop() stops nothing, the RSL state and the comms-disable count are unknown
 // and core's low-voltage threshold is not set; without R13 (schema size limit) the dashboard
-// reports a refused schema against PROBOT_DASH_MAX_VALUE.
+// reports a refused schema against PROBOT_DASH_MAX_VALUE; without R15 (grid restarts) the robot
+// host re-aligns its schedule only when loopOverruns changes.
 //
 // ABI rules: only append fields, bump kCoreOpsAbiVersion on any change of meaning or layout. The
 // archive refuses a table whose abiVersion differs or whose size is smaller than its own.
@@ -39,7 +40,7 @@
 namespace prosdk::platform {
 
 /** Layout/meaning version of CoreOps; both sides must agree. */
-inline constexpr uint32_t kCoreOpsAbiVersion = 6;
+inline constexpr uint32_t kCoreOpsAbiVersion = 7;
 
 /** probot-core robot::Phase values (probot/robot/state.hpp). */
 enum CorePhase : uint8_t {
@@ -263,6 +264,15 @@ struct CoreOps {
   // every stored value (writes flash: call it while the robot is stopped); false without storage
   // or when the erase failed. Null (core without persistence): PERSISTENT is not used.
   bool (*dashClearPersisted)();
+
+  // ---- ABI 7 ----
+  // pass grid restarts (probot-core R15: probot::loopGridRestarts()): times core's pass schedule
+  // restarted since boot, i.e. every pass that ended late, including the one-shot INIT/START/STOP
+  // passes that loopOverruns leaves out. Core steps it after the late pass, before its sleep, so
+  // the next pass (and its pre-cycle hook) already sees the new value; the passes from that one
+  // on start on a new grid. A period change is not counted. Null (core without R15): the robot
+  // host re-aligns only when loopOverruns changes.
+  uint32_t (*loopGridRestarts)();
 };
 
 /**
@@ -324,6 +334,13 @@ uint32_t LoopPeriodMs() noexcept;
 
 /** User-loop passes since boot that ended after their deadline (one-shot hook passes excluded). */
 uint32_t LoopOverruns() noexcept;
+
+/**
+ * Times core's pass schedule restarted since boot (probot-core R15 loopGridRestarts(): every late
+ * pass, one-shot hook passes included). Returns false (and leaves *count unchanged) without core
+ * or with a core without R15.
+ */
+bool GetLoopGridRestarts(uint32_t* count) noexcept;
 
 /**
  * Replaces the opmode list the Driver Station offers. Options that core would refuse are fixed

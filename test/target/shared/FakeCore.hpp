@@ -127,6 +127,9 @@ inline bool Install() {
       // ABI 6 (R12 dashClearPersisted) null, as the bridge leaves it for a core without
       // dashboard persistence: no tunable is published PERSISTENT
       nullptr,
+      // ABI 7 (R15 loopGridRestarts) null, as the bridge leaves it for a core without R15: the
+      // robot host re-aligns on counted overruns only
+      nullptr,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   // what CoreBridge.hpp reports after probot::framework::install succeeded

@@ -86,6 +86,8 @@ bool DefSetLowVoltage(float) { return false; }
 uint32_t DefMaxSchemaBytes() { return 0; }
 // No core, or core without dashboard persistence (DashPersistenceSupported() recognizes it).
 bool DefClearPersisted() { return false; }
+// No core, or core without R15 (GetLoopGridRestarts() recognizes it).
+uint32_t DefLoopGridRestarts() { return 0; }
 
 constexpr CoreOps kDefaultOps{
     kCoreOpsAbiVersion, sizeof(CoreOps), 0, "",
@@ -99,6 +101,7 @@ constexpr CoreOps kDefaultOps{
     DefRequestStop, DefRslState, DefCommsDisableCount, DefSetLowVoltage,
     DefMaxSchemaBytes,
     DefClearPersisted,
+    DefLoopGridRestarts,
 };
 
 // Written once (static initialization, single-threaded) before gInstalled is set.
@@ -247,6 +250,7 @@ bool InstallCoreOps(const CoreOps* ops) noexcept {
   PROSDK_COREOPS_FILL(setLowVoltage);
   PROSDK_COREOPS_FILL(dashMaxSchemaBytes);
   PROSDK_COREOPS_FILL(dashClearPersisted);
+  PROSDK_COREOPS_FILL(loopGridRestarts);
 #undef PROSDK_COREOPS_FILL
   if (copy.coreVersionString == nullptr) {
     copy.coreVersionString = "";
@@ -307,6 +311,14 @@ uint32_t LoopPeriodMs() noexcept {
 
 uint32_t LoopOverruns() noexcept {
   return gOps.loopOverruns();
+}
+
+bool GetLoopGridRestarts(uint32_t* count) noexcept {
+  if (gOps.loopGridRestarts == kDefaultOps.loopGridRestarts || count == nullptr) {
+    return false;
+  }
+  *count = gOps.loopGridRestarts();
+  return true;
 }
 
 namespace {
