@@ -23,6 +23,7 @@
 #include "prosdk/hal/monotonic_clock.hpp"
 #include "prosdk/platform/Console.hpp"
 #include "prosdk/platform/CoreOps.hpp"
+#include "prosdk/platform/RobotHost.hpp"
 
 namespace prosdk::hal::esp32 {
 
@@ -194,9 +195,10 @@ bool EStopped() {
 }
 
 // Without prosdk's framework hooks (another framework owns core's hooks) the e-stop callback
-// and the pre-cycle gate never run, so the gate stays closed.
+// and the pre-cycle gate never run, so the gate stays closed. A halted robot program (constructor
+// or loop exception, prosdk/platform/RobotHost.hpp) keeps it closed too.
 bool OutputsEnabled() {
-  return !EStopped() && platform::FrameworkInstalled() &&
+  return !EStopped() && platform::FrameworkInstalled() && !platform::RobotProgramHalted() &&
          platform::GetCoreOps().outputsEnabled();
 }
 

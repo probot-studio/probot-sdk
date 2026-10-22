@@ -12,3 +12,8 @@ prosdk_add_test(prosdk_tests SOURCES ${_cxx_tests})
 # own executable: it installs the fake core table (CoreOps is installed once per process)
 file(GLOB _dashboard_tests CONFIGURE_DEPENDS "${PROSDK_ROOT}/test/prosdk/dashboard/*.cpp")
 prosdk_add_test(prosdk_dashboard_tests SOURCES "${PROSDK_ROOT}/test/prosdk/main.cpp" ${_dashboard_tests})
+
+# own executable: the hosted robot program against a fake core table and the HAL sim (CoreOps is
+# installed once per process, and the e-stop latches)
+file(GLOB _robot_tests CONFIGURE_DEPENDS "${PROSDK_ROOT}/test/prosdk/robot/*.cpp")
+prosdk_add_test(prosdk_robot_tests SOURCES ${_robot_tests})

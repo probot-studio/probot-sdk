@@ -8,6 +8,10 @@
 // hooks become optional) and a larger user-task stack before <probot.h> is seen. Core
 // configuration macros (PROBOT_WIFI_AP_PASSWORD, NEOPIXEL_PIN, PROBOT_RSL_PIN, ...) go before
 // this include, exactly as they would before <probot.h>.
+//
+// A robot program includes its framework header (prosdk/framework/TimedRobot.hpp,
+// TimesliceRobot.hpp or OpModeRobot.hpp) and ends with PROSDK_ROBOT_MAIN(Robot) instead of
+// main() (prosdk/platform/RobotMain.hpp).
 
 #pragma once
 
@@ -32,6 +36,7 @@
 #endif
 
 #include "prosdk/platform/dashboard/Dashboard.hpp"
+#include "prosdk/platform/RobotMain.hpp"
 #include "prosdk/telemetry/Telemetry.hpp"
 #include "prosdk/tunables/Tunables.hpp"
 #include "prosdk/util/Alert.hpp"

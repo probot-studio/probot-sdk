@@ -11,6 +11,12 @@
 
 #pragma once
 
+#include <stdint.h>
+
+namespace prosdk {
+class RobotBase;
+}  // namespace prosdk
+
 namespace prosdk::platform {
 
 /** Robot host callbacks. A null entry is a no-op. */
@@ -40,5 +46,58 @@ void OnRobotBaseConstructed();
 
 /** Calls RobotHostHooks::flushTelemetry if installed. */
 void FlushTelemetry();
+
+// ---- hosted robot program (the robot side of StartRobot; design/PORT.md section 8) ----
+//
+// On the robot there is no main(): PROSDK_ROBOT_MAIN(MyRobot) (prosdk/platform/RobotMain.hpp)
+// registers a factory at static initialization, and the robot host runs the program on
+// probot-core's user task:
+//   - boot (once, before core's first loop pass): installs the dashboard hooks above, runs
+//     RunHALInitialization(), constructs the robot (exceptions are reported like upstream
+//     StartRobot and halt the program), calls RobotBase::StartHosted() and sets core's loop
+//     period from the robot's periodic callbacks;
+//   - every core loop pass (a pre-cycle callback registered after the HAL's and the dashboard's):
+//     runs the callbacks that are due (PeriodicPriorityQueue::RunDue), keeps the schedule aligned
+//     with core's pass grid and follows AddPeriodic() changes of the pass period;
+//   - after a probot-core emergency stop it never touches the robot again (core deleted the user
+//     task; outputs are off through the HAL).
+// A halted program (constructor or loop exception, invalid period, robot class without a hosted
+// loop) keeps its outputs off (the HAL output gate) and only reports to the console.
+
+/** Creates the user's robot (on core's user task). */
+using RobotFactory = prosdk::RobotBase* (*)();
+
+/** The state of the hosted robot program. */
+enum class RobotProgramState : uint8_t {
+  kNone = 0,     ///< no PROSDK_ROBOT_MAIN in the program
+  kRegistered,   ///< registered, waiting for core's boot
+  kRunning,      ///< constructed; its loop runs from core's cycle callbacks
+  kHalted,       ///< failed or crashed; outputs stay off
+  kEStopped,     ///< stopped by a probot-core emergency stop
+};
+
+/**
+ * Registers the robot program (PROSDK_ROBOT_MAIN). Safe during static initialization: it only
+ * stores the factory and registers core boot callback; the robot is constructed at core's boot,
+ * never here. Only the first registration is taken; a second one returns false.
+ *
+ * @param factory Creates the robot.
+ * @param name    The robot class name (for messages); a string literal.
+ */
+bool SetRobotMain(RobotFactory factory, const char* name) noexcept;
+
+/** The state of the hosted robot program. */
+RobotProgramState GetRobotProgramState() noexcept;
+
+/** True once the hosted robot program halted (its outputs stay disabled). */
+bool RobotProgramHalted() noexcept;
+
+namespace detail {
+/**
+ * Host tests only: deletes the hosted robot, unregisters its cycle callback and forgets the
+ * registration, so that the next SetRobotMain() starts over (HAL initialization is kept).
+ */
+void ResetRobotMainForTest();
+}  // namespace detail
 
 }  // namespace prosdk::platform
