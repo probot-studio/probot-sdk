@@ -218,11 +218,11 @@ void UpdateOutputGate() {
   dio::ApplyGate(enabled, true);
 }
 
-void Log(std::string_view text) {
+void Log(std::string_view text, platform::ConsoleLevel level) {
   std::string line = "[prosdk hal] ";
   line.append(text);
   line.push_back('\n');
-  platform::ConsoleWrite(line);
+  platform::ConsoleWrite(line, level);
 }
 
 const char* EspErrName(int err) {
@@ -246,7 +246,8 @@ void InitializeSmartIo() {
   if (esp_timer_create(&args, &gGateTimer) == ESP_OK) {
     esp_timer_start_periodic(gGateTimer, 10000);  // 10 ms
   } else {
-    Log("output gate timer could not be created; the gate follows core's loop only");
+    Log("output gate timer could not be created; the gate follows core's loop only",
+        platform::ConsoleLevel::kWarning);
   }
 }
 }  // namespace prosdk::hal::init

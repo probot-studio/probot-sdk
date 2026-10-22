@@ -74,7 +74,7 @@ std::string Serialize(const std::map<std::string, Value, std::less<>>& values) {
 void Deserialize(std::string_view text, std::map<std::string, Value, std::less<>>& values) {
   auto parsed = prosdk::util::json::parse(text);
   if (!parsed || !parsed->is_array()) {
-    ConsoleWrite("Preferences: stored data is not readable; starting empty\n");
+    ConsoleWrite("Preferences: stored data is not readable; starting empty\n", ConsoleLevel::kWarning);
     return;
   }
   for (const auto& item : parsed->get_array()) {
@@ -142,7 +142,7 @@ void SavePersisted(Store& store) {
   std::string data = Serialize(store.values);
   nvs_handle_t handle;
   if (!NvsOpen(NVS_READWRITE, &handle)) {
-    ConsoleWrite("Preferences: cannot open NVS; the change is not persisted\n");
+    ConsoleWrite("Preferences: cannot open NVS; the change is not persisted\n", ConsoleLevel::kWarning);
     return;
   }
   esp_err_t err = nvs_set_blob(handle, kNvsKey, data.data(), data.size());
@@ -151,7 +151,7 @@ void SavePersisted(Store& store) {
   }
   nvs_close(handle);
   if (err != ESP_OK) {
-    ConsoleWrite("Preferences: writing NVS failed; the change is not persisted\n");
+    ConsoleWrite("Preferences: writing NVS failed; the change is not persisted\n", ConsoleLevel::kWarning);
   }
 }
 #else
@@ -186,7 +186,7 @@ void SavePersisted(Store& store) {
   }
   if (!ok || std::rename(tmp.c_str(), store.file.c_str()) != 0) {
     std::remove(tmp.c_str());
-    ConsoleWrite("Preferences: writing the preferences file failed\n");
+    ConsoleWrite("Preferences: writing the preferences file failed\n", ConsoleLevel::kWarning);
   }
 }
 #endif

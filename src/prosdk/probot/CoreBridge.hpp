@@ -25,6 +25,10 @@
 //     PROSDK_CORE_HAS_MULTI_GAMEPAD. Without it the CoreGamepad fields of ABI 3 are filled the way
 //     core 0.4.0 behaved (trigger buttons 0/1, core's 4-way POV, the mapping profile's name,
 //     standard mapping) and only port 0 has data.
+//   - R9 leveled console (<probot/telemetry/console.hpp>): PROSDK_CORE_HAS_CONSOLE. Without it the
+//     console text goes to core's telemetry ring (telemetry::writeBytes) without its level.
+//   - R10 wall clock (<probot/core/wall_clock.hpp>, ds::systemTimeValid()):
+//     PROSDK_CORE_HAS_WALL_CLOCK. Without it the archive's 2024-01-01 heuristic applies.
 //
 // ODR: every function here only calls core's config-free headers, so all definitions are the same
 // in every translation unit. The pin reservation depends on the sketch's configuration macros and
@@ -46,6 +50,7 @@
 #include <probot/robot/state.hpp>
 #include <probot/telemetry/telemetry.hpp>
 
+#include "prosdk/platform/Console.hpp"
 #include "prosdk/platform/CoreOps.hpp"
 
 #if PROBOT_VERSION < PROBOT_VERSION_OF(0, 4, 0)
@@ -70,6 +75,19 @@
 #define PROSDK_CORE_HAS_MULTI_GAMEPAD 1
 #else
 #define PROSDK_CORE_HAS_MULTI_GAMEPAD 0
+#endif
+
+#if __has_include(<probot/telemetry/console.hpp>)
+#include <probot/telemetry/console.hpp>
+#define PROSDK_CORE_HAS_CONSOLE 1
+#else
+#define PROSDK_CORE_HAS_CONSOLE 0
+#endif
+
+#if __has_include(<probot/core/wall_clock.hpp>)
+#define PROSDK_CORE_HAS_WALL_CLOCK 1
+#else
+#define PROSDK_CORE_HAS_WALL_CLOCK 0
 #endif
 
 #include <new>
@@ -108,6 +126,15 @@ static_assert(probot::robot::OpModeRegistry::kMaxOptions == pf::kCoreOpModeMaxOp
 static_assert(probot::io::kMaxGamepads == pf::kCoreMaxGamepads &&
                   probot::io::kMaxGamepadName == pf::kCoreGamepadMaxName,
               "probot-core gamepad limits changed");
+#endif
+#if PROSDK_CORE_HAS_CONSOLE
+static_assert(static_cast<uint8_t>(probot::console::Level::Info) ==
+                      static_cast<uint8_t>(pf::ConsoleLevel::kInfo) &&
+                  static_cast<uint8_t>(probot::console::Level::Warning) ==
+                      static_cast<uint8_t>(pf::ConsoleLevel::kWarning) &&
+                  static_cast<uint8_t>(probot::console::Level::Error) ==
+                      static_cast<uint8_t>(pf::ConsoleLevel::kError),
+              "probot-core console levels changed");
 #endif
 #if PROSDK_CORE_HAS_LOOP_RATE
 static_assert(probot::core::kMinLoopPeriodMs == pf::kCoreLoopPeriodMinMs &&
@@ -251,6 +278,26 @@ inline void ConsoleWrite(const char* text, size_t len) {
   }
 }
 
+#if PROSDK_CORE_HAS_CONSOLE
+// One console entry per write (core drops a trailing newline and splits text over 512 bytes).
+inline void ConsoleWriteLevel(uint8_t level, const char* text, size_t len) {
+  if (text != nullptr && len != 0) {
+    probot::console::write(static_cast<probot::console::Level>(level <= 2 ? level : 0), text,
+                           len);
+  }
+}
+#define PROSDK_CORE_CONSOLE_OP &ConsoleWriteLevel
+#else
+#define PROSDK_CORE_CONSOLE_OP nullptr
+#endif
+
+#if PROSDK_CORE_HAS_WALL_CLOCK
+inline bool SystemTimeValid() { return probot::ds::systemTimeValid(); }
+#define PROSDK_CORE_WALL_CLOCK_OP &SystemTimeValid
+#else
+#define PROSDK_CORE_WALL_CLOCK_OP nullptr
+#endif
+
 inline uint16_t DashPublish(const char* path, uint8_t vt, const char* typeString,
                             const char* propertiesJson, uint8_t flags) {
   return probot::dashboard::publish(path, static_cast<probot::dashboard::ValueType>(vt),
@@ -351,6 +398,8 @@ inline bool Install() {
       &DashAddSchema, &DashDrainWrites, &DashRejectWrite, &DashStats,
       PROSDK_CORE_LOOP_RATE_OPS,
       PROSDK_CORE_OPMODE_OPS,
+      PROSDK_CORE_CONSOLE_OP,
+      PROSDK_CORE_WALL_CLOCK_OP,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   bool hooks = probot::framework::install(probot::framework::Hooks{
@@ -362,6 +411,8 @@ inline bool Install() {
 
 #undef PROSDK_CORE_LOOP_RATE_OPS
 #undef PROSDK_CORE_OPMODE_OPS
+#undef PROSDK_CORE_CONSOLE_OP
+#undef PROSDK_CORE_WALL_CLOCK_OP
 
 /**
  * True once the bridge is installed: the CoreOps table and prosdk's framework hooks (evaluated

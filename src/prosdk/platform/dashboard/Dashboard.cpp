@@ -45,7 +45,8 @@ void RegisterDashboardBackends() {
         !AddCycleCallback(CyclePhase::kPost, DashboardPostCycle, nullptr)) {
       ConsoleWrite(
           "[prosdk] dashboard: core cycle callback table full; Driver Station tunable writes "
-          "and alerts are not processed\n");
+          "and alerts are not processed\n",
+          ConsoleLevel::kError);
     }
   });
 }

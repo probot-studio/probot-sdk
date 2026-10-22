@@ -70,7 +70,8 @@ PCA9685::PCA9685(I2C::Port port, int address, units::hertz_t frequency,
     m_configured = Configure();
   }
   if (!m_configured) {
-    platform::ConsolePrint("[prosdk] PCA9685 0x{:02X}: no answer on I2C port {}; retrying\n",
+    platform::ConsolePrint(platform::ConsoleLevel::kWarning,
+                           "[prosdk] PCA9685 0x{:02X}: no answer on I2C port {}; retrying\n",
                            address, static_cast<int>(port));
   }
   util::ReportUsage("PCA9685", address, "");

@@ -1,5 +1,5 @@
 diff --git a/src/prosdk/impl/tunables/cpp/TunableRegistry.cpp b/src/prosdk/impl/tunables/cpp/TunableRegistry.cpp
-index ffa6315..b4e5566 100644
+index ffa6315..a624900 100644
 --- a/src/prosdk/impl/tunables/cpp/TunableRegistry.cpp
 +++ b/src/prosdk/impl/tunables/cpp/TunableRegistry.cpp
 @@ -10,12 +10,12 @@
@@ -16,14 +16,15 @@ index ffa6315..b4e5566 100644
  #include "prosdk/tunables/ComplexTunable.hpp"
  #include "prosdk/tunables/TunableBackend.hpp"
  #include "prosdk/tunables/TunableConfig.hpp"
-@@ -128,8 +128,8 @@ static void UpdateBackendSnapshot(Instance& inst) {
+@@ -128,8 +128,9 @@ static void UpdateBackendSnapshot(Instance& inst) {
  }
  
  static void DefaultReportWarning(std::string_view msg) {
 -  // TODO: do something smarter here
 -  prosdk::cxx::print(stderr, "Tunable warning: {}\n", msg);
 +  // prosdk: platform console (DS console on the robot), never throws
-+  prosdk::platform::ConsoleWrite(std::format("Tunable warning: {}\n", msg));
++  prosdk::platform::ConsoleWrite(std::format("Tunable warning: {}\n", msg),
++                                 prosdk::platform::ConsoleLevel::kWarning);
  }
  
  static std::shared_ptr<TunableBackend> GetBackendForNormalizedPath(

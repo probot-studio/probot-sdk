@@ -150,7 +150,8 @@ static std::string MakeLogDir(std::string_view dir) {
   std::string logDir = prosdk::platform::GetLogDirectory();
   if (logDir.empty()) {
     prosdk::platform::ConsoleWrite(
-        "DataLogManager: no log storage (LittleFS is not mounted); log data is discarded\n");
+        "DataLogManager: no log storage (LittleFS is not mounted); log data is discarded\n",
+        prosdk::platform::ConsoleLevel::kWarning);
     return logDir;
   }
   std::error_code ec;
@@ -263,7 +264,8 @@ void Thread::Main() {
             break;
           }
         } else {
-          prosdk::platform::ConsolePrint("DataLogManager: could not delete {}\n",
+          prosdk::platform::ConsolePrint(prosdk::platform::ConsoleLevel::kWarning,
+                                         "DataLogManager: could not delete {}\n",
                                          entry.path().string());
         }
       }
@@ -481,7 +483,8 @@ Instance::Instance(std::string_view dir, std::string_view filename,
     if (prosdk::util::starts_with(entry.path().stem().string(), "WPILIB_TBD_") &&
         entry.path().extension() == ".wpilog") {
       if (!prosdk::fs::remove(entry, ec)) {
-        prosdk::platform::ConsolePrint("DataLogManager: could not delete {}\n",
+        prosdk::platform::ConsolePrint(prosdk::platform::ConsoleLevel::kWarning,
+                                       "DataLogManager: could not delete {}\n",
                                        entry.path().string());
       }
     }

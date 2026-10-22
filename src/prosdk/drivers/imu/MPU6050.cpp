@@ -57,7 +57,7 @@ MPU6050::MPU6050(I2C::Port port, int address, units::millisecond_t updatePeriod)
   aborted = aborted || m_i2c.Write(kRegAccelConfig, kAccel4G);
   if (aborted || !m_whoAmIOk) {
     platform::ConsolePrint(
-        "[prosdk] MPU6050 0x{:02X} on I2C port {}: {} (WHO_AM_I 0x{:02X})\n", address,
+        platform::ConsoleLevel::kWarning, "[prosdk] MPU6050 0x{:02X} on I2C port {}: {} (WHO_AM_I 0x{:02X})\n", address,
         static_cast<int>(port), aborted ? "no answer" : "unexpected chip", who);
   }
   util::ReportUsage("MPU6050", address, "");

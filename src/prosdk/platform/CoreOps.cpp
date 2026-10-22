@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <cstdio>
+#include <ctime>
 #include <format>
 #include <string>
 #include <string_view>
@@ -68,6 +69,13 @@ bool DefSetOpModeOptions(const CoreOpModeOption*, size_t) {
   return !gInstalled.load(std::memory_order_acquire);
 }
 uint64_t DefOpModeId() { return 0; }
+void DefConsoleLevel(uint8_t level, const char* text, size_t len);  // below: needs gOps
+// No core, or core without R10: valid once something moved the clock past 2024-01-01 (the
+// ESP32's clock starts at 1970 after boot).
+bool DefSystemTimeValid() {
+  constexpr std::time_t k20240101 = 1704067200;
+  return std::time(nullptr) >= k20240101;
+}
 
 constexpr CoreOps kDefaultOps{
     kCoreOpsAbiVersion, sizeof(CoreOps), 0, "",
@@ -77,6 +85,7 @@ constexpr CoreOps kDefaultOps{
     DefDrain, DefReject, DefStats,
     DefSetLoopPeriod, DefLoopPeriod, DefOverruns,
     DefSetOpModeOptions, DefOpModeId, DefOpModeId, DefFalse,
+    DefConsoleLevel, DefSystemTimeValid,
 };
 
 // Written once (static initialization, single-threaded) before gInstalled is set.
@@ -85,9 +94,17 @@ constinit std::atomic<uint64_t> gReservedPins{0};
 constinit std::atomic<bool> gEStopped{false};
 constinit std::atomic<bool> gBooted{false};
 
-// Console sink once core is present: Driver Station console plus the default stderr (UART0).
-void CoreConsoleSink(std::string_view text) {
-  gOps.consoleWrite(text.data(), text.size());
+// Core without R9: the text goes to core's telemetry ring, without its level.
+void DefConsoleLevel(uint8_t, const char* text, size_t len) {
+  gOps.consoleWrite(text, len);
+}
+
+// Console sink once core is present: Driver Station console (leveled with R9) plus the default
+// stderr (UART0).
+void CoreConsoleSink(ConsoleLevel level, std::string_view text) {
+  if (!text.empty()) {
+    gOps.consoleWriteLevel(static_cast<uint8_t>(level), text.data(), text.size());
+  }
   std::fwrite(text.data(), 1, text.size(), stderr);
 }
 
@@ -168,7 +185,8 @@ bool InstallCoreOps(const CoreOps* ops) noexcept {
   if (ops == nullptr || ops->abiVersion != kCoreOpsAbiVersion || ops->size < sizeof(CoreOps)) {
     ConsoleWrite(
         "[prosdk] probot-core bridge ABI mismatch: rebuild the sketch against this prosdk "
-        "release (CoreOps)\n");
+        "release (CoreOps)\n",
+        ConsoleLevel::kError);
     return false;
   }
   bool expected = false;
@@ -206,13 +224,15 @@ bool InstallCoreOps(const CoreOps* ops) noexcept {
   PROSDK_COREOPS_FILL(selectedOpModeId);
   PROSDK_COREOPS_FILL(activeOpModeId);
   PROSDK_COREOPS_FILL(utilityAvailable);
+  PROSDK_COREOPS_FILL(consoleWriteLevel);
+  PROSDK_COREOPS_FILL(systemTimeValid);
 #undef PROSDK_COREOPS_FILL
   if (copy.coreVersionString == nullptr) {
     copy.coreVersionString = "";
   }
   copy.size = sizeof(CoreOps);
   gOps = copy;
-  SetConsoleSink(CoreConsoleSink);
+  SetLeveledConsoleSink(CoreConsoleSink);
   return true;
 }
 
@@ -247,7 +267,8 @@ void NoteFrameworkInstall(bool installed) noexcept {
     ConsoleWrite(
         "[prosdk] ERROR: probot-core already has another framework installed "
         "(probot::framework::install returned false). prosdk's robot loop, Driver Station "
-        "input and output gate will not run. Use only one framework per sketch.\n");
+        "input and output gate will not run. Use only one framework per sketch.\n",
+        ConsoleLevel::kError);
   }
 }
 
@@ -299,7 +320,8 @@ bool SetOpModeOptions(const CoreOpModeOption* options, size_t count) {
   std::vector<Copy> copies;
   copies.reserve(count < kCoreOpModeMaxOptions ? count : kCoreOpModeMaxOptions);
   auto warn = [](uint64_t id, std::string_view name, std::string_view what) {
-    ConsoleWrite(std::format("[prosdk] Driver Station opmode {} \"{}\": {}\n", id, name, what));
+    ConsoleWrite(std::format("[prosdk] Driver Station opmode {} \"{}\": {}\n", id, name, what),
+                 ConsoleLevel::kWarning);
   };
   for (size_t i = 0; i < count; ++i) {
     const CoreOpModeOption& o = options[i];
@@ -308,7 +330,8 @@ bool SetOpModeOptions(const CoreOpModeOption* options, size_t count) {
       ConsoleWrite(std::format(
           "[prosdk] Driver Station opmodes: {} options given, probot-core shows at most {}; "
           "the rest are not selectable\n",
-          count, kCoreOpModeMaxOptions));
+          count, kCoreOpModeMaxOptions),
+          ConsoleLevel::kWarning);
       break;
     }
     if (o.id == 0) {
@@ -360,7 +383,8 @@ bool SetOpModeOptions(const CoreOpModeOption* options, size_t count) {
         "the previous list stays\n",
         list.size(),
         HasCoreOps() ? "out of memory, or this probot-core has no opmode list (R7)"
-                     : "invalid list"));
+                     : "invalid list"),
+        ConsoleLevel::kError);
   }
   return ok;
 }
@@ -375,6 +399,10 @@ uint64_t ActiveOpModeId() noexcept {
 
 bool UtilityAvailable() noexcept {
   return gOps.utilityAvailable();
+}
+
+bool SystemTimeValid() noexcept {
+  return gOps.systemTimeValid();
 }
 
 bool AddCycleCallback(CyclePhase phase, CoreCallback callback, void* context) noexcept {

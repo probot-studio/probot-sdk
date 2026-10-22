@@ -83,8 +83,16 @@ int32_t DefaultSendErrorImpl(bool isError, int32_t errorCode,
         std::format_to(std::back_inserter(buf), "{}\n", callStackView);
       }
       auto printError = gPrintErrorImpl.load();
-      struct WPI_String line = {buf.data(), buf.size()};
-      printError(&line);
+      if (printError == DefaultPrintErrorImpl) {
+        // prosdk: the platform console also gets the level
+        prosdk::platform::ConsoleWrite(
+            {buf.data(), buf.size()},
+            isError ? prosdk::platform::ConsoleLevel::kError
+                    : prosdk::platform::ConsoleLevel::kWarning);
+      } else {
+        struct WPI_String line = {buf.data(), buf.size()};
+        printError(&line);
+      }
     }
     if (i == KEEP_MSGS) {
       // replace the oldest one

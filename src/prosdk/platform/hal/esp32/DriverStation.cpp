@@ -33,7 +33,6 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
-#include <ctime>
 #include <format>
 #include <mutex>
 #include <string>
@@ -273,7 +272,8 @@ int32_t ProbotCoreDs::sendProgramCrash(const struct WPI_String* details,
   prosdk::platform::ConsoleWrite(std::format("Program Crash: {}\nLocation: {}\nCall Stack:\n{}\n",
                                              prosdk::util::to_string_view(details),
                                              prosdk::util::to_string_view(location),
-                                             prosdk::util::to_string_view(callStack)));
+                                             prosdk::util::to_string_view(callStack)),
+                                 prosdk::platform::ConsoleLevel::kError);
   return 0;
 }
 
@@ -494,11 +494,11 @@ int32_t ProbotCoreDs::observeUserProgram(HAL_ControlWord) {
 
 // "System time" is the wall clock (std::chrono::system_clock, DataLogManager file names and its
 // systemTime entry), not the HAL's monotonic clock. The ESP32's wall clock starts at 1970 after
-// boot and nothing sets it yet (core-requests.md R10: set it from the browser), so it is valid
-// only once something (the sketch's SNTP or settimeofday) moved it past 2024-01-01.
+// boot; probot-core R10 sets it from the Driver Station browser (ds::systemTimeValid()). With an
+// older core it is valid only once something (the sketch's SNTP or settimeofday) moved it past
+// 2024-01-01 (prosdk::platform::SystemTimeValid()).
 int32_t ProbotCoreDs::getSystemTimeValid(bool* systemTimeValid) {
-  constexpr std::time_t k20240101 = 1704067200;
-  *systemTimeValid = std::time(nullptr) >= k20240101;
+  *systemTimeValid = prosdk::platform::SystemTimeValid();
   return 0;
 }
 

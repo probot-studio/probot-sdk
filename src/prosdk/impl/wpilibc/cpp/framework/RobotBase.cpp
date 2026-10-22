@@ -42,7 +42,8 @@ using namespace prosdk;
 
 int prosdk::RunHALInitialization() {
   if (!HAL_Initialize()) {
-    prosdk::platform::ConsoleWrite("FATAL ERROR: HAL could not be initialized\n");
+    prosdk::platform::ConsoleWrite("FATAL ERROR: HAL could not be initialized\n",
+                                   prosdk::platform::ConsoleLevel::kError);
     return -1;
   }
   prosdk::util::SetReportUsageImpl(
@@ -62,11 +63,13 @@ namespace {
 std::atomic<uint32_t> s_nextWarningReporterId{0};
 
 void PrintDefaultTelemetryWarning(std::string_view path, std::string_view msg) {
-  prosdk::platform::ConsolePrint("Telemetry '{}': warning: {}\n", path, msg);
+  prosdk::platform::ConsolePrint(prosdk::platform::ConsoleLevel::kWarning,
+                                 "Telemetry '{}': warning: {}\n", path, msg);
 }
 
 void PrintDefaultTunableWarning(std::string_view msg) {
-  prosdk::platform::ConsolePrint("Tunable warning: {}\n", msg);
+  prosdk::platform::ConsolePrint(prosdk::platform::ConsoleLevel::kWarning,
+                                 "Tunable warning: {}\n", msg);
 }
 
 class WPILibMathShared : public prosdk::math::MathShared {

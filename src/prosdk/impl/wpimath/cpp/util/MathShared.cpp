@@ -21,13 +21,14 @@ using namespace prosdk::math;
 namespace {
 // prosdk: errors and warnings go to the platform console (the Driver Station
 // console on the robot) instead of being dropped; reporting never throws.
-void ReportToConsole(std::string_view prefix, std::string_view format,
+void ReportToConsole(prosdk::platform::ConsoleLevel level,
+                     std::string_view prefix, std::string_view format,
                      std::format_args args) noexcept {
   try {
     std::string text{prefix};
     text += std::vformat(format, args);
     text += '\n';
-    prosdk::platform::ConsoleWrite(text);
+    prosdk::platform::ConsoleWrite(text, level);
   } catch (...) {
   }
 }
@@ -35,10 +36,12 @@ void ReportToConsole(std::string_view prefix, std::string_view format,
 class DefaultMathShared : public MathShared {
  public:
   void ReportErrorV(std::string_view format, std::format_args args) override {
-    ReportToConsole("Error: ", format, args);
+    ReportToConsole(prosdk::platform::ConsoleLevel::kError, "Error: ", format,
+                    args);
   }
   void ReportWarningV(std::string_view format, std::format_args args) override {
-    ReportToConsole("Warning: ", format, args);
+    ReportToConsole(prosdk::platform::ConsoleLevel::kWarning, "Warning: ",
+                    format, args);
   }
   prosdk::units::second_t GetTimestamp() override {
     return prosdk::units::second_t{prosdk::util::Now() * 1.0e-9};

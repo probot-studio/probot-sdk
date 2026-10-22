@@ -79,7 +79,8 @@ void FlushDashboard() {
 void Halt(const char* why) {
   RemoveCycleCallback(CyclePhase::kPre, RobotPass, nullptr);
   gState.store(RobotProgramState::kHalted, std::memory_order_release);
-  ConsolePrint("[prosdk] robot program {} halted: {}. Outputs stay disabled until reboot.\n",
+  ConsolePrint(ConsoleLevel::kError,
+               "[prosdk] robot program {} halted: {}. Outputs stay disabled until reboot.\n",
                gName.load(std::memory_order_relaxed), why);
 }
 
@@ -352,7 +353,8 @@ bool SetRobotMain(RobotFactory factory, const char* name) noexcept {
   gState.store(RobotProgramState::kRegistered, std::memory_order_release);
   if (!AddBootCallback(BootRobot, nullptr)) {
     gState.store(RobotProgramState::kHalted, std::memory_order_release);
-    ConsoleWrite("[prosdk] robot program not started: probot-core's boot callback table is full\n");
+    ConsoleWrite("[prosdk] robot program not started: probot-core's boot callback table is full\n",
+                 ConsoleLevel::kError);
     return false;
   }
   return true;

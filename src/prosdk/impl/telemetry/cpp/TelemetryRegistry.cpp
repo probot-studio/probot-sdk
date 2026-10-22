@@ -92,7 +92,8 @@ static std::shared_ptr<TelemetryBackend> GetBackendForNormalizedPath(
 static void DefaultReportWarning(std::string_view path, std::string_view msg) {
   // prosdk: platform console (DS console on the robot), never throws
   prosdk::platform::ConsoleWrite(
-      std::format("Telemetry '{}': warning: {}\n", path, msg));
+      std::format("Telemetry '{}': warning: {}\n", path, msg),
+      prosdk::platform::ConsoleLevel::kWarning);
 }
 
 void TelemetryRegistry::SetReportWarning(

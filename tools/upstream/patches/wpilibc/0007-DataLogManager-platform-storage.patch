@@ -1,5 +1,5 @@
 diff --git a/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp b/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
-index bc8b325..cbd7338 100644
+index bc8b325..a3fe35a 100644
 --- a/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
 +++ b/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
 @@ -8,17 +8,19 @@
@@ -38,7 +38,7 @@ index bc8b325..cbd7338 100644
    prosdk::log::StringLogEntry m_messageLog;
  };
  
-@@ -67,37 +66,29 @@ struct Instance {
+@@ -67,37 +66,30 @@ struct Instance {
  static constexpr uintmax_t FREE_SPACE_THRESHOLD = 50000000;
  static constexpr int FILE_COUNT_THRESHOLD = 10;
  
@@ -60,7 +60,8 @@ index bc8b325..cbd7338 100644
 +  std::string logDir = prosdk::platform::GetLogDirectory();
 +  if (logDir.empty()) {
 +    prosdk::platform::ConsoleWrite(
-+        "DataLogManager: no log storage (LittleFS is not mounted); log data is discarded\n");
++        "DataLogManager: no log storage (LittleFS is not mounted); log data is discarded\n",
++        prosdk::platform::ConsoleLevel::kWarning);
 +    return logDir;
    }
 -  prosdk::fs::create_directory("/home/systemcore/logs", ec);
@@ -85,7 +86,7 @@ index bc8b325..cbd7338 100644
    std::uniform_int_distribution<int> dist(0, 15);
    const char* v = "0123456789abcdef";
    std::string filename = "WPILIB_TBD_";
-@@ -108,10 +99,22 @@ static std::string MakeLogFilename(std::string_view filenameOverride) {
+@@ -108,10 +100,22 @@ static std::string MakeLogFilename(std::string_view filenameOverride) {
    return filename;
  }
  
@@ -109,7 +110,7 @@ index bc8b325..cbd7338 100644
        m_messageLog{m_log, "messages"} {
    StartNTLog();
    StartConsoleLog();
-@@ -133,7 +136,7 @@ void Thread::Main() {
+@@ -133,7 +137,7 @@ void Thread::Main() {
      } else {
        freeSpace = UINTMAX_MAX;
      }
@@ -118,13 +119,14 @@ index bc8b325..cbd7338 100644
        // Delete oldest WPILIB_*.wpilog files (ignore WPILIB_TBD_*.wpilog as we
        // just created one)
        std::vector<prosdk::fs::directory_entry> entries;
-@@ -165,11 +168,11 @@ void Thread::Main() {
+@@ -165,11 +169,12 @@ void Thread::Main() {
              break;
            }
          } else {
 -          prosdk::util::print(stderr, "DataLogManager: could not delete {}\n",
 -                           entry.path().string());
-+          prosdk::platform::ConsolePrint("DataLogManager: could not delete {}\n",
++          prosdk::platform::ConsolePrint(prosdk::platform::ConsoleLevel::kWarning,
++                                         "DataLogManager: could not delete {}\n",
 +                                         entry.path().string());
          }
        }
@@ -133,7 +135,7 @@ index bc8b325..cbd7338 100644
        WPILIB_ReportError(
            warn::Warning,
            "DataLogManager: Log storage device has {} MB of free space "
-@@ -290,37 +293,14 @@ void Thread::Main() {
+@@ -290,37 +295,14 @@ void Thread::Main() {
        newDataEvent.GetHandle());
  }
  
@@ -176,18 +178,19 @@ index bc8b325..cbd7338 100644
  
  Instance::Instance(std::string_view dir, std::string_view filename,
                     double period) {
-@@ -333,8 +313,8 @@ Instance::Instance(std::string_view dir, std::string_view filename,
+@@ -333,8 +315,9 @@ Instance::Instance(std::string_view dir, std::string_view filename,
      if (prosdk::util::starts_with(entry.path().stem().string(), "WPILIB_TBD_") &&
          entry.path().extension() == ".wpilog") {
        if (!prosdk::fs::remove(entry, ec)) {
 -        prosdk::util::print(stderr, "DataLogManager: could not delete {}\n",
 -                         entry.path().string());
-+        prosdk::platform::ConsolePrint("DataLogManager: could not delete {}\n",
++        prosdk::platform::ConsolePrint(prosdk::platform::ConsoleLevel::kWarning,
++                                       "DataLogManager: could not delete {}\n",
 +                                       entry.path().string());
        }
      }
    }
-@@ -365,7 +345,7 @@ void DataLogManager::Stop() {
+@@ -365,7 +348,7 @@ void DataLogManager::Stop() {
  
  void DataLogManager::Log(std::string_view message) {
    GetInstance().owner.GetThread()->m_messageLog.Append(message);

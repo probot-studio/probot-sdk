@@ -71,7 +71,7 @@ index 3efcdec..080deae 100644
  
  }  // namespace wpi
 diff --git a/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp b/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp
-index c233c7b..3e431a3 100644
+index c233c7b..37f30fb 100644
 --- a/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp
 +++ b/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp
 @@ -17,15 +17,13 @@
@@ -92,16 +92,17 @@ index c233c7b..3e431a3 100644
  #include "prosdk/system/Errors.hpp"
  #include "prosdk/system/WPILibVersion.hpp"
  #include "prosdk/telemetry/TelemetryRegistry.hpp"
-@@ -44,7 +42,7 @@ using namespace prosdk;
+@@ -44,7 +42,8 @@ using namespace prosdk;
  
  int prosdk::RunHALInitialization() {
    if (!HAL_Initialize()) {
 -    std::puts("FATAL ERROR: HAL could not be initialized");
-+    prosdk::platform::ConsoleWrite("FATAL ERROR: HAL could not be initialized\n");
++    prosdk::platform::ConsoleWrite("FATAL ERROR: HAL could not be initialized\n",
++                                   prosdk::platform::ConsoleLevel::kError);
      return -1;
    }
    prosdk::util::SetReportUsageImpl(
-@@ -54,7 +52,7 @@ int prosdk::RunHALInitialization() {
+@@ -54,7 +53,7 @@ int prosdk::RunHALInitialization() {
    prosdk::util::ReportUsage("WPILibVersion", GetWPILibVersion());
    HAL_PublishWpilibVersion(std::format("{} (C++)", GetWPILibVersion()));
  
@@ -110,21 +111,23 @@ index c233c7b..3e431a3 100644
    return 0;
  }
  
-@@ -64,11 +62,11 @@ namespace {
+@@ -64,11 +63,13 @@ namespace {
  std::atomic<uint32_t> s_nextWarningReporterId{0};
  
  void PrintDefaultTelemetryWarning(std::string_view path, std::string_view msg) {
 -  prosdk::cxx::print(stderr, "Telemetry '{}': warning: {}\n", path, msg);
-+  prosdk::platform::ConsolePrint("Telemetry '{}': warning: {}\n", path, msg);
++  prosdk::platform::ConsolePrint(prosdk::platform::ConsoleLevel::kWarning,
++                                 "Telemetry '{}': warning: {}\n", path, msg);
  }
  
  void PrintDefaultTunableWarning(std::string_view msg) {
 -  prosdk::cxx::print(stderr, "Tunable warning: {}\n", msg);
-+  prosdk::platform::ConsolePrint("Tunable warning: {}\n", msg);
++  prosdk::platform::ConsolePrint(prosdk::platform::ConsoleLevel::kWarning,
++                                 "Tunable warning: {}\n", msg);
  }
  
  class WPILibMathShared : public prosdk::math::MathShared {
-@@ -193,15 +191,7 @@ RobotBase::RobotBase() {
+@@ -193,15 +194,7 @@ RobotBase::RobotBase() {
    m_warningReporter = std::make_shared<WarningReporter>();
    std::weak_ptr<WarningReporter> warningReporter{m_warningReporter};
  
@@ -141,7 +144,7 @@ index c233c7b..3e431a3 100644
  
    prosdk::telemetry::TelemetryRegistry::SetReportWarning(
        [warningReporter](std::string_view path, std::string_view msg) {
-@@ -220,38 +210,10 @@ RobotBase::RobotBase() {
+@@ -220,38 +213,10 @@ RobotBase::RobotBase() {
          }
        });
  

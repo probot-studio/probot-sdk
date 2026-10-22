@@ -1,5 +1,5 @@
 diff --git a/src/prosdk/impl/datalog/cpp/DataLog.cpp b/src/prosdk/impl/datalog/cpp/DataLog.cpp
-index e04daf1..6c9bae0 100644
+index e04daf1..b9438e4 100644
 --- a/src/prosdk/impl/datalog/cpp/DataLog.cpp
 +++ b/src/prosdk/impl/datalog/cpp/DataLog.cpp
 @@ -19,6 +19,7 @@
@@ -10,7 +10,7 @@ index e04daf1..6c9bae0 100644
  
  using namespace prosdk::log;
  
-@@ -26,10 +27,12 @@ static constexpr size_t RECORD_MAX_HEADER_SIZE = 17;
+@@ -26,10 +27,17 @@ static constexpr size_t RECORD_MAX_HEADER_SIZE = 17;
  
  static void DefaultLog(unsigned int level, const char* file, unsigned int line,
                         const char* msg) {
@@ -23,7 +23,12 @@ index e04daf1..6c9bae0 100644
 +    std::string text{"DataLog: "};
 +    text += msg;
 +    text += '\n';
-+    prosdk::platform::ConsoleWrite(text);
++    prosdk::platform::ConsoleWrite(
++        text, level >= prosdk::util::WPI_LOG_ERROR
++                  ? prosdk::platform::ConsoleLevel::kError
++              : level >= prosdk::util::WPI_LOG_WARNING
++                  ? prosdk::platform::ConsoleLevel::kWarning
++                  : prosdk::platform::ConsoleLevel::kInfo);
    }
  }
  

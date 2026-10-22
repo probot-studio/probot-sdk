@@ -43,7 +43,8 @@ adc_cali_handle_t Calibration() {
     config.bitwidth = ADC_BITWIDTH_12;
     if (adc_cali_create_scheme_curve_fitting(&config, &gCali) != ESP_OK) {
       gCali = nullptr;
-      Log("AnalogInput: no ADC calibration in eFuse; volts are approximate");
+      Log("AnalogInput: no ADC calibration in eFuse; volts are approximate",
+          prosdk::platform::ConsoleLevel::kWarning);
     }
   });
   return gCali;

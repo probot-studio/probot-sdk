@@ -30,6 +30,7 @@
 #include "prosdk/hal/Types.h"
 #include "prosdk/hal/handles/DigitalHandleResource.hpp"
 #include "prosdk/hal/handles/HandlesInternal.hpp"
+#include "prosdk/platform/Console.hpp"
 
 namespace prosdk::hal::esp32 {
 
@@ -147,8 +148,12 @@ namespace can {
 void OnEmergencyStop();
 }  // namespace can
 
-/** Logs one diagnostic line through the prosdk console (adds the "[prosdk hal] " prefix). */
-void Log(std::string_view text);
+/**
+ * Logs one diagnostic line through the prosdk console (adds the "[prosdk hal] " prefix). HAL
+ * errors are console errors; degraded but working features pass kWarning.
+ */
+void Log(std::string_view text,
+         platform::ConsoleLevel level = platform::ConsoleLevel::kError);
 
 /** esp_err_t to a short name for messages. */
 const char* EspErrName(int err);

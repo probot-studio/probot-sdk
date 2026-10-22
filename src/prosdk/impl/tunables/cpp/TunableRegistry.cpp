@@ -129,7 +129,8 @@ static void UpdateBackendSnapshot(Instance& inst) {
 
 static void DefaultReportWarning(std::string_view msg) {
   // prosdk: platform console (DS console on the robot), never throws
-  prosdk::platform::ConsoleWrite(std::format("Tunable warning: {}\n", msg));
+  prosdk::platform::ConsoleWrite(std::format("Tunable warning: {}\n", msg),
+                                 prosdk::platform::ConsoleLevel::kWarning);
 }
 
 static std::shared_ptr<TunableBackend> GetBackendForNormalizedPath(

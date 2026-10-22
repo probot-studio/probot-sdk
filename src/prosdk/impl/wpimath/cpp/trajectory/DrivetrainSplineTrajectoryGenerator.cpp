@@ -41,7 +41,8 @@ void DrivetrainSplineTrajectoryGenerator::ReportError(const char* error) {
   } else {
     // prosdk: platform console (DS console on the robot), never throws
     prosdk::platform::ConsoleWrite(
-        std::format("DrivetrainSplineTrajectoryGenerator error: {}\n", error));
+        std::format("DrivetrainSplineTrajectoryGenerator error: {}\n", error),
+        prosdk::platform::ConsoleLevel::kError);
   }
 }
 

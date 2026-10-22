@@ -32,7 +32,12 @@ static void DefaultLog(unsigned int level, const char* file, unsigned int line,
     std::string text{"DataLog: "};
     text += msg;
     text += '\n';
-    prosdk::platform::ConsoleWrite(text);
+    prosdk::platform::ConsoleWrite(
+        text, level >= prosdk::util::WPI_LOG_ERROR
+                  ? prosdk::platform::ConsoleLevel::kError
+              : level >= prosdk::util::WPI_LOG_WARNING
+                  ? prosdk::platform::ConsoleLevel::kWarning
+                  : prosdk::platform::ConsoleLevel::kInfo);
   }
 }
 

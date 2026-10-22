@@ -24,4 +24,13 @@ void ConsolePrint(std::format_string<Args...> fmt, Args&&... args) noexcept {
   }
 }
 
+/** Formats and writes to the console sink with a level. Never throws. */
+template <class... Args>
+void ConsolePrint(ConsoleLevel level, std::format_string<Args...> fmt, Args&&... args) noexcept {
+  try {
+    ConsoleWrite(std::format(fmt, std::forward<Args>(args)...), level);
+  } catch (...) {
+  }
+}
+
 }  // namespace prosdk::platform

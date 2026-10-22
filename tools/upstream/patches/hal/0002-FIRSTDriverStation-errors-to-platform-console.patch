@@ -1,5 +1,5 @@
 diff --git a/src/prosdk/impl/hal/cpp/FIRSTDriverStation.cpp b/src/prosdk/impl/hal/cpp/FIRSTDriverStation.cpp
-index 665608e..98f05db 100644
+index 665608e..23345f5 100644
 --- a/src/prosdk/impl/hal/cpp/FIRSTDriverStation.cpp
 +++ b/src/prosdk/impl/hal/cpp/FIRSTDriverStation.cpp
 @@ -15,6 +15,7 @@
@@ -20,3 +20,22 @@ index 665608e..98f05db 100644
    }
  }
  
+@@ -81,8 +83,16 @@ int32_t DefaultSendErrorImpl(bool isError, int32_t errorCode,
+         std::format_to(std::back_inserter(buf), "{}\n", callStackView);
+       }
+       auto printError = gPrintErrorImpl.load();
+-      struct WPI_String line = {buf.data(), buf.size()};
+-      printError(&line);
++      if (printError == DefaultPrintErrorImpl) {
++        // prosdk: the platform console also gets the level
++        prosdk::platform::ConsoleWrite(
++            {buf.data(), buf.size()},
++            isError ? prosdk::platform::ConsoleLevel::kError
++                    : prosdk::platform::ConsoleLevel::kWarning);
++      } else {
++        struct WPI_String line = {buf.data(), buf.size()};
++        printError(&line);
++      }
+     }
+     if (i == KEEP_MSGS) {
+       // replace the oldest one

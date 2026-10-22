@@ -82,7 +82,8 @@ void InitializeNotifier() {
 
 void NotifierThread::Main() {
   if (HAL_SetCurrentThreadPriority(40) != 0) {
-    prosdk::hal::esp32::Log("Failed to set HAL Notifier thread priority");
+    prosdk::hal::esp32::Log("Failed to set HAL Notifier thread priority",
+                            prosdk::platform::ConsoleLevel::kWarning);
   }
 
   std::unique_lock lock(m_mutex);

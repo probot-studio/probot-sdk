@@ -138,7 +138,8 @@ void ReleaseEncoderPorts(const std::shared_ptr<Encoder>& encoder) {
   while (encoder.use_count() != 1) {
     auto current = prosdk::hal::monotonic_clock::now();
     if (!timeoutReported && start + std::chrono::seconds(1) < current) {
-      Log("Encoder handle free taking longer than expected");
+      Log("Encoder handle free taking longer than expected",
+          prosdk::platform::ConsoleLevel::kWarning);
       timeoutReported = true;
     }
     std::this_thread::yield();

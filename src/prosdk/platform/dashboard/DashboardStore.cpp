@@ -112,9 +112,10 @@ void ReportLimitOnce(Limit limit, std::string_view path) noexcept {
     return;
   }
   try {
-    ConsoleWrite(std::format("[prosdk] {}: '{}'\n", LimitText(limit), path));
+    ConsoleWrite(std::format("[prosdk] {}: '{}'\n", LimitText(limit), path),
+                 ConsoleLevel::kWarning);
   } catch (...) {
-    ConsoleWrite("[prosdk] dashboard limit reached\n");
+    ConsoleWrite("[prosdk] dashboard limit reached\n", ConsoleLevel::kWarning);
   }
 }
 
@@ -227,7 +228,8 @@ void AddParticipant(Participant* participant) noexcept {
       r.participants.push_back(participant);
     }
   } catch (...) {
-    ConsoleWrite("[prosdk] dashboard: out of memory registering a backend\n");
+    ConsoleWrite("[prosdk] dashboard: out of memory registering a backend\n",
+                 ConsoleLevel::kError);
   }
 }
 
@@ -272,7 +274,8 @@ void FlushPending() noexcept {
     try {
       p->FlushPending();
     } catch (...) {
-      ConsoleWrite("[prosdk] dashboard: publishing pending topics failed\n");
+      ConsoleWrite("[prosdk] dashboard: publishing pending topics failed\n",
+                   ConsoleLevel::kError);
     }
   }
 }

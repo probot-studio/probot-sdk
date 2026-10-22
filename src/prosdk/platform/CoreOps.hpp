@@ -16,7 +16,9 @@
 // (R6 loop rate, R7 opmode list: compiled out by CoreBridge.hpp) are left null by the bridge and
 // get these defaults too. Without R8 (more gamepads) the bridge reports port 0 only and fills the
 // CoreGamepad fields of ABI 3 the way core 0.4.0 behaved (trigger buttons as 0/1, 4-way POV,
-// the mapping profile's name, standard mapping).
+// the mapping profile's name, standard mapping). Without R9 (leveled console) the console text
+// goes to consoleWrite (core's telemetry ring) without its level; without R10 (wall clock) the
+// system time counts as valid once the clock is past 2024-01-01 (SystemTimeValid()).
 //
 // ABI rules: only append fields, bump kCoreOpsAbiVersion on any change of meaning or layout. The
 // archive refuses a table whose abiVersion differs or whose size is smaller than its own.
@@ -34,7 +36,7 @@
 namespace prosdk::platform {
 
 /** Layout/meaning version of CoreOps; both sides must agree. */
-inline constexpr uint32_t kCoreOpsAbiVersion = 3;
+inline constexpr uint32_t kCoreOpsAbiVersion = 4;
 
 /** probot-core robot::Phase values (probot/robot/state.hpp). */
 enum CorePhase : uint8_t {
@@ -188,7 +190,8 @@ struct CoreOps {
   // robot state
   float (*batteryVoltage)();  // volts; 0 until a battery reading exists (no sensor configured)
 
-  // console: text for the Driver Station console (core telemetry ring)
+  // console: text for the Driver Station console (core telemetry ring). With probot-core R9 the
+  // archive uses consoleWriteLevel (ABI 4) instead.
   void (*consoleWrite)(const char* text, size_t len);
 
   // dashboard topic store (probot::dashboard)
@@ -215,6 +218,17 @@ struct CoreOps {
   uint64_t (*selectedOpModeId)();  // Driver Station choice, 0 = none
   uint64_t (*activeOpModeId)();    // latched at INIT, 0 = none
   bool (*utilityAvailable)();
+
+  // ---- ABI 4 ----
+  // leveled Driver Station console (probot-core R9: probot::console::write). level is a
+  // ConsoleLevel value (0 info, 1 warning, 2 error); core keeps one entry per call (a trailing
+  // newline dropped), splits text over 512 bytes at newlines and never inside a UTF-8 character.
+  // Any task, not an ISR. Null (core without R9): the archive calls consoleWrite.
+  void (*consoleWriteLevel)(uint8_t level, const char* text, size_t len);
+
+  // wall clock (probot-core R10: probot::ds::systemTimeValid): true once a Driver Station set the
+  // robot's clock since boot. Null (core without R10): the archive's 2024-01-01 heuristic.
+  bool (*systemTimeValid)();
 };
 
 /**
@@ -300,6 +314,14 @@ uint64_t ActiveOpModeId() noexcept;
 /** True when the Driver Station offers UTILITY (a UTILITY option is listed, or the sketch
  * defines core's utilityLoop() hook). */
 bool UtilityAvailable() noexcept;
+
+/**
+ * True when the system clock (std::chrono::system_clock, time()) holds real UTC time
+ * (HAL_GetSystemTimeValid on the robot). With probot-core R10: a Driver Station set the clock
+ * since boot (core's ds::systemTimeValid()). Without core or without R10: the clock is past
+ * 2024-01-01 (something such as the sketch's SNTP or settimeofday set it).
+ */
+bool SystemTimeValid() noexcept;
 
 /** Where a cycle callback runs relative to core's user loop iteration. */
 enum class CyclePhase : uint8_t { kPre = 0, kPost = 1 };

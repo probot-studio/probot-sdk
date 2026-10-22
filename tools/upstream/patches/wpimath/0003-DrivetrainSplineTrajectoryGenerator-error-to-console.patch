@@ -1,5 +1,5 @@
 diff --git a/src/prosdk/impl/wpimath/cpp/trajectory/DrivetrainSplineTrajectoryGenerator.cpp b/src/prosdk/impl/wpimath/cpp/trajectory/DrivetrainSplineTrajectoryGenerator.cpp
-index 8af3646..a455706 100644
+index 8af3646..c34deb5 100644
 --- a/src/prosdk/impl/wpimath/cpp/trajectory/DrivetrainSplineTrajectoryGenerator.cpp
 +++ b/src/prosdk/impl/wpimath/cpp/trajectory/DrivetrainSplineTrajectoryGenerator.cpp
 @@ -4,6 +4,7 @@
@@ -20,7 +20,7 @@ index 8af3646..a455706 100644
  
  using namespace prosdk::math;
  
-@@ -38,8 +39,9 @@ void DrivetrainSplineTrajectoryGenerator::ReportError(const char* error) {
+@@ -38,8 +39,10 @@ void DrivetrainSplineTrajectoryGenerator::ReportError(const char* error) {
    if (s_errorFunc) {
      s_errorFunc(error);
    } else {
@@ -28,7 +28,8 @@ index 8af3646..a455706 100644
 -                     error);
 +    // prosdk: platform console (DS console on the robot), never throws
 +    prosdk::platform::ConsoleWrite(
-+        std::format("DrivetrainSplineTrajectoryGenerator error: {}\n", error));
++        std::format("DrivetrainSplineTrajectoryGenerator error: {}\n", error),
++        prosdk::platform::ConsoleLevel::kError);
    }
  }
  
