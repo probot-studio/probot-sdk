@@ -60,6 +60,7 @@ void PeriodicPriorityQueue::Add(std::function<void()> func,
                                 std::chrono::nanoseconds period,
                                 std::chrono::nanoseconds offset) {
   m_queue.emplace(std::move(func), startTime, period, offset);
+  ++m_version;
 }
 
 void PeriodicPriorityQueue::Add(std::function<void()> func,
@@ -73,17 +74,21 @@ void PeriodicPriorityQueue::Add(std::function<void()> func,
                                 prosdk::units::second_t period,
                                 prosdk::units::second_t offset) {
   m_queue.emplace(std::move(func), startTime, period, offset);
+  ++m_version;
 }
 
 void PeriodicPriorityQueue::Add(Callback callback) {
   m_queue.push(std::move(callback));
+  ++m_version;
 }
 
 bool PeriodicPriorityQueue::Remove(const Callback& callback) {
+  ++m_version;
   return m_queue.remove(callback);
 }
 
 void PeriodicPriorityQueue::Clear() {
+  ++m_version;
   while (!m_queue.empty()) {
     m_queue.pop();
   }
@@ -132,4 +137,43 @@ bool PeriodicPriorityQueue::RunCallbacks(HAL_NotifierHandle notifier) {
   }
 
   return true;
+}
+
+// prosdk: hosted robot loop (design/PORT.md section 8)
+bool PeriodicPriorityQueue::RunDue(std::chrono::nanoseconds currentTime,
+                                   std::chrono::nanoseconds lookahead) {
+  const auto horizon = currentTime + lookahead;
+  if (m_queue.empty() || m_queue.top().expirationTime > horizon) {
+    return false;
+  }
+  m_loopStartTime = prosdk::units::nanosecond_t{currentTime};
+
+  // Same rescheduling as RunCallbacks(): skip the full periods a late callback
+  // is behind, plus one (an early one is behind by zero full periods).
+  while (!m_queue.empty() && m_queue.top().expirationTime <= horizon) {
+    auto callback = m_queue.pop();
+
+    callback.func();
+
+    const auto behind = currentTime > callback.expirationTime
+                            ? currentTime - callback.expirationTime
+                            : std::chrono::nanoseconds{0};
+    callback.expirationTime +=
+        callback.period + behind / callback.period * callback.period;
+    m_queue.push(std::move(callback));
+  }
+  return true;
+}
+
+void PeriodicPriorityQueue::Update(
+    const std::function<void(Callback&)>& func) {
+  std::vector<Callback> callbacks;
+  callbacks.reserve(m_queue.size());
+  while (!m_queue.empty()) {
+    callbacks.push_back(m_queue.pop());
+  }
+  for (auto& callback : callbacks) {
+    func(callback);
+    m_queue.push(std::move(callback));
+  }
 }

@@ -187,7 +187,8 @@ void OpModeRobotBase::LoopFunc() {
   }
 }
 
-void OpModeRobotBase::StartCompetition() {
+// prosdk: hosted robot loop (design/PORT.md section 8)
+RobotBase::HostedLoop OpModeRobotBase::StartHosted() {
   prosdk::platform::ConsolePrint("********** Robot program startup complete **********\n");
 
   if constexpr (IsSimulation()) {
@@ -196,6 +197,12 @@ void OpModeRobotBase::StartCompetition() {
 
   // Tell the DS that the robot is ready to be enabled
   prosdk::internal::DriverStationBackend::ObserveUserProgramStarting();
+
+  return {&m_callbacks, &m_startTime, m_period};
+}
+
+void OpModeRobotBase::StartCompetition() {
+  StartHosted();
 
   // Loop forever, calling the callback system which handles periodic functions
   while (true) {

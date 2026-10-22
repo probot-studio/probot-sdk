@@ -183,6 +183,34 @@ class PeriodicPriorityQueue {
    */
   bool RunCallbacks(HAL_NotifierHandle notifier);
 
+  // prosdk: hosted robot loop (design/PORT.md section 8). On the robot, probot-core's user task
+  // calls the robot once per loop pass instead of a thread blocking in RunCallbacks().
+
+  /**
+   * Runs every callback whose expiration time is at or before currentTime + lookahead, earliest
+   * first, and reschedules each as RunCallbacks() does (as of currentTime). Never blocks.
+   *
+   * @param currentTime The current monotonic time (also the new loop start time).
+   * @param lookahead   How early a callback may run (the host runs callbacks only once per pass,
+   *                    so one due before the middle of the next pass runs now).
+   * @return true if at least one callback ran.
+   */
+  bool RunDue(std::chrono::nanoseconds currentTime,
+              std::chrono::nanoseconds lookahead = std::chrono::nanoseconds{0});
+
+  /**
+   * Calls func for every queued callback, in no particular order, and requeues the callbacks
+   * with what func changed (e.g. their expiration time). Does not change GetVersion().
+   *
+   * @param func The function to call.
+   */
+  void Update(const std::function<void(Callback&)>& func);
+
+  /**
+   * Returns a counter that changes whenever a callback is added or removed.
+   */
+  uint64_t GetVersion() const { return m_version; }
+
   /**
    * Returns the underlying priority queue.
    */
@@ -208,6 +236,9 @@ class PeriodicPriorityQueue {
       m_queue;
 
   prosdk::units::nanosecond_t m_loopStartTime{0};
+
+  // prosdk: changes with every Add/Remove/Clear (GetVersion)
+  uint64_t m_version = 0;
 };
 
 }  // namespace prosdk::internal

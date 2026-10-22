@@ -19,7 +19,8 @@
 
 using namespace prosdk;
 
-void TimedRobot::StartCompetition() {
+// prosdk: hosted robot loop (design/PORT.md section 8)
+RobotBase::HostedLoop TimedRobot::StartHosted() {
   if constexpr (IsSimulation()) {
     SimulationInit();
   }
@@ -28,6 +29,12 @@ void TimedRobot::StartCompetition() {
   prosdk::platform::ConsoleWrite(
       "\n********** Robot program startup complete **********\n");
   prosdk::internal::DriverStationBackend::ObserveUserProgramStarting();
+
+  return {&m_callbacks, &m_startTime, GetPeriod()};
+}
+
+void TimedRobot::StartCompetition() {
+  StartHosted();
 
   // Loop forever, calling the appropriate mode-dependent function
   while (true) {

@@ -17,6 +17,7 @@
 #include "prosdk/platform/config.hpp"
 #include "prosdk/system/Errors.hpp"
 #include "prosdk/system/RuntimeType.hpp"
+#include "prosdk/units/time.hpp"
 #include "prosdk/util/RuntimeCheck.h"
 #include "prosdk/util/condition_variable.hpp"
 #include "prosdk/util/mutex.hpp"
@@ -24,6 +25,10 @@
 #include "prosdk/util/string.h"
 
 namespace prosdk {
+
+namespace internal {
+class PeriodicPriorityQueue;
+}  // namespace internal
 
 int RunHALInitialization();
 
@@ -247,6 +252,28 @@ class RobotBase {
 
   /** Ends the main loop in StartCompetition(). */
   virtual void EndCompetition() = 0;
+
+  /**
+   * prosdk: the loop of a robot program hosted by probot-core (design/PORT.md section 8).
+   */
+  struct HostedLoop {
+    /// The robot's periodic callbacks; nullptr if the robot cannot be hosted.
+    internal::PeriodicPriorityQueue* callbacks = nullptr;
+    /// The time the callbacks are scheduled from.
+    std::chrono::nanoseconds* startTime = nullptr;
+    /// The robot's main loop period.
+    prosdk::units::second_t period{0};
+  };
+
+  /**
+   * prosdk: does everything StartCompetition() does before its loop and returns the loop, which
+   * the caller then runs (on the robot, from probot-core's cycle callbacks instead of a blocking
+   * thread). The default returns an empty HostedLoop: a robot that derives from RobotBase
+   * directly can only run through StartCompetition().
+   *
+   * @return The robot's loop.
+   */
+  virtual HostedLoop StartHosted();
 
   /**
    * Get the current runtime type.

@@ -76,6 +76,11 @@ class OpModeRobotBase : public RobotBase {
   void EndCompetition() override;
 
   /**
+   * prosdk: StartCompetition() without its loop (see RobotBase::StartHosted()).
+   */
+  HostedLoop StartHosted() override;
+
+  /**
    * Constructor.
    *
    * @param period The period of the robot loop function.

@@ -1,0 +1,286 @@
+diff --git a/src/prosdk/framework/OpModeRobot.hpp b/src/prosdk/framework/OpModeRobot.hpp
+index d6f20d3..75b2ec6 100644
+--- a/src/prosdk/framework/OpModeRobot.hpp
++++ b/src/prosdk/framework/OpModeRobot.hpp
+@@ -75,6 +75,11 @@ class OpModeRobotBase : public RobotBase {
+    */
+   void EndCompetition() override;
+ 
++  /**
++   * prosdk: StartCompetition() without its loop (see RobotBase::StartHosted()).
++   */
++  HostedLoop StartHosted() override;
++
+   /**
+    * Constructor.
+    *
+diff --git a/src/prosdk/framework/RobotBase.hpp b/src/prosdk/framework/RobotBase.hpp
+index 080deae..f02ce74 100644
+--- a/src/prosdk/framework/RobotBase.hpp
++++ b/src/prosdk/framework/RobotBase.hpp
+@@ -17,6 +17,7 @@
+ #include "prosdk/platform/config.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/system/RuntimeType.hpp"
++#include "prosdk/units/time.hpp"
+ #include "prosdk/util/RuntimeCheck.h"
+ #include "prosdk/util/condition_variable.hpp"
+ #include "prosdk/util/mutex.hpp"
+@@ -25,6 +26,10 @@
+ 
+ namespace prosdk {
+ 
++namespace internal {
++class PeriodicPriorityQueue;
++}  // namespace internal
++
+ int RunHALInitialization();
+ 
+ namespace impl {
+@@ -248,6 +253,28 @@ class RobotBase {
+   /** Ends the main loop in StartCompetition(). */
+   virtual void EndCompetition() = 0;
+ 
++  /**
++   * prosdk: the loop of a robot program hosted by probot-core (design/PORT.md section 8).
++   */
++  struct HostedLoop {
++    /// The robot's periodic callbacks; nullptr if the robot cannot be hosted.
++    internal::PeriodicPriorityQueue* callbacks = nullptr;
++    /// The time the callbacks are scheduled from.
++    std::chrono::nanoseconds* startTime = nullptr;
++    /// The robot's main loop period.
++    prosdk::units::second_t period{0};
++  };
++
++  /**
++   * prosdk: does everything StartCompetition() does before its loop and returns the loop, which
++   * the caller then runs (on the robot, from probot-core's cycle callbacks instead of a blocking
++   * thread). The default returns an empty HostedLoop: a robot that derives from RobotBase
++   * directly can only run through StartCompetition().
++   *
++   * @return The robot's loop.
++   */
++  virtual HostedLoop StartHosted();
++
+   /**
+    * Get the current runtime type.
+    *
+diff --git a/src/prosdk/framework/TimedRobot.hpp b/src/prosdk/framework/TimedRobot.hpp
+index 756a7fc..91dde43 100644
+--- a/src/prosdk/framework/TimedRobot.hpp
++++ b/src/prosdk/framework/TimedRobot.hpp
+@@ -39,6 +39,11 @@ class TimedRobot : public IterativeRobotBase {
+    */
+   void EndCompetition() override;
+ 
++  /**
++   * prosdk: StartCompetition() without its loop (see RobotBase::StartHosted()).
++   */
++  HostedLoop StartHosted() override;
++
+   /**
+    * Constructor for TimedRobot.
+    *
+diff --git a/src/prosdk/impl/wpilibc/cpp/framework/OpModeRobot.cpp b/src/prosdk/impl/wpilibc/cpp/framework/OpModeRobot.cpp
+index ab97069..6092a75 100644
+--- a/src/prosdk/impl/wpilibc/cpp/framework/OpModeRobot.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/framework/OpModeRobot.cpp
+@@ -187,7 +187,8 @@ void OpModeRobotBase::LoopFunc() {
+   }
+ }
+ 
+-void OpModeRobotBase::StartCompetition() {
++// prosdk: hosted robot loop (design/PORT.md section 8)
++RobotBase::HostedLoop OpModeRobotBase::StartHosted() {
+   prosdk::platform::ConsolePrint("********** Robot program startup complete **********\n");
+ 
+   if constexpr (IsSimulation()) {
+@@ -197,6 +198,12 @@ void OpModeRobotBase::StartCompetition() {
+   // Tell the DS that the robot is ready to be enabled
+   prosdk::internal::DriverStationBackend::ObserveUserProgramStarting();
+ 
++  return {&m_callbacks, &m_startTime, m_period};
++}
++
++void OpModeRobotBase::StartCompetition() {
++  StartHosted();
++
+   // Loop forever, calling the callback system which handles periodic functions
+   while (true) {
+     if (!m_callbacks.RunCallbacks(m_notifier)) {
+diff --git a/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp b/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp
+index 3e431a3..9a6dd95 100644
+--- a/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp
+@@ -184,8 +184,17 @@ RuntimeType RobotBase::GetRuntimeType() {
+   return static_cast<RuntimeType>(HAL_GetRuntimeType());
+ }
+ 
++RobotBase::HostedLoop RobotBase::StartHosted() {
++  return {};
++}
++
+ RobotBase::RobotBase() {
++#if !PROSDK_TARGET_HW
+   m_threadId = std::this_thread::get_id();
++#else
++  // prosdk: the robot is constructed on probot-core's user task, which is not a pthread;
++  // ESP-IDF's pthread_self() aborts there. GetThreadId() returns std::thread::id{} on the robot.
++#endif
+ 
+   SetupMathShared();
+   m_warningReporter = std::make_shared<WarningReporter>();
+diff --git a/src/prosdk/impl/wpilibc/cpp/framework/TimedRobot.cpp b/src/prosdk/impl/wpilibc/cpp/framework/TimedRobot.cpp
+index d92f5d2..46915dc 100644
+--- a/src/prosdk/impl/wpilibc/cpp/framework/TimedRobot.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/framework/TimedRobot.cpp
+@@ -19,7 +19,8 @@
+ 
+ using namespace prosdk;
+ 
+-void TimedRobot::StartCompetition() {
++// prosdk: hosted robot loop (design/PORT.md section 8)
++RobotBase::HostedLoop TimedRobot::StartHosted() {
+   if constexpr (IsSimulation()) {
+     SimulationInit();
+   }
+@@ -29,6 +30,12 @@ void TimedRobot::StartCompetition() {
+       "\n********** Robot program startup complete **********\n");
+   prosdk::internal::DriverStationBackend::ObserveUserProgramStarting();
+ 
++  return {&m_callbacks, &m_startTime, GetPeriod()};
++}
++
++void TimedRobot::StartCompetition() {
++  StartHosted();
++
+   // Loop forever, calling the appropriate mode-dependent function
+   while (true) {
+     if (!m_callbacks.RunCallbacks(m_notifier)) {
+diff --git a/src/prosdk/impl/wpilibc/cpp/internal/PeriodicPriorityQueue.cpp b/src/prosdk/impl/wpilibc/cpp/internal/PeriodicPriorityQueue.cpp
+index db6ed7f..03b5868 100644
+--- a/src/prosdk/impl/wpilibc/cpp/internal/PeriodicPriorityQueue.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/internal/PeriodicPriorityQueue.cpp
+@@ -60,6 +60,7 @@ void PeriodicPriorityQueue::Add(std::function<void()> func,
+                                 std::chrono::nanoseconds period,
+                                 std::chrono::nanoseconds offset) {
+   m_queue.emplace(std::move(func), startTime, period, offset);
++  ++m_version;
+ }
+ 
+ void PeriodicPriorityQueue::Add(std::function<void()> func,
+@@ -73,17 +74,21 @@ void PeriodicPriorityQueue::Add(std::function<void()> func,
+                                 prosdk::units::second_t period,
+                                 prosdk::units::second_t offset) {
+   m_queue.emplace(std::move(func), startTime, period, offset);
++  ++m_version;
+ }
+ 
+ void PeriodicPriorityQueue::Add(Callback callback) {
+   m_queue.push(std::move(callback));
++  ++m_version;
+ }
+ 
+ bool PeriodicPriorityQueue::Remove(const Callback& callback) {
++  ++m_version;
+   return m_queue.remove(callback);
+ }
+ 
+ void PeriodicPriorityQueue::Clear() {
++  ++m_version;
+   while (!m_queue.empty()) {
+     m_queue.pop();
+   }
+@@ -133,3 +138,42 @@ bool PeriodicPriorityQueue::RunCallbacks(HAL_NotifierHandle notifier) {
+ 
+   return true;
+ }
++
++// prosdk: hosted robot loop (design/PORT.md section 8)
++bool PeriodicPriorityQueue::RunDue(std::chrono::nanoseconds currentTime,
++                                   std::chrono::nanoseconds lookahead) {
++  const auto horizon = currentTime + lookahead;
++  if (m_queue.empty() || m_queue.top().expirationTime > horizon) {
++    return false;
++  }
++  m_loopStartTime = prosdk::units::nanosecond_t{currentTime};
++
++  // Same rescheduling as RunCallbacks(): skip the full periods a late callback
++  // is behind, plus one (an early one is behind by zero full periods).
++  while (!m_queue.empty() && m_queue.top().expirationTime <= horizon) {
++    auto callback = m_queue.pop();
++
++    callback.func();
++
++    const auto behind = currentTime > callback.expirationTime
++                            ? currentTime - callback.expirationTime
++                            : std::chrono::nanoseconds{0};
++    callback.expirationTime +=
++        callback.period + behind / callback.period * callback.period;
++    m_queue.push(std::move(callback));
++  }
++  return true;
++}
++
++void PeriodicPriorityQueue::Update(
++    const std::function<void(Callback&)>& func) {
++  std::vector<Callback> callbacks;
++  callbacks.reserve(m_queue.size());
++  while (!m_queue.empty()) {
++    callbacks.push_back(m_queue.pop());
++  }
++  for (auto& callback : callbacks) {
++    func(callback);
++    m_queue.push(std::move(callback));
++  }
++}
+diff --git a/src/prosdk/internal/PeriodicPriorityQueue.hpp b/src/prosdk/internal/PeriodicPriorityQueue.hpp
+index bf31ecd..4042162 100644
+--- a/src/prosdk/internal/PeriodicPriorityQueue.hpp
++++ b/src/prosdk/internal/PeriodicPriorityQueue.hpp
+@@ -183,6 +183,34 @@ class PeriodicPriorityQueue {
+    */
+   bool RunCallbacks(HAL_NotifierHandle notifier);
+ 
++  // prosdk: hosted robot loop (design/PORT.md section 8). On the robot, probot-core's user task
++  // calls the robot once per loop pass instead of a thread blocking in RunCallbacks().
++
++  /**
++   * Runs every callback whose expiration time is at or before currentTime + lookahead, earliest
++   * first, and reschedules each as RunCallbacks() does (as of currentTime). Never blocks.
++   *
++   * @param currentTime The current monotonic time (also the new loop start time).
++   * @param lookahead   How early a callback may run (the host runs callbacks only once per pass,
++   *                    so one due before the middle of the next pass runs now).
++   * @return true if at least one callback ran.
++   */
++  bool RunDue(std::chrono::nanoseconds currentTime,
++              std::chrono::nanoseconds lookahead = std::chrono::nanoseconds{0});
++
++  /**
++   * Calls func for every queued callback, in no particular order, and requeues the callbacks
++   * with what func changed (e.g. their expiration time). Does not change GetVersion().
++   *
++   * @param func The function to call.
++   */
++  void Update(const std::function<void(Callback&)>& func);
++
++  /**
++   * Returns a counter that changes whenever a callback is added or removed.
++   */
++  uint64_t GetVersion() const { return m_version; }
++
+   /**
+    * Returns the underlying priority queue.
+    */
+@@ -208,6 +236,9 @@ class PeriodicPriorityQueue {
+       m_queue;
+ 
+   prosdk::units::nanosecond_t m_loopStartTime{0};
++
++  // prosdk: changes with every Add/Remove/Clear (GetVersion)
++  uint64_t m_version = 0;
+ };
+ 
+ }  // namespace prosdk::internal

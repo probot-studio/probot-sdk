@@ -184,8 +184,17 @@ RuntimeType RobotBase::GetRuntimeType() {
   return static_cast<RuntimeType>(HAL_GetRuntimeType());
 }
 
+RobotBase::HostedLoop RobotBase::StartHosted() {
+  return {};
+}
+
 RobotBase::RobotBase() {
+#if !PROSDK_TARGET_HW
   m_threadId = std::this_thread::get_id();
+#else
+  // prosdk: the robot is constructed on probot-core's user task, which is not a pthread;
+  // ESP-IDF's pthread_self() aborts there. GetThreadId() returns std::thread::id{} on the robot.
+#endif
 
   SetupMathShared();
   m_warningReporter = std::make_shared<WarningReporter>();

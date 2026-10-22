@@ -40,6 +40,11 @@ class TimedRobot : public IterativeRobotBase {
   void EndCompetition() override;
 
   /**
+   * prosdk: StartCompetition() without its loop (see RobotBase::StartHosted()).
+   */
+  HostedLoop StartHosted() override;
+
+  /**
    * Constructor for TimedRobot.
    *
    * @param period The period of the robot loop function.
