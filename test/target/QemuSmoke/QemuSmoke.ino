@@ -3,8 +3,9 @@
 //
 // No probot-core: QEMU has no WiFi, so the sketch does not include <prosdk.h>/<probot.h>.
 // FakeCore.hpp (test/target/shared) installs a fake CoreOps table (as the host tests do) and
-// CaseRobot.cpp drives core's framework hooks. Everything else is the real precompiled archive on
-// the real Xtensa CPU, FreeRTOS, newlib and ESP-IDF (esp_timer, NVS, LittleFS).
+// CaseRobot.cpp drives core's framework hooks; QemuTasks.hpp (shared too) runs every case on a
+// user task. Everything else is the real precompiled archive on the real Xtensa CPU, FreeRTOS,
+// newlib and ESP-IDF (esp_timer, NVS, LittleFS).
 //
 // UART0 protocol (parsed by tools/qemu/run.sh):
 //   QEMU-SMOKE BEGIN boot=<n>
@@ -25,6 +26,7 @@
 
 #include "FakeCore.hpp"
 #include "Harness.hpp"
+#include "QemuTasks.hpp"
 
 // linker symbols bounding the static TLS template (.tdata + .tbss)
 extern "C" char _thread_local_start[];
@@ -49,48 +51,27 @@ const CaseDef kCases[] = {
     {"d", "timed-robot-hosted-loop", &qemu::CaseRobot},
 };
 
+// one case on the user task: the definition and its result collector
 struct CaseRun {
   const CaseDef* def;
   qemu::Ctx ctx;
-  TaskHandle_t waiter;
-  uint32_t stackFreeMin;
-  bool threw;
-  std::string what;
 };
 
 void CaseTask(void* arg) {
   auto* run = static_cast<CaseRun*>(arg);
-  try {
-    run->def->fn(run->ctx);
-  } catch (const std::exception& e) {
-    run->threw = true;
-    run->what = e.what();
-  } catch (...) {
-    run->threw = true;
-    run->what = "unknown exception";
-  }
-  // ESP-IDF: StackType_t is uint8_t, so the high-water mark is in bytes
-  run->stackFreeMin = uxTaskGetStackHighWaterMark(nullptr);
-  xTaskNotifyGive(run->waiter);
-  vTaskDelete(nullptr);
+  run->def->fn(run->ctx);
 }
 
-size_t HeapFree() { return heap_caps_get_free_size(MALLOC_CAP_8BIT); }
+using qemu::HeapFree;
 
 void ReportTasks(int& pass, int& fail) {
   // (h) every task: stack high-water marks; prosdk threads must run below priority 4 and
   // no thread may have been created with the default pthread configuration
-  UBaseType_t n = uxTaskGetNumberOfTasks();
-  std::vector<TaskStatus_t> tasks(n + 4);
-  n = uxTaskGetSystemState(tasks.data(), tasks.size(), nullptr);
+  const std::vector<TaskStatus_t> tasks = qemu::ReportTasks();
+  const auto n = static_cast<unsigned>(tasks.size());
   qemu::Ctx ctx;
   int prosdkTasks = 0;
-  for (UBaseType_t i = 0; i < n; ++i) {
-    const TaskStatus_t& t = tasks[i];
-    int core = t.xCoreID == tskNO_AFFINITY ? -1 : static_cast<int>(t.xCoreID);
-    qemu::Linef("TASK {} prio={} core={} stack_free_min={}", t.pcTaskName,
-                static_cast<unsigned>(t.uxCurrentPriority), core,
-                static_cast<unsigned>(t.usStackHighWaterMark));
+  for (const TaskStatus_t& t : tasks) {
     const char* name = t.pcTaskName;
     bool isProsdk = std::strcmp(name, "prosdk") == 0 || std::strcmp(name, "notifier") == 0 ||
                     std::strcmp(name, "datalog") == 0 || std::strcmp(name, "watchdog") == 0 ||
@@ -130,27 +111,26 @@ void RunnerTask(void*) {
   int pass = 0;
   int fail = 0;
   for (const CaseDef& def : kCases) {
-    auto* run = new CaseRun{&def, {}, xTaskGetCurrentTaskHandle(), 0, false, {}};
+    auto* run = new CaseRun{&def, {}};
     size_t heapBefore = HeapFree();
     int64_t t0 = esp_timer_get_time();
-    TaskHandle_t task = nullptr;
-    // probot-core's user task: priority 1, core 1, PROBOT_USER_STACK
-    if (xTaskCreatePinnedToCore(CaseTask, "user", qemu::kUserStack, run, 1, &task, 1) != pdPASS) {
+    // probot-core's user task; generous timeout: the slowest case (robot) takes a few seconds of
+    // guest time
+    const qemu::UserTaskResult r = qemu::RunUserTask(CaseTask, run, 120000);
+    if (r.status == qemu::UserTaskResult::kNotCreated) {
       qemu::Linef("CASE {} {} FAIL could not create the case task", def.id, def.name);
       ++fail;
       delete run;
       continue;
     }
-    // generous: the slowest case (robot) takes a few seconds of guest time
-    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(120000)) == 0) {
+    if (r.status == qemu::UserTaskResult::kTimeout) {
       qemu::Linef("CASE {} {} FAIL timeout", def.id, def.name);
       ++fail;
       continue;  // leaks run; the task may still use it
     }
-    vTaskDelay(pdMS_TO_TICKS(20));  // let the idle task free the case task's stack
     int64_t ms = (esp_timer_get_time() - t0) / 1000;
-    if (run->threw) {
-      run->ctx.Check(false, "uncaught exception", __FILE__, __LINE__, run->what);
+    if (r.threw) {
+      run->ctx.Check(false, "uncaught exception", __FILE__, __LINE__, r.what);
     }
     bool ok = run->ctx.failures == 0 && run->ctx.checks > 0;
     (ok ? pass : fail)++;
@@ -158,7 +138,7 @@ void RunnerTask(void*) {
     qemu::Linef("CASE {} {} {} checks={} failed={} ms={} stack_used={}/{} heap_free={} "
                 "heap_delta={}{}",
                 def.id, def.name, ok ? "PASS" : "FAIL", run->ctx.checks, run->ctx.failures, ms,
-                qemu::kUserStack - run->stackFreeMin, qemu::kUserStack, HeapFree(), delta,
+                qemu::kUserStack - r.stackFreeMin, qemu::kUserStack, HeapFree(), delta,
                 run->ctx.notes);
     delete run;
   }
@@ -186,8 +166,7 @@ void Ctx::Check(bool ok, const char* expr, const char* file, int line, std::stri
 
 void setup() {
   qemu::Line("QEMU-SMOKE setup");
-  // the runner only starts and waits for the case tasks
-  xTaskCreatePinnedToCore(RunnerTask, "runner", 16384, nullptr, 2, nullptr, 0);
+  qemu::StartRunner(RunnerTask);
 }
 
 void loop() {

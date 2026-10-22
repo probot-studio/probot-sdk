@@ -18,9 +18,6 @@
 
 namespace qemu {
 
-/** The stack every case task gets: prosdk's PROBOT_USER_STACK (prosdk.h). */
-inline constexpr uint32_t kUserStack = 24576;
-
 /** Result collector of one case. */
 struct Ctx {
   int checks = 0;
@@ -43,7 +40,8 @@ struct Ctx {
 int BootNumber();
 
 // The cases (one file each). Every case runs on its own FreeRTOS task with kUserStack bytes of
-// stack, priority 1, core 1 (probot-core's user task), except where noted.
+// stack, priority 1, core 1 (probot-core's user task, qemu::RunUserTask in QemuTasks.hpp), except
+// where noted.
 void CaseMath(Ctx& ctx);         // (a) Eigen / Sleipnir / LQR / trajectory
 void CaseExceptions(Ctx& ctx);   // (b) exceptions across the archive, std::format / print
 void CaseThreads(Ctx& ctx);      // (c) ScopedThreadConfig threads, Notifier timing

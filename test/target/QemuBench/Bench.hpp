@@ -11,12 +11,10 @@
 #include <string>
 #include <string_view>
 
-#include "QemuUart.hpp"  // Line, Linef (test/target/shared)
+#include "QemuTasks.hpp"  // kUserStack, HeapFree, RunUserTask (test/target/shared)
+#include "QemuUart.hpp"   // Line, Linef (test/target/shared)
 
 namespace qemu::bench {
-
-/** The stack every group task gets: prosdk's PROBOT_USER_STACK (prosdk.h), as QemuSmoke. */
-inline constexpr uint32_t kUserStack = 24576;
 
 /**
  * Measures the clock sources against each other and picks one (prints a CLOCK line): the
@@ -67,9 +65,6 @@ void Run(std::string_view name, uint32_t iters, Fn&& fn, std::string_view extra 
   }
   Report(name, iters, watch.ElapsedNs(), extra);
 }
-
-/** Free 8-bit heap in bytes (heap_caps_get_free_size(MALLOC_CAP_8BIT)). */
-size_t HeapFree();
 
 // The groups (one file each). Each runs on its own FreeRTOS task with kUserStack bytes of stack,
 // priority 1, core 1 (probot-core's user task), like the QemuSmoke cases.

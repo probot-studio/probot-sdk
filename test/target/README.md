@@ -29,8 +29,10 @@ library adds. No libraries folder is passed: probot-core cannot leak in.
 ## Shared code and the speed benchmark (`QemuBench/`)
 
 `shared/` holds what both sketches use: `FakeCore.hpp` (the fake core, header-only, installed
-by a static initializer) and `QemuUart.hpp` (`qemu::Line`/`Linef` to UART0). Arduino compiles
-only the sketch folder, so `run.sh` adds `-I<repo>/test/target/shared`.
+by a static initializer), `QemuUart.hpp` (`qemu::Line`/`Linef` to UART0) and `QemuTasks.hpp`
+(the runner task, `RunUserTask` for a case or benchmark group on probot-core's user-task
+parameters, the `TASK` lines, `kUserStack`, `HeapFree`). Arduino compiles only the sketch
+folder, so `run.sh` adds `-I<repo>/test/target/shared`.
 
 `QemuBench/` is the on-target speed benchmark with the same setup. It covers the hosted
 `TimedRobot` under load at 20/10/5/2 ms through core's hooks, `CommandScheduler::Run()` with 0 to
@@ -113,17 +115,18 @@ Peak stack of the 24576-byte case task and heap change per case (boot 1 / boot 2
 
 | case | stack used (bytes) | heap change (bytes) |
 |------|--------------------|---------------------|
-| a math | 12512 / 12512 | -260 |
-| b exceptions, format, HAL init | 3692 / 3692 | -16652 (HAL initialized, stays) |
-| c threads, Notifier | 2640 / 2640 (worker 1220 of 6144) | -260 |
-| e Preferences | 2412 / 3120 | -916 |
-| f DataLog | 3372 / 3280 | -3360 |
-| g CommandScheduler | 3756 / 3756 | -9436 |
-| d hosted TimedRobot | 5628 / 5628 | -19344 (robot stays registered) |
+| a math | 12544 / 12544 | -260 |
+| b exceptions, format, HAL init | 3756 / 3756 | -16692 (HAL initialized, stays) |
+| c threads, Notifier | 2672 / 2672 (worker 1220 of 6144) | -276 |
+| e Preferences | 2428 / 3152 | -912 |
+| f DataLog | 3308 / 3312 | -3356 |
+| g CommandScheduler | 3788 / 3788 | -9460 |
+| d hosted TimedRobot | 5472 / 5472 | -19376 (robot stays registered) |
 
-Heap free 329032 bytes at start, 279524 after every case, minimum ever 238620, largest free block
-208884. Minimum free stack of the remaining tasks: `prosdk` (HAL notifier) 2800, `watchdog` 4652,
-`esp_timer` 7836, `ipc0`/`ipc1` 248/240, `IDLE0`/`IDLE1` 228/220. Static TLS 16 bytes. The
+Heap free 328968 bytes at start, 279368 after every case, minimum ever 238548, largest free block
+208884 (boot 1). Minimum free stack of the remaining tasks: `prosdk` (HAL notifier) 2804,
+`watchdog` 4652, `esp_timer` 7836, `ipc0`/`ipc1` 248/240, `IDLE0`/`IDLE1` 228/220. Static TLS 16
+bytes. Static RAM 44060 bytes, flash 1985122 bytes. The
 timing numbers in the `CASE` lines are instruction-count numbers, not ESP32-S3 numbers.
 
 ## Found by this test: thread_local in the archive overflowed the IPC tasks at boot

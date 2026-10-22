@@ -25,7 +25,6 @@
 
 #include <cmath>
 #include <string>
-#include <vector>
 
 #include "Bench.hpp"
 #include "FakeCore.hpp"
@@ -77,10 +76,6 @@ void CalibrateClock() {
         ok ? "ccount" : "esp_timer");
 }
 
-size_t HeapFree() {
-  return heap_caps_get_free_size(MALLOC_CAP_8BIT);
-}
-
 void Report(std::string_view name, uint64_t iters, uint64_t totalNs, std::string_view extra) {
   const double n = iters != 0 ? double(iters) : 1.0;
   Linef("BENCH {} iters={} total_us={:.1f} per_op_us={:.3f} instr_per_op={:.1f}{}{}", name, iters,
@@ -107,29 +102,8 @@ const Group kGroups[] = {
     {"drivers", &qb::BenchDrivers},
 };
 
-struct GroupRun {
-  const Group* group;
-  TaskHandle_t waiter;
-  uint32_t stackFreeMin;
-  bool threw;
-  std::string what;
-};
-
 void GroupTask(void* arg) {
-  auto* run = static_cast<GroupRun*>(arg);
-  try {
-    run->group->fn();
-  } catch (const std::exception& e) {
-    run->threw = true;
-    run->what = e.what();
-  } catch (...) {
-    run->threw = true;
-    run->what = "unknown exception";
-  }
-  // ESP-IDF: StackType_t is uint8_t, so the high-water mark is in bytes
-  run->stackFreeMin = uxTaskGetStackHighWaterMark(nullptr);
-  xTaskNotifyGive(run->waiter);
-  vTaskDelete(nullptr);
+  static_cast<const Group*>(arg)->fn();
 }
 
 void Mem(const char* where) {
@@ -139,19 +113,6 @@ void Mem(const char* where) {
               heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 }
 
-void ReportTasks() {
-  UBaseType_t n = uxTaskGetNumberOfTasks();
-  std::vector<TaskStatus_t> tasks(n + 4);
-  n = uxTaskGetSystemState(tasks.data(), tasks.size(), nullptr);
-  for (UBaseType_t i = 0; i < n; ++i) {
-    const TaskStatus_t& t = tasks[i];
-    int core = t.xCoreID == tskNO_AFFINITY ? -1 : static_cast<int>(t.xCoreID);
-    qemu::Linef("TASK {} prio={} core={} stack_free_min={}", t.pcTaskName,
-                static_cast<unsigned>(t.uxCurrentPriority), core,
-                static_cast<unsigned>(t.usStackHighWaterMark));
-  }
-}
-
 void RunnerTask(void*) {
   // fixed boot number: every bench boot starts from the same flash image (run.sh --bench)
   qemu::Linef("QEMU-BENCH BEGIN boot=1 fake_core={}", qemu::fakecore::Installed() ? 1 : 0);
@@ -159,31 +120,28 @@ void RunnerTask(void*) {
   Mem("start");
   int failed = 0;
   for (const Group& group : kGroups) {
-    auto* run = new GroupRun{&group, xTaskGetCurrentTaskHandle(), 0, false, {}};
-    TaskHandle_t task = nullptr;
     // probot-core's user task: priority 1, core 1, PROBOT_USER_STACK
-    if (xTaskCreatePinnedToCore(GroupTask, "user", qb::kUserStack, run, 1, &task, 1) != pdPASS) {
+    const qemu::UserTaskResult r =
+        qemu::RunUserTask(GroupTask, const_cast<Group*>(&group), 300000);
+    if (r.status == qemu::UserTaskResult::kNotCreated) {
       qemu::Linef("BENCH-FAIL {} could not create the group task", group.name);
       ++failed;
-      delete run;
       continue;
     }
-    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(300000)) == 0) {
+    if (r.status == qemu::UserTaskResult::kTimeout) {
       qemu::Linef("BENCH-FAIL {} timeout", group.name);
       ++failed;
-      continue;  // leaks run; the task may still use it
+      continue;
     }
-    vTaskDelay(pdMS_TO_TICKS(20));  // let the idle task free the group task's stack
-    if (run->threw) {
-      qemu::Linef("BENCH-FAIL {} exception: {}", group.name, run->what);
+    if (r.threw) {
+      qemu::Linef("BENCH-FAIL {} exception: {}", group.name, r.what);
       ++failed;
     }
-    qemu::Linef("STACK {} used={}/{}", group.name, qb::kUserStack - run->stackFreeMin,
-                qb::kUserStack);
+    qemu::Linef("STACK {} used={}/{}", group.name, qemu::kUserStack - r.stackFreeMin,
+                qemu::kUserStack);
     Mem((std::string{"after-"} + group.name).c_str());
-    delete run;
   }
-  ReportTasks();
+  qemu::ReportTasks();
   qemu::Linef("QEMU-BENCH END boot=1 groups={} failed={}", std::size(kGroups), failed);
   vTaskDelete(nullptr);
 }
@@ -193,7 +151,7 @@ void RunnerTask(void*) {
 void setup() {
   qemu::Line("QEMU-BENCH setup");
   // the runner only starts and waits for the group tasks (core 0 stays idle meanwhile)
-  xTaskCreatePinnedToCore(RunnerTask, "runner", 16384, nullptr, 2, nullptr, 0);
+  qemu::StartRunner(RunnerTask);
 }
 
 void loop() {

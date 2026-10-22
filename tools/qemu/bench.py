@@ -7,9 +7,11 @@
 
 Prints the BENCH lines of the first log as a table, writes them with the memory lines (MEM,
 STACK, TASK), the clock line and the static RAM of the compile log to JSON, and with two or more
-logs compares every benchmark's instr_per_op between the boots (QEMU's -icount makes the counts
-deterministic). --check exits 1 when a benchmark of the baseline is missing or its instr_per_op
-grew by more than PCT percent (default 10). Run by tools/qemu/run.sh --bench.
+logs compares every benchmark's instr_per_op between the boots: QEMU's -icount makes the counts
+deterministic for one binary, so any difference exits 1. --check exits 1 when a benchmark of the
+baseline is missing or its instr_per_op grew by more than PCT percent (default 10); it reads the
+first log, which stands for all of them once the boots are identical. --save-baseline writes the
+baseline only when everything else passed. Run by tools/qemu/run.sh --bench.
 """
 
 import argparse
@@ -178,6 +180,7 @@ def main():
                   f"largest {det['max_rel_diff_pct']:.4f} %")
             for d in det["diffs"]:
                 print("   " + d)
+            status = 1
 
     if args.check:
         failures, notes = check(run, args.check, args.threshold)
@@ -198,7 +201,10 @@ def main():
             f.write("\n")
         print("== json: " + args.json)
 
-    if args.save_baseline:
+    if args.save_baseline and status != 0:
+        print("== baseline NOT written (the boots differ or the check failed): "
+              + args.save_baseline)
+    elif args.save_baseline:
         baseline = {
             "about": "QemuBench baseline (tools/qemu/run.sh --bench --check): guest "
                      "instructions per operation under QEMU -icount shift=2; design/qemu-bench.md",

@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include <array>
+#include <cmath>
 #include <memory>
 #include <span>
 #include <string>
@@ -159,8 +160,14 @@ void Thermal() {
     }
     DoNotOptimize(d.to);
   });
-  // the datasheet example: Ta 39.184 C, pixel 367 80.18 C (MLX90640Test.cpp)
+  // the datasheet example: Ta 39.184 C, pixel 367 80.18 C, with MLX90640Test.cpp's margins
   Linef("BENCH-CHECK mlx90640 extract_error={} ta={:.3f} to367={:.2f}", error, ta, d.to[367]);
+  const bool ok = error == 0 && std::fabs(ta - 39.184f) <= 0.01f &&
+                  std::fabs(d.to[367] - 80.18f) <= 0.1f;  // false for NaN too
+  if (!ok) {
+    Linef("BENCH-FAIL mlx90640_frame_to_768px decode differs from the host test "
+          "(expected extract_error=0 ta=39.184+-0.01 to367=80.18+-0.1)");
+  }
 }
 
 void Environment() {
@@ -188,7 +195,7 @@ void Environment() {
   // MS5611Test.cpp: PROM words; first and second order compensation (integer)
   constexpr std::array<uint16_t, 8> kProm = {0, 40127, 36924, 23317, 23282, 33464, 28312, 0};
   int32_t acc = 0;
-  Run("ms5611_compensate_sample", 10000, [&] {
+  Run("ms5611_compensate_sample", 30000, [&] {
     adc = (adc + 1) & 0xFFFF;
     int32_t temperature = 0;
     int32_t pressure = 0;

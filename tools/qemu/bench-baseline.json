@@ -1,69 +1,69 @@
 {
   "about": "QemuBench baseline (tools/qemu/run.sh --bench --check): guest instructions per operation under QEMU -icount shift=2; design/qemu-bench.md",
-  "generated": "2026-10-22T16:22:58+00:00",
+  "generated": "2026-10-22T16:39:20+00:00",
   "benchmarks": {
     "robot_loop_20ms": {
-      "instr_per_op": 221640.0
+      "instr_per_op": 221630.0
     },
     "robot_loop_10ms": {
-      "instr_per_op": 220971.1
+      "instr_per_op": 221072.9
     },
     "robot_loop_5ms": {
-      "instr_per_op": 225951.2
+      "instr_per_op": 227057.5
     },
     "robot_loop_2ms": {
-      "instr_per_op": 222036.2
+      "instr_per_op": 221974.8
     },
     "scheduler_run_0cmd": {
-      "instr_per_op": 34717.1
+      "instr_per_op": 35034.5
     },
     "scheduler_run_10cmd": {
-      "instr_per_op": 68416.5
+      "instr_per_op": 69491.8
     },
     "scheduler_run_50cmd": {
-      "instr_per_op": 221345.6
+      "instr_per_op": 221137.5
     },
     "scheduler_run_200cmd": {
-      "instr_per_op": 1228620.0
+      "instr_per_op": 1236187.5
     },
     "scheduler_run_10sub_default": {
-      "instr_per_op": 159629.8
+      "instr_per_op": 160620.2
     },
     "scheduler_run_200cmd_10sub_default": {
-      "instr_per_op": 1366232.5
+      "instr_per_op": 1381765.0
     },
     "rotation2d_rotateby": {
-      "instr_per_op": 2542.5
+      "instr_per_op": 2542.4
     },
     "pose2d_transformby": {
       "instr_per_op": 3085.9
     },
     "pose2d_exp_log": {
-      "instr_per_op": 23391.1
+      "instr_per_op": 23390.8
     },
     "diff_odometry_update": {
-      "instr_per_op": 18789.5
+      "instr_per_op": 18790.1
     },
     "diff_kinematics_to_wheels": {
       "instr_per_op": 334.2
     },
     "swerve_kinematics_to_module_velocities": {
-      "instr_per_op": 16932.5
+      "instr_per_op": 16932.4
     },
     "swerve_pose_estimator_update": {
       "instr_per_op": 58782.6
     },
-    "swerve_pose_estimator_vision": {
-      "instr_per_op": 157343.8
+    "swerve_pose_estimator_update_vision": {
+      "instr_per_op": 157345.0
     },
     "lqr_construct_2x1": {
-      "instr_per_op": 255285.0
+      "instr_per_op": 253710.0
     },
     "kalman_2state_predict_correct": {
-      "instr_per_op": 70610.4
+      "instr_per_op": 70827.4
     },
     "linear_system_loop_2state": {
-      "instr_per_op": 78689.1
+      "instr_per_op": 78702.9
     },
     "pid_calculate": {
       "instr_per_op": 2403.7
@@ -72,49 +72,49 @@
       "instr_per_op": 4235.6
     },
     "profiled_pid_calculate": {
-      "instr_per_op": 2799.8
+      "instr_per_op": 5011.9
     },
     "trapezoid_profile_calculate": {
-      "instr_per_op": 2014.7
+      "instr_per_op": 3976.6
     },
     "trajectory_generate_2waypoints": {
-      "instr_per_op": 15562625.0
+      "instr_per_op": 15562900.0
     },
     "sleipnir_qp_2var": {
-      "instr_per_op": 2242025.0
+      "instr_per_op": 2235112.5
     },
     "sleipnir_arm_feedforward": {
-      "instr_per_op": 1116525.0
+      "instr_per_op": 1117550.0
     },
     "sleipnir_ellipse2d_nearest": {
-      "instr_per_op": 1107275.0
+      "instr_per_op": 1106200.0
     },
     "nmea_epoch_gga_rmc_gsa": {
-      "instr_per_op": 60439.8
+      "instr_per_op": 60440.0
     },
     "ubx_navpvt_frame": {
-      "instr_per_op": 3998.9
+      "instr_per_op": 4001.5
     },
     "mlx90640_extract_parameters": {
-      "instr_per_op": 15836325.0
+      "instr_per_op": 15836287.5
     },
     "mlx90640_frame_to_768px": {
       "instr_per_op": 2994087.5
     },
     "bme688_compensate_sample": {
-      "instr_per_op": 6663.2
+      "instr_per_op": 6660.6
     },
     "ms5611_compensate_sample": {
-      "instr_per_op": 170.6
+      "instr_per_op": 170.9
     },
     "tmag5170_crc4_frame": {
       "instr_per_op": 382.3
     },
     "opt4048_decode_channel_crc": {
-      "instr_per_op": 261.1
+      "instr_per_op": 260.9
     },
     "vl53l7cx_swap_buffer_1k": {
-      "instr_per_op": 4931.6
+      "instr_per_op": 4933.0
     }
   }
 }

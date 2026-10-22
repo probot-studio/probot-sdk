@@ -15,7 +15,8 @@
 #    library's top-level header (prosdk.h, which pulls in <probot.h>), so the sketch reaches
 #    prosdk the way a discovered precompiled library would: -I<repo>/src for every TU and
 #    src/esp32s3/libprosdk.a inside the link group (build.extra_libs). -I<repo>/test/target/shared
-#    gives both sketches the one copy of the fake core (Arduino compiles only the sketch folder).
+#    gives both sketches the one copy of the fake core, the UART lines and the task helpers
+#    (Arduino compiles only the sketch folder).
 # 3. builds a 4 MB flash image with esptool merge-bin (bootloader, partition table, boot_app0,
 #    app; the rest erased) in .build/qemu/flash.bin
 # 4. writes the QEMU eFuse image (.build/qemu/efuse.bin, see below) and boots QEMU headless N
@@ -29,9 +30,10 @@
 # bench-compile.log, bench-flash.bin, bench-uart-<n>.log; default 1 boot). Every boot starts from
 # a freshly merged flash image, so boots are comparable. tools/qemu/bench.py then parses the BENCH
 # lines into a table and .build/qemu/bench.json and, with 2 or more boots, compares the boots
-# (instruction counts are deterministic under -icount). --check fails (exit 1) when a benchmark's
-# instr_per_op grew by more than --threshold percent (default 10) over the committed baseline
-# tools/qemu/bench-baseline.json; --save-baseline rewrites that baseline from this run.
+# (instruction counts are deterministic under -icount; any difference fails). --check fails
+# (exit 1) when a benchmark's instr_per_op grew by more than --threshold percent (default 10) over
+# the committed baseline tools/qemu/bench-baseline.json; --save-baseline rewrites that baseline
+# from this run, only when the run passed.
 #
 # Needs: src/esp32s3/libprosdk.a (tools/build/build.sh esp32s3), arduino-cli with
 # esp32:esp32@3.3.10.
@@ -48,8 +50,14 @@ boots=
 timeout_s=300
 bench=0
 check=0
-threshold=10
+threshold=
 save_baseline=0
+usage() {
+  echo "usage: $0 [--no-build] [--boots N] [--timeout S]" >&2
+  echo "       $0 --bench [--no-build] [--boots N] [--timeout S] [--check] [--threshold PCT]" \
+       "[--save-baseline]" >&2
+  exit 2
+}
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -60,11 +68,15 @@ while [ $# -gt 0 ]; do
     --check) check=1 ;;
     --threshold) threshold="$2"; shift ;;
     --save-baseline) save_baseline=1 ;;
-    *) echo "usage: $0 [--bench] [--no-build] [--boots N] [--timeout S] [--check]" \
-            "[--threshold PCT] [--save-baseline]" >&2; exit 2 ;;
+    *) usage ;;
   esac
   shift
 done
+# --check, --threshold and --save-baseline belong to --bench; the smoke test has no baseline
+if [ "$bench" = 0 ] && { [ "$check" = 1 ] || [ -n "$threshold" ] || [ "$save_baseline" = 1 ]; }; then
+  usage
+fi
+threshold="${threshold:-10}"
 
 if [ "$bench" = 1 ]; then
   NAME=QemuBench; PFX=bench-; MARK=QEMU-BENCH; boots="${boots:-1}"

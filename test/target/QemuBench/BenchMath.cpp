@@ -112,7 +112,7 @@ void Drivetrains() {
     DoNotOptimize(states);
   });
 
-  // pose estimator with explicit timestamps (5 ms steps), vision measurements 100 ms in the past
+  // pose estimator with explicit timestamps (5 ms steps)
   prosdk::util::array<pm::SwerveModulePosition, 4> modules{
       pm::SwerveModulePosition{}, pm::SwerveModulePosition{}, pm::SwerveModulePosition{},
       pm::SwerveModulePosition{}};
@@ -138,7 +138,11 @@ void Drivetrains() {
     pm::Pose2d pose = step();
     DoNotOptimize(pose);
   });
-  Run("swerve_pose_estimator_vision", 200, [&] {
+  // one loop with a vision measurement: UpdateWithTime as above, then AddVisionMeasurement 100 ms
+  // in the past (samples the odometry buffer and the compensated estimate there, then applies
+  // the Kalman-scaled correction; no odometry replay). The vision part alone is the difference
+  // with swerve_pose_estimator_update.
+  Run("swerve_pose_estimator_update_vision", 200, [&] {
     step();
     estimator.AddVisionMeasurement(pm::Pose2d{pu::meter_t{dist}, 0.01_m, 1_deg},
                                    pu::second_t{t - 0.1});
@@ -192,9 +196,18 @@ void Controllers() {
     DoNotOptimize(out);
   });
 
+  // 0 to 3 m at {2 m/s, 1 m/s^2} is a triangular profile of 2 * sqrt(3 m / 1 m/s^2) = 3.46 s:
+  // 692 steps of 5 ms or 173 of 20 ms. Both restart before the end, so every call samples the
+  // moving part of the profile (accelerating or decelerating), not the settled goal.
   pm::ProfiledPIDController<pu::meters> ppid{1.3, 0.0, 0.7, {2_mps, 1_mps_sq}, 5_ms};
   double pos = 0.0;
+  int n = 0;
   Run("profiled_pid_calculate", 10000, [&] {
+    // restart every 600 steps (3 s of the 5 ms profile)
+    if (++n % 600 == 0) {
+      pos = 0.0;
+      ppid.Reset(0_m);
+    }
     double out = ppid.Calculate(pu::meter_t{pos}, 3_m);
     pos += out * 1e-4;
     DoNotOptimize(out);
@@ -204,8 +217,8 @@ void Controllers() {
   pm::TrapezoidProfile<pu::meters>::State goal{3_m, 0_mps}, state{0_m, 0_mps};
   int k = 0;
   Run("trapezoid_profile_calculate", 20000, [&] {
-    // restart every 1000 steps (20 s of profile): stay on the moving part of the profile
-    if (++k % 1000 == 0) {
+    // restart every 150 steps (3 s of the 20 ms profile)
+    if (++k % 150 == 0) {
       state = {0_m, 0_mps};
     }
     state = profile.Calculate(20_ms, state, goal);

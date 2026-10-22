@@ -368,9 +368,9 @@ of more than 10 % against `tools/qemu/bench-baseline.json`. The absolute times a
 see the caveats there.
 
 Measured 2026-10-22 (`tools/qemu/run.sh --boots 2`, both boots `pass=8 fail=0`): peak stack on the
-24576-byte user task 12.5 to 12.6 KB for the math case (LQR, Kalman, Sleipnir, trajectory), 5.3 KB
-for the hosted robot loop, 3.1 to 3.8 KB for the others; heap free 327 KB at start, 269 KB after
-every case (HAL, scheduler and robot stay allocated), minimum 237 KB, largest block 196 KB; static
+24576-byte user task 12.5 KB for the math case (LQR, Kalman, Sleipnir, trajectory), 5.5 KB for
+the hosted robot loop, 2.4 to 3.8 KB for the others; heap free 329 KB at start, 279 KB after
+every case (HAL, scheduler and robot stay allocated), minimum 239 KB, largest block 209 KB; static
 TLS 16 bytes. The test found that the HAL's 528-byte `thread_local` last-error storage overflowed
 the 1 KB ESP-IDF IPC tasks at boot (every example had a 537 to 544 byte TLS block), fixed by hal
 patch 0003; case h keeps the TLS block at 64 bytes or less.
