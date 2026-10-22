@@ -33,20 +33,18 @@
 #include <prosdk/math/controller/PIDController.hpp>
 #include <prosdk/tunables/Selectable.hpp>
 
-namespace {
-
 constexpr double kWheelDiameterMeters = 0.065;
 constexpr int kEncoderCountsPerRev = 360;
 
-// A hobby ESC or continuous servo on one PWM pin: 1000-2000 us, 1500 us stop.
+// A hobby ESC or continuous servo on one PWM pin: 1000-2000 us, 1500 us stop. Not in an
+// anonymous namespace: Drive (below) has PwmEsc members, and GCC warns (-Wsubobject-linkage)
+// about a class whose field type has internal linkage when the .ino is not the main file.
 class PwmEsc : public prosdk::PWMMotorController {
  public:
   explicit PwmEsc(int pin) : PWMMotorController(pin) {
     SetBounds(2000_us, 1510_us, 1500_us, 1490_us, 1000_us);
   }
 };
-
-}  // namespace
 
 class Drive : public prosdk::cmd::SubsystemBase {
  public:
