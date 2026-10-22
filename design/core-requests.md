@@ -650,15 +650,18 @@ Wired (prosdk 9ec2023, CoreOps ABI 7: `loopGridRestarts`):
   (the `g_store` path of `dashMaxSchemaBytes` compiles there) nor on `feat/dashboard-store`. Sizes:
   design/size.md section 10.
 
-### Core stack rebased again (2026-10-22, after 9ec2023): R12 part 2 final rule, repinned to e40fa3d
+### Core stack rebased again (2026-10-22, after 9ec2023): R12 part 2 final rule, repinned to 15defc1
 
-Core force-pushed #38-#41 twice more within minutes of the R15 wiring (23:32 and 23:36). Current shas
+Core force-pushed #38-#41 three more times after the R15 wiring (23:32, 23:36 and 23:57). Current shas
 (`gh pr list`, and the clone after `git fetch`): #37 `feat/small-items` 2eb1a72 (unchanged), #38
-`feat/ds-files` 352b555, #39 `feat/dash-persist` 3e9189b, #40 `feat/dash-widgets` 634cd40, #41
-`feat/loop-grid-restarts` e40fa3d. `.upstream/probot-core` `sdk-target` is at e40fa3d; CI's
-`PROBOT_CORE_REF` names the branch (`feat/loop-grid-restarts`), so it already builds that. The R15 API is
-unchanged (`git diff dbf9d1f e40fa3d` touches no loop timing file; `limits()`, `Limits`,
-`clearPersisted()` and `loopGridRestarts()` keep their signatures). The core stack is still moving: a
+`feat/ds-files` eab956a, #39 `feat/dash-persist` 3773ea1, #40 `feat/dash-widgets` e725330, #41
+`feat/loop-grid-restarts` 15defc1 (between: 352b555 / 3e9189b / 634cd40 / e40fa3d, where most of the
+checks below ran). `.upstream/probot-core` `sdk-target` is at 15defc1; CI's `PROBOT_CORE_REF` names the
+branch (`feat/loop-grid-restarts`), so it already builds that. The R15 API is unchanged (`git diff dbf9d1f
+15defc1` touches no loop timing file; `limits()`, `Limits`, `clearPersisted()` and `loopGridRestarts()`
+keep their signatures). e40fa3d -> 15defc1 leaves `dashboard.hpp` alone (PB-E308 texts, a 404 from
+`/files` without shares, the WPILib 2027 Field2d `struct:Pose2d[]` and Mechanism2d `position` layouts,
+which prosdk's Field2d and Mechanism2d already publish, and the DS page). The core stack is still moving: a
 later force-push needs the same check.
 
 What changed for prosdk:
@@ -692,4 +695,5 @@ Checked against e40fa3d: host tests, the incremental archive, the HAL link test 
 restart and limits probes in the ELF) and the four size examples; the HAL link test against
 `feat/dashboard-store` 9217ae4 (no probes); a host syntax check of `CoreBridge.hpp` with core's test
 stubs (persistence detected on e40fa3d and 634cd40, not on abef559; R15 only on e40fa3d); QEMU smoke and
-bench. Sizes: design/size.md section 11.
+bench. Against 15defc1: the syntax check (all three detected) and the HAL link test (all three probes in
+the ELF). Sizes: design/size.md section 11.

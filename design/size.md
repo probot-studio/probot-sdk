@@ -375,3 +375,5 @@ Archive at `d641c18` (the tunable backend's republish memory back to accepted va
   attributed further.
 - CommandBasedRobot is 63.7 % of the huge_app partition. The HAL link test against
   `feat/dashboard-store` 9217ae4 (no persistence, no R15) is 1,745,189 / 68,940 B.
+- Core moved on to 15defc1 (#41) right after; the HAL link test there is 1,707,973 / 75,980 B (+2,036 B
+  flash: the DS page grew from 45,837 to 47,771 B compressed). The examples were not re-measured.
