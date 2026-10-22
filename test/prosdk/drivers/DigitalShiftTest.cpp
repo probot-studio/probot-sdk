@@ -48,6 +48,9 @@ struct FakeHx711 {
 TEST_CASE("DigitalShift reads an HX711 word MSB first", "[digitalshift]") {
   DigitalOutput clock{21};
   DigitalInput data{22};
+  // A robot DigitalOutput starts low (esp32/DIO.cpp); a DIO sim channel starts high, and sim
+  // value callbacks fire only on a change, so the first rising edge needs the low idle level.
+  clock.Set(false);  // PD_SCK idles low, as the HX711 driver sets it
   FakeHx711 chip{21, 22};
   chip.word = 0xA5C3F1;
   DigitalShift shift{clock, data};
@@ -68,6 +71,7 @@ TEST_CASE("DigitalShift reads an HX711 word MSB first", "[digitalshift]") {
 TEST_CASE("DigitalShift reads up to 64 bits", "[digitalshift]") {
   DigitalOutput clock{23};
   DigitalInput data{24};
+  clock.Set(false);  // the idle-low clock of the robot (see above)
   sim::DIOSim clk{23};
   sim::DIOSim din{24};
   int edges = 0;
@@ -110,6 +114,7 @@ TEST_CASE("DigitalShift argument and pin errors", "[digitalshift]") {
 
 TEST_CASE("WriteWaveform drives the levels and keeps the last one", "[digitalshift]") {
   DigitalOutput pin{28};
+  pin.Set(false);  // the robot's initial output level (see above)
   sim::DIOSim dio{28};
   std::vector<bool> levels;
   auto cb = dio.RegisterValueCallback(
