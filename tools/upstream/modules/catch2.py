@@ -13,3 +13,10 @@ RULES = [
          include_base="test/thirdparty/catch2/include", include=["*"]),
     dict(kind="test", src=f"{_N}/cpp", dst="test/thirdparty/catch2/cpp", include=["*"]),
 ]
+
+# Not vendored at all, with reasons.
+NOT_VENDORED = {
+    "thirdparty/catch2/{BUILD.bazel,CMakeLists.txt,build.gradle,publish.gradle}":
+        "upstream build files (Bazel/CMake/Gradle packaging); prosdk builds the host tests with tools/build",
+    "thirdparty/catch2/extras": "Catch2 CMake test-discovery scripts; prosdk registers its test binaries in tools/build",
+}

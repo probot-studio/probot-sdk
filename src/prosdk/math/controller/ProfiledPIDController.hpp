@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include <limits>
 #include <ratio>
 #include <string>
@@ -67,7 +69,7 @@ class ProfiledPIDController : public prosdk::telemetry::TelemetryLoggable,
       : m_controller{Kp, Ki, Kd, period},
         m_constraints{constraints},
         m_profile{m_constraints} {
-    if !consteval {
+    if (!std::is_constant_evaluated()) {
       int instances = detail::IncrementAndGetProfiledPIDControllerInstances();
       prosdk::util::ReportUsage("ProfiledPIDController",
                              std::to_string(instances));
@@ -212,7 +214,7 @@ class ProfiledPIDController : public prosdk::telemetry::TelemetryLoggable,
     bool goalPositionChanged = m_goalPosition != goalPosition;
     m_goal = goal;
     m_goalPosition = goalPosition;
-    if !consteval {
+    if (!std::is_constant_evaluated()) {
       if (goalPositionChanged) {
         SetChildTunableChanged("goal");
       }
@@ -248,7 +250,7 @@ class ProfiledPIDController : public prosdk::telemetry::TelemetryLoggable,
   constexpr void SetConstraints(Constraints constraints) {
     m_constraints = constraints;
     m_profile = TrapezoidProfile<Distance>{m_constraints};
-    if !consteval {
+    if (!std::is_constant_evaluated()) {
       SetChildTunableChanged("constraints");
     }
   }
@@ -371,7 +373,7 @@ class ProfiledPIDController : public prosdk::telemetry::TelemetryLoggable,
       double goalPosition = ToBaseGoalPosition(m_goal.position);
       bool goalPositionChanged = m_goalPosition != goalPosition;
       m_goalPosition = goalPosition;
-      if !consteval {
+      if (!std::is_constant_evaluated()) {
         if (goalPositionChanged) {
           SetChildTunableChanged("goal");
         }

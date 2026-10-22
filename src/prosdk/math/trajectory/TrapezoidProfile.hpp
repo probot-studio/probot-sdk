@@ -47,7 +47,7 @@ class TrapezoidProfileConstraints {
   constexpr TrapezoidProfileConstraints(Velocity_t maxVelocity,
                                         Acceleration_t maxAcceleration)
       : maxVelocity{maxVelocity}, maxAcceleration{maxAcceleration} {
-    if !consteval {
+    if (!std::is_constant_evaluated()) {
       prosdk::util::ReportUsage("TrapezoidProfile", "");
     }
 

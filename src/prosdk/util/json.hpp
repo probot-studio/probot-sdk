@@ -191,15 +191,11 @@ class json
     {
     }
 
-    constexpr json(unsigned long value)
+    // prosdk: delegate to the unsigned long long constructor. unsigned long is 32 bits on the
+    // ESP32, where `value <= LLONG_MAX` is always true and -Wextra (-Wtype-limits) warns in every
+    // sketch that includes this header.
+    constexpr json(unsigned long value) : json(static_cast<unsigned long long>(value))
     {
-        if (value <= LLONG_MAX) {
-            type_ = Type::Int;
-            long_value = value;
-        } else {
-            type_ = Type::Uint;
-            ulong_value = value;
-        }
     }
 
     constexpr json(long long value) : type_(Type::Int), long_value(value)

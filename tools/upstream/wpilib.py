@@ -489,6 +489,7 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
     toks = lex(text)
     assert "".join(t[1] for t in toks) == text, f"lexer is not lossless for {up_file}"
     used_shims: set[str] = set()
+    used_std_headers: set[str] = set()
     defined_shim_headers: set[str] = set()
     define_file = None
     for r in ARDUINO_RENAMES:
@@ -586,6 +587,17 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
                         continue  # X::fs:: (member of another scope)
                 t[1] = "prosdk::fs"
             continue
+        if tr["cxx23"] and s == "consteval":
+            # section 6: `if consteval` / `if !consteval` (C++23) -> std::is_constant_evaluated()
+            p = _sig(toks, i, -1)
+            neg = _tok(toks, p)[1] == "!"
+            q = _sig(toks, p, -1) if neg else p
+            if _tok(toks, q)[1] == "if":
+                if neg:
+                    toks[p][1] = ""
+                t[1] = "(!std::is_constant_evaluated())" if neg else "(std::is_constant_evaluated())"
+                used_std_headers.add("type_traits")
+            continue
         if tr["cxx23"] and s == "std":
             nx = _sig(toks, i, 1)
             if _tok(toks, nx)[1] == "::":
@@ -619,6 +631,8 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
 
     # add shim includes that are used but not included
     missing = sorted(h for h in used_shims if h not in defined_shim_headers)
+    missing += sorted(h for h in used_std_headers
+                      if not re.search(rf"^#[ \t]*include[ \t]*<{h}>", out, re.M))
     if missing:
         out = _insert_includes(out, [f"#include <{h}>" for h in missing])
 

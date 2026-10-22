@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
@@ -53,7 +55,7 @@ class LinearSystem {
                          const Matrixd<Outputs, States>& C,
                          const Matrixd<Outputs, Inputs>& D) {
     auto allFinite = [](const auto& mat) {
-      if consteval {
+      if (std::is_constant_evaluated()) {
         for (int row = 0; row < mat.rows(); ++row) {
           for (int col = 0; col < mat.cols(); ++col) {
             if (!gcem::internal::is_finite(mat(row, col))) {

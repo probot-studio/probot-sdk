@@ -48,4 +48,10 @@ NOT_VENDORED = {
     "apriltag/AprilTag.json": "vendordep descriptor for the desktop/roboRIO build system",
     "apriltag/src/main/java": "Java API (no JVM on the MCU)",
     "apriltag/src/main/python": "Python bindings",
+    "apriltag/{BUILD.bazel,CMakeLists.txt,apriltag-config.cmake.in,build.gradle,robotpy_*.bzl}":
+        "upstream build files (Bazel/CMake/Gradle/RobotPy packaging); prosdk builds with tools/build",
+    "apriltag/src/test/native/BUILD.bazel": "upstream build files (Bazel/CMake/Gradle/RobotPy packaging); prosdk builds with tools/build",
+    "apriltag/README.md": "upstream readme (what the wrapper is, where its C library patches live); provenance is in NOTICE",
+    "apriltag/src/test/java": "Java tests (no JVM on the MCU)",
+    "apriltag/src/test/python": "Python tests and their tag images",
 }

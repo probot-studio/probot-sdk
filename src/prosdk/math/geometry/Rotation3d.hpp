@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include <numbers>
 #include <stdexcept>
 
@@ -207,7 +209,7 @@ class WPILIB_DLLEXPORT Rotation3d final {
       return Quaternion{w, x, y, z};
     };
 
-    if consteval {
+    if (std::is_constant_evaluated()) {
       m_q = impl(ct_matrix3d{rotationMatrix});
     } else {
       m_q = impl(rotationMatrix);

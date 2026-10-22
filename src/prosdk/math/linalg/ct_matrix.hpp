@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include <concepts>
 #include <initializer_list>
 
@@ -103,7 +105,7 @@ class ct_matrix {
    */
   friend constexpr ct_matrix<Scalar, Rows, Cols> operator*(
       Scalar lhs, const ct_matrix<Scalar, Rows, Cols>& rhs) {
-    if consteval {
+    if (std::is_constant_evaluated()) {
       ct_matrix<Scalar, Rows, Cols> result;
 
       for (int i = 0; i < rhs.rows(); ++i) {
@@ -130,7 +132,7 @@ class ct_matrix {
   friend constexpr ct_matrix<Scalar, Rows, Cols2> operator*(
       const ct_matrix<Scalar, Rows, Cols>& lhs,
       const ct_matrix<Scalar, Rows, Cols2>& rhs) {
-    if consteval {
+    if (std::is_constant_evaluated()) {
       ct_matrix<Scalar, Rows, Cols2> result;
 
       for (int i = 0; i < lhs.rows(); ++i) {
@@ -159,7 +161,7 @@ class ct_matrix {
   friend constexpr ct_matrix<Scalar, Rows, Cols> operator+(
       const ct_matrix<Scalar, Rows, Cols>& lhs,
       const ct_matrix<Scalar, Rows, Cols>& rhs) {
-    if consteval {
+    if (std::is_constant_evaluated()) {
       ct_matrix<Scalar, Rows, Cols> result;
 
       for (int row = 0; row < rhs.rows(); ++row) {
@@ -184,7 +186,7 @@ class ct_matrix {
   friend constexpr ct_matrix<Scalar, Rows, Cols> operator-(
       const ct_matrix<Scalar, Rows, Cols>& lhs,
       const ct_matrix<Scalar, Rows, Cols>& rhs) {
-    if consteval {
+    if (std::is_constant_evaluated()) {
       ct_matrix<Scalar, Rows, Cols> result;
 
       for (int row = 0; row < rhs.rows(); ++row) {
@@ -205,7 +207,7 @@ class ct_matrix {
    * @return Transpose of matrix.
    */
   constexpr ct_matrix<Scalar, Cols, Rows> transpose() const {
-    if consteval {
+    if (std::is_constant_evaluated()) {
       ct_matrix<Scalar, Cols, Rows> result;
 
       for (int row = 0; row < rows(); ++row) {
@@ -228,7 +230,7 @@ class ct_matrix {
   static constexpr ct_matrix<Scalar, Rows, Cols> Identity()
     requires(Rows != Eigen::Dynamic && Cols != Eigen::Dynamic)
   {
-    if consteval {
+    if (std::is_constant_evaluated()) {
       ct_matrix<Scalar, Rows, Cols> result;
 
       for (int row = 0; row < Rows; ++row) {
@@ -259,7 +261,7 @@ class ct_matrix {
     requires(Rows == 1 || Cols == 1) && (RhsRows == 1 || RhsCols == 1) &&
             (Rows * Cols == RhsRows * RhsCols)
   constexpr Scalar dot(const ct_matrix<Scalar, RhsRows, RhsCols>& rhs) const {
-    if consteval {
+    if (std::is_constant_evaluated()) {
       Scalar sum = 0.0;
 
       for (int index = 0; index < rows() * rhs.cols(); ++index) {
@@ -278,7 +280,7 @@ class ct_matrix {
    * @return Norm of matrix.
    */
   constexpr Scalar norm() const {
-    if consteval {
+    if (std::is_constant_evaluated()) {
       Scalar sum = 0.0;
 
       for (int row = 0; row < rows(); ++row) {

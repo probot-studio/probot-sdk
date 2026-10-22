@@ -46,4 +46,5 @@ NOT_VENDORED = {
     f"{_S}/test/python": "Python tests",
     "drivers/{BUILD.bazel,build.gradle,CMakeLists.txt,drivers-config.cmake.in,generate.bzl,"
     "robotpy_*.bzl}": "upstream build files (prosdk builds with tools/build)",
+    f"{_S}/test/native/BUILD.bazel": "upstream build file (prosdk builds with tools/build)",
 }

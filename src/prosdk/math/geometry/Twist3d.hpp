@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include <prosdk/thirdparty/eigen/Eigen/Core>
 #include <prosdk/thirdparty/gcem/gcem.hpp>
 
@@ -161,7 +163,7 @@ constexpr Transform3d Twist3d::Exp() const {
     return transform;
   };
 
-  if consteval {
+  if (std::is_constant_evaluated()) {
     return impl.template operator()<ct_matrix3d, ct_vector3d>();
   }
   return impl.template operator()<Eigen::Matrix3d, Eigen::Vector3d>();

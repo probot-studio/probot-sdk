@@ -52,4 +52,9 @@ NOT_VENDORED = {
     f"{_S}/test/resources": "JUnit service registration (Java tests)",
     f"{_S}/test/native/BUILD.bazel": "Bazel build file",
     f"{_S}/dev": "upstream developer scratch executable",
+    "commandsv2/{BUILD.bazel,CMakeLists.txt,build.gradle,commandsv2-config.cmake.in,generate.bzl}":
+        "upstream build files (Bazel/CMake/Gradle/RobotPy packaging); prosdk builds with tools/build",
+    "commandsv2/CommandsV2.json": "vendordep descriptor for the desktop/roboRIO build system",
+    "commandsv2/generate_hids.py": "generator of the Command*Controller wrappers (its C++ output is committed upstream and vendored)",
+    f"{_S}/generated/main/java": "generated Java Command*Controller wrappers (no JVM on the MCU)",
 }

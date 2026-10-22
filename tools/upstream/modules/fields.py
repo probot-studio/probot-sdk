@@ -50,4 +50,11 @@ NOT_VENDORED = {
     "fields/src/test/resources": "custom layout/image files used only by the Java tests",
     "fields/src/main/java": "Java API (no JVM on the MCU)",
     "fields/src/main/python": "Python bindings",
+    "fields/{BUILD.bazel,CMakeLists.txt,build.gradle,fields-config.cmake.in,generate_fields.bzl,publish.gradle,robotpy_*.bzl}":
+        "upstream build files (Bazel/CMake/Gradle/RobotPy packaging); prosdk builds with tools/build",
+    "fields/src/test/native/BUILD.bazel": "upstream build files (Bazel/CMake/Gradle/RobotPy packaging); prosdk builds with tools/build",
+    "fields/README.md": "upstream readme of the fields project",
+    "fields/src/generated/main/java": "generated Java field registry (no JVM on the MCU)",
+    "fields/src/test/java": "Java tests (no JVM on the MCU)",
+    "fields/src/test/python": "Python tests",
 }

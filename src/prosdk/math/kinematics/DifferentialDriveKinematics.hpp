@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include "prosdk/math/geometry/Twist2d.hpp"
 #include "prosdk/math/kinematics/ChassisAccelerations.hpp"
 #include "prosdk/math/kinematics/ChassisVelocities.hpp"
@@ -43,7 +45,7 @@ class WPILIB_DLLEXPORT DifferentialDriveKinematics
    */
   constexpr explicit DifferentialDriveKinematics(prosdk::units::meter_t trackwidth)
       : trackwidth(trackwidth) {
-    if !consteval {
+    if (!std::is_constant_evaluated()) {
       prosdk::util::ReportUsage("DifferentialDriveKinematics", "");
     }
   }

@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include <algorithm>
 #include <cstddef>
 #include <initializer_list>
@@ -101,7 +103,7 @@ class LinearFilter {
       m_outputs.emplace_front(0.0);
     }
 
-    if !consteval {
+    if (!std::is_constant_evaluated()) {
       ++instances;
       prosdk::util::ReportUsage("LinearFilter", std::to_string(instances));
     }

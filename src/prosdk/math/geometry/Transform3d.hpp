@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include <stdexcept>
 #include <utility>
 
@@ -276,7 +278,7 @@ constexpr Twist3d Transform3d::Log() const {
                    prosdk::units::radian_t{rvec(2)}};
   };
 
-  if consteval {
+  if (std::is_constant_evaluated()) {
     return impl.template operator()<ct_matrix3d, ct_vector3d>();
   }
   return impl.template operator()<Eigen::Matrix3d, Eigen::Vector3d>();

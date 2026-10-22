@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include <string_view>
 #include <utility>
 
@@ -51,18 +53,18 @@ class WPILIB_DLLEXPORT ComplexTunable : public detail::TunableBase {
   constexpr ComplexTunable(const ComplexTunable&) = default;
   constexpr ComplexTunable(ComplexTunable&& other)
       : detail::TunableBase{std::move(other)} {
-    if !consteval {
+    if (!std::is_constant_evaluated()) {
       TunableRegistry::MoveTunableCallbackParent(&other, this);
     }
   }
   constexpr ComplexTunable& operator=(const ComplexTunable&) = default;
   constexpr ComplexTunable& operator=(ComplexTunable&& other) {
     if (this != &other) {
-      if !consteval {
+      if (!std::is_constant_evaluated()) {
         TunableRegistry::PrepareComplexMoveAssignment(*this, other);
       }
       detail::TunableBase::operator=(std::move(other));
-      if !consteval {
+      if (!std::is_constant_evaluated()) {
         TunableRegistry::MoveTunableCallbackParent(&other, this);
       }
     }

@@ -71,7 +71,7 @@ class WPILIB_DLLEXPORT PIDController : public prosdk::telemetry::TelemetryLoggab
       prosdk::math::MathSharedStore::ReportWarning(
           "Controller period defaulted to 20ms.");
     }
-    if !consteval {
+    if (!std::is_constant_evaluated()) {
       ++instances;
 
       prosdk::util::ReportUsage("PIDController", std::to_string(instances));

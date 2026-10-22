@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include <limits>
 #include <string>
 
@@ -46,7 +48,7 @@ class WPILIB_DLLEXPORT BangBangController
   constexpr explicit BangBangController(
       double tolerance = std::numeric_limits<double>::infinity())
       : m_tolerance(tolerance) {
-    if !consteval {
+    if (!std::is_constant_evaluated()) {
       ++instances;
       prosdk::util::ReportUsage("BangBangController", std::to_string(instances));
     }
