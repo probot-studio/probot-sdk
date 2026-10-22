@@ -63,7 +63,9 @@ void OnEmergencyStop() {
 // Never blocks the esp_timer task: if the PWM table is busy the next tick retries.
 void GateTimerCallback(void*) {
   if (!EStopped()) {
-    pwm::ApplyGate(OutputsEnabled(), false);
+    bool enabled = OutputsEnabled();
+    pwm::ApplyGate(enabled, false);
+    dio::ApplyGate(enabled, false);
   }
 }
 
@@ -203,7 +205,9 @@ bool OutputsEnabled() {
 }
 
 void UpdateOutputGate() {
-  pwm::ApplyGate(OutputsEnabled(), true);
+  bool enabled = OutputsEnabled();
+  pwm::ApplyGate(enabled, true);
+  dio::ApplyGate(enabled, true);
 }
 
 void Log(std::string_view text) {

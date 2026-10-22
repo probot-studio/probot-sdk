@@ -9,8 +9,9 @@
 // (USB D-/D+, UART0 console) and probot-core (pins named by its configuration macros) before it is
 // handed out.
 //
-// Output safety (PORT.md section 8): servo/ESC PWM pulses only leave the chip while probot-core
-// reports outputsEnabled() (RUN phase, DS connected, no deadline miss, no e-stop). The output gate
+// Output safety (PORT.md section 8): servo/ESC PWM pulses and digital PWM duty cycles (LEDC)
+// only leave the chip while probot-core reports outputsEnabled() (RUN phase, DS connected, no
+// deadline miss, no e-stop). The output gate
 // is re-evaluated on core's user task (pre-cycle) and every 10 ms by an esp_timer. On an emergency
 // stop every HAL-owned output pin is routed to plain GPIO and driven low, lock-free.
 
@@ -125,7 +126,8 @@ bool EStopped();
 /** Current output gate: probot-core's outputsEnabled() and not e-stopped. */
 bool OutputsEnabled();
 
-/** Re-evaluates the gate now and applies a change to the PWM outputs (task context only). */
+/** Re-evaluates the gate now and applies a change to the PWM outputs and the digital PWM
+ * generators (task context only). */
 void UpdateOutputGate();
 
 // ---- per-module hooks (defined in the module .cpp files) ----
@@ -133,6 +135,12 @@ namespace pwm {
 /** Applies the output gate to every PWM output. Returns false if it could not lock (retry). */
 bool ApplyGate(bool enabled, bool blocking);
 }  // namespace pwm
+
+namespace dio {
+/** Applies the output gate to every digital PWM generator (duty 0 while closed). Returns false
+ * if it could not lock (retry). */
+bool ApplyGate(bool enabled, bool blocking);
+}  // namespace dio
 
 namespace can {
 /** Lock-free: stops periodic CAN transmissions after an emergency stop. */

@@ -54,7 +54,8 @@ Driver Station (design/PORT.md section 8).
 | CAN buses | 1 | TWAI | external transceiver, classic CAN |
 | Notifiers | unlimited | one thread, software alarms | |
 | Interrupts | 0 | | WPILib 2027 has no interrupt HAL |
-| Digital PWM, pulses | 0 | | stubs (systemcore does not implement them either) |
+| Digital PWM generators | 6 | LEDC, on DIO outputs | one rate for all, 5 Hz to 40 kHz; gated |
+| DIO pulses | 0 | | stubs (systemcore does not implement them either) |
 | CTRE PCM, REV PH, PDP/PDH | 0 | | not supported (below) |
 
 ## Output safety
@@ -65,6 +66,8 @@ Driver Station (design/PORT.md section 8).
   is re-evaluated on core's user task before every loop iteration and every 10 ms by the
   `prosdk-gate` esp_timer, so outputs stop within about 10 ms of a disable even if the user loop
   hangs. Pulse values set while disabled are kept and apply on the next enable.
+  Digital PWM generators (DIO) are gated the same way: their duty is 0 while the gate is
+  closed (the value set is kept).
 - **Emergency stop**: core deletes the user task and calls the framework e-stop hook on a fresh
   task. The backend's callback is lock-free: every HAL output pin (PWM, DIO outputs, LED data
   lines) is routed back to plain GPIO and driven low, then CAN periodic frames are stopped. After
@@ -73,7 +76,7 @@ Driver Station (design/PORT.md section 8).
   forced low whatever their pulse value, and DIO writes are ignored until reboot (a write racing
   the e-stop is undone). Deviation from the roboRIO: DIO outputs are also driven low (the roboRIO
   keeps DIO values on disable); "every HAL output" stops on an e-stop.
-- **Not gated**: DIO outputs while merely disabled (as on the roboRIO), LED strips (they show
+- **Not gated**: DIO output levels while merely disabled (as on the roboRIO), LED strips (they show
   robot state), I2C, serial and CAN. CAN TX is never forced low: a dominant TX line jams the bus;
   after an e-stop periodic frames stop and new sends fail with
   `HAL_ERR_CANSessionMux_NotAllowed`.
@@ -87,8 +90,17 @@ Driver Station (design/PORT.md section 8).
   roboRIO/systemcore). Output: starts low, `GPIO_MODE_INPUT_OUTPUT` (the level reads back),
   no pull.
 - Direction change through `HAL_SetDIODirection`; changing to output after an e-stop is refused.
-- `HAL_AllocateDigitalPWM`, `HAL_Pulse*` and friends report `HAL_HANDLE_ERROR` with a message
-  (systemcore stubs them too).
+- Digital PWM generators (`DigitalOutput::EnablePWM`; systemcore stubs them) on the LEDC
+  peripheral through the Arduino LEDC API: 6 generators, each on one DIO output
+  (`HAL_SetDigitalPWMOutputChannel` refuses a pin that is not an allocated DIO output or already
+  has a generator). One rate for all generators (`HAL_SetDigitalPWMRate`, 5 Hz to 40 kHz,
+  default 500 Hz): resolution floor(log2(80 MHz / rate)) bits, at most 14; a rate change
+  re-attaches every active generator. Duty 0..1 (NaN = 0), forced to 0 while the output gate is
+  closed (applied with the PWM gate, before every loop iteration and every 10 ms). Freeing the
+  generator or the DIO, or turning the DIO into an input, detaches it (pin low). After an
+  emergency stop the pins are low like every DIO output and no generator can be attached.
+- `HAL_SetDigitalPWMPPS` and `HAL_Pulse*` report `HAL_HANDLE_ERROR` with a message (systemcore
+  stubs them too).
 
 ### PWM (PWM.cpp)
 - MCPWM timers at 1 MHz (1 us per tick), up-counting; output high at timer zero, low at the
@@ -255,7 +267,7 @@ Driver Station (design/PORT.md section 8).
 - CTRE PCM, REV PH, CTRE PDP and REV PDH (`CANDevices.cpp`): `Initialize*` fails with a message,
   every other call reports `HAL_HANDLE_ERROR`. They need the FRC CAN heartbeat and are not in
   the kit.
-- Digital PWM generators and pulse outputs (stubs, as on systemcore).
+- DIO pulse outputs and digital PWM PPS mode (stubs, as on systemcore).
 - Serial flow control, ADC2, CAN FD, joystick rumble/LEDs/touchpads, alliance/match data.
 
 ## Completeness
