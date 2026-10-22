@@ -310,6 +310,35 @@ Every exclusion is listed in `design/API-DIFFERENCES.md`.
 Nothing is "done" without: the command that was run, its output (compile log, test summary, size table),
 and where it ran. Unmeasured performance is called an estimate.
 
+### 11.1 On-target smoke test in QEMU (no board needed)
+
+`tools/qemu/setup.sh` installs Espressif's QEMU (`esp-develop-9.2.2-20260417`, sha256-pinned) into
+`tools/bin/qemu`; `tools/qemu/run.sh` compiles `test/target/QemuSmoke` against
+`src/esp32s3/libprosdk.a` (no probot-core: a fake `CoreOps` table), merges a 4 MB flash image and
+boots it twice on machine `esp32s3`, parsing one `CASE <id> ... PASS|FAIL` line per case from the
+UART. CI runs it only on manual dispatch (job `qemu`). Details, the QEMU-only settings (DIO flash,
+eFuse image for the ADC calibration) and the case table: `test/target/README.md`.
+
+What a pass proves: the archive links and boots without probot-core; Eigen, Sleipnir, LQR, Kalman
+and the spline trajectory give the host's numbers on Xtensa (the Kalman estimate matches the
+x86_64 host build to 17 digits); exceptions unwind across archive and sketch under `-fno-rtti`;
+`std::format`/`println` and the platform console work; `ScopedThreadConfig` sets name, priority,
+core and stack; `Notifier` periodic and one-shot timing on esp_timer; `Preferences` on NVS and
+`DataLogManager` on LittleFS survive a restart; `CommandScheduler`; the hosted `TimedRobot`
+through disabled/auto/teleop/e-stop with `AddPeriodic`; stack and heap use. It does not prove any
+peripheral HAL path (MCPWM, LEDC, PCNT, RMT, TWAI, ADC, I2C, UART devices, GPIO electrical
+behaviour, `drivers/`), probot-core (WiFi, Driver Station, gamepads, real hooks, e-stop line,
+battery) or real-time performance (QEMU runs at emulation speed on a host clock); those need a
+board.
+
+Measured 2026-10-22 (`tools/qemu/run.sh --boots 2`, both boots `pass=8 fail=0`): peak stack on the
+24576-byte user task 12.5 to 12.6 KB for the math case (LQR, Kalman, Sleipnir, trajectory), 5.3 KB
+for the hosted robot loop, 3.1 to 3.8 KB for the others; heap free 327 KB at start, 269 KB after
+every case (HAL, scheduler and robot stay allocated), minimum 237 KB, largest block 196 KB; static
+TLS 16 bytes. The test found that the HAL's 528-byte `thread_local` last-error storage overflowed
+the 1 KB ESP-IDF IPC tasks at boot (every example had a 537 to 544 byte TLS block), fixed by hal
+patch 0003; case h keeps the TLS block at 64 bytes or less.
+
 ## Reports behind this design
 
 Copied into the repo:

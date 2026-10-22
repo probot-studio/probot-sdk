@@ -5,6 +5,7 @@
 #include "prosdk/hal/ErrorHandling.hpp"
 
 #include <format>
+#include <memory>
 
 #include "prosdk/hal/Errors.h"
 #include "prosdk/hal/HAL.h"
@@ -17,9 +18,16 @@ struct LastErrorStorage {
 };
 }  // namespace
 
+// prosdk: only a pointer is thread_local. ESP-IDF copies the static TLS block
+// into the top of every FreeRTOS task stack, so the 528-byte storage there
+// overflowed the 1 KB IPC tasks at boot (test/target, case h); the storage is
+// allocated on a thread's first HAL error instead.
 static LastErrorStorage& GetThreadLastError() {
-  thread_local LastErrorStorage lastError;
-  return lastError;
+  thread_local std::unique_ptr<LastErrorStorage> lastError;
+  if (!lastError) {
+    lastError = std::make_unique<LastErrorStorage>();
+  }
+  return *lastError;
 }
 
 namespace prosdk::hal {

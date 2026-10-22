@@ -6,12 +6,15 @@
 #            (every public header after #include <Arduino.h>, exact Arduino flags)
 #   examples: the archive, every examples/* sketch and the HAL link test
 #            (tools/build/hal_link_test.py) compiled against probot-core at PROBOT_CORE_REF
+#   qemu:    manual only (workflow_dispatch): the archive and the on-target smoke test in
+#            Espressif's QEMU (tools/qemu/run.sh, test/target/README.md), two boots
 name: CI
 
 on:
   push:
     branches: [stable, dev]
   pull_request:
+  workflow_dispatch:
 
 env:
   ARDUINO_CLI_VERSION: "1.5.1"
@@ -112,3 +115,48 @@ jobs:
         run: >-
           python3 tools/build/hal_link_test.py --out .build/hal-link --compile
           --core "$GITHUB_WORKSPACE/.upstream/probot-core"
+
+  qemu:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install arduino-cli and Arduino-ESP32
+        run: |
+          set -euo pipefail
+          dl=$(mktemp -d)
+          archive=arduino-cli_${ARDUINO_CLI_VERSION}_Linux_64bit.tar.gz
+          curl -fsSL "https://downloads.arduino.cc/arduino-cli/${archive}" -o "$dl/$archive"
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$dl/$archive" -C "$HOME/.local/bin" arduino-cli
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          arduino-cli config init --overwrite
+          arduino-cli config set board_manager.additional_urls \
+            https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install "esp32:esp32@${ARDUINO_ESP32_VERSION}"
+
+      - name: Archive
+        run: tools/build/build.sh esp32s3 prosdk
+
+      - name: QEMU (pinned, sha256-checked)
+        run: tools/qemu/setup.sh
+
+      - name: On-target smoke test (two boots)
+        run: tools/qemu/run.sh --boots 2 --timeout 600
+
+      - name: UART logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-uart
+          path: |
+            .build/qemu/uart-*.log
+            .build/qemu/compile.log
+          if-no-files-found: ignore

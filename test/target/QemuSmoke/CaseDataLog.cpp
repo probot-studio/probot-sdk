@@ -1,0 +1,102 @@
+// Copyright (c) Probot Studio. Hand-written; see LICENSE.
+//
+// (f) DataLogManager on LittleFS (the huge_app "spiffs" data partition, mounted by the runner
+// with LittleFS.begin(true)): Start() picks /littlefs/logs (prosdk::platform::GetLogDirectory),
+// the writer thread writes a .wpilog, Stop() flushes it; the file is then read back with stdio.
+// Boot 2 checks that boot 1's log survived the restart.
+
+#include <dirent.h>
+#include <sys/stat.h>
+
+#include <cstdio>
+#include <string>
+#include <vector>
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
+#include <prosdk/datalog/DataLog.hpp>
+#include <prosdk/platform/Storage.hpp>
+#include <prosdk/system/DataLogManager.hpp>
+
+#include "Harness.hpp"
+
+namespace qemu {
+
+namespace {
+
+std::string ReadFile(const std::string& path) {
+  std::string data;
+  if (FILE* f = std::fopen(path.c_str(), "rb")) {
+    char buf[512];
+    size_t n;
+    while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0) {
+      data.append(buf, n);
+    }
+    std::fclose(f);
+  }
+  return data;
+}
+
+std::vector<std::string> ListLogs(const std::string& dir) {
+  std::vector<std::string> names;
+  if (DIR* d = opendir(dir.c_str())) {
+    while (dirent* e = readdir(d)) {
+      std::string name = e->d_name;
+      if (name.size() > 7 && name.ends_with(".wpilog")) {
+        names.push_back(name);
+      }
+    }
+    closedir(d);
+  }
+  return names;
+}
+
+}  // namespace
+
+void CaseDataLog(Ctx& ctx) {
+  const int boot = BootNumber();
+  QCHECK_MSG(ctx, prosdk::platform::IsLittleFsMounted(), "LittleFS not mounted at {}",
+             prosdk::platform::kLittleFsBasePath);
+  const std::string dir = prosdk::platform::GetLogDirectory();
+  QCHECK_MSG(ctx, dir == "/littlefs/logs", "log dir '{}'", dir);
+  if (auto space = prosdk::platform::GetStorageSpace(dir)) {
+    ctx.Note("fs_capacity={} fs_free={}", space->capacity, space->available);
+  } else {
+    QCHECK_MSG(ctx, false, "GetStorageSpace({}) unknown", dir);
+  }
+
+  // the previous boot's log must still be there
+  if (boot > 1) {
+    std::string prev = std::format("{}/qemu_smoke_{}.wpilog", dir, boot - 1);
+    std::string data = ReadFile(prev);
+    QCHECK_MSG(ctx, data.starts_with("WPILOG"), "{}: {} bytes", prev, data.size());
+    QCHECK(ctx, data.find(std::format("qemu-smoke boot {}", boot - 1)) != std::string::npos);
+    ctx.Note("prev_log_bytes={}", data.size());
+  }
+
+  const std::string name = std::format("qemu_smoke_{}.wpilog", boot);
+  prosdk::DataLogManager::Start("", name);
+  prosdk::DataLogManager::Log(std::format("qemu-smoke boot {}", boot));
+  auto& log = prosdk::DataLogManager::GetLog();
+  prosdk::log::IntegerLogEntry counter{log, "/qemu/counter"};
+  prosdk::log::DoubleLogEntry value{log, "/qemu/value"};
+  for (int i = 0; i < 200; ++i) {
+    counter.Append(i);
+    value.Append(i * 0.5);
+  }
+  vTaskDelay(pdMS_TO_TICKS(400));  // > the writer's 0.25 s flush period
+  prosdk::DataLogManager::Stop();
+
+  const std::string path = dir + "/" + name;
+  std::string data = ReadFile(path);
+  QCHECK_MSG(ctx, data.starts_with("WPILOG"), "{}: {} bytes", path, data.size());
+  QCHECK_MSG(ctx, data.size() > 200 * 2 * 8, "{} bytes", data.size());
+  QCHECK(ctx, data.find("/qemu/counter") != std::string::npos);
+  QCHECK(ctx, data.find(std::format("qemu-smoke boot {}", boot)) != std::string::npos);
+  auto logs = ListLogs(dir);
+  QCHECK_MSG(ctx, static_cast<int>(logs.size()) >= std::min(boot, 2), "{} logs", logs.size());
+  ctx.Note("log_bytes={} logs_in_dir={}", data.size(), logs.size());
+}
+
+}  // namespace qemu
