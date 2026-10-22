@@ -92,11 +92,15 @@ low cmake --build "$BUILD" -j "$JOBS" --target "${targets[@]}"
 
 if [ "$run_tests" = 1 ]; then
   [ "$cfg" = host ] || { echo "--test is only for the host build" >&2; exit 2; }
+  # tests run in the build dir: files they write relative to the working directory (DataLogManager's
+  # default logs/ directory on the host) stay out of the source tree
+  rundir="$BUILD/test-run"
+  mkdir -p "$rundir"
   status=0
   for t in prosdk_tests prosdk_dashboard_tests prosdk_robot_tests wpiutil_tests telemetry_tests tunables_tests hal_tests datalog_tests units_tests wpimath_tests fields_tests apriltag_tests wpilibc_tests commandsv2_tests prosdk_commands2_tests drivers_tests prosdk_drivers_tests example_ArmSimulation_tests example_ElevatorSimulation_tests; do
     if [ -x "$BUILD/$t" ]; then
       echo "== $t"
-      low "$BUILD/$t" || status=1
+      (cd "$rundir" && low "$BUILD/$t") || status=1
     fi
   done
   exit $status
