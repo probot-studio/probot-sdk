@@ -169,12 +169,14 @@ class BenchRobot : public prosdk::TimedRobot {
     prosdk::telemetry::Log("Scheduler", scheduler);
     if (loopStart.size() < kMaxStamps) {
       loopStart.push_back(start);
+      loopOffset.push_back(start - pf::CycleStartTime() / 1000);
       loopUserNs.push_back(watch.ElapsedNs());
     }
   }
 
   static constexpr size_t kMaxStamps = 1600;
   std::vector<int64_t> loopStart;    // esp_timer us at the start of RobotPeriodic
+  std::vector<int64_t> loopOffset;   // us from the pass start (core's pre-cycle hook) to it
   std::vector<uint64_t> loopUserNs;  // RobotPeriodic (scheduler and its commands, telemetry)
 
  private:
@@ -207,20 +209,9 @@ void RunPeriod(uint32_t periodMs, bool first) {
   pf::SetRobotMain(&NewBenchRobot, "BenchRobot");
   if (first) {
     pf::detail::Boot();  // core's boot hook: HAL, robot, loop period
-  } else {
-    // A robot registered after core's boot is constructed inside the next pre-cycle, and the
-    // host aligns its schedule to that pass's clock reading, which then includes the
-    // construction: the loop deadline can land next to the half-pass lookahead edge, and the
-    // loop runs twice in one pass and not at all in the next (design/qemu-bench.md, open
-    // items). On a robot the boot hook constructs it before the first pass, as for the first
-    // period here. So: construct it in one pass, then report one restarted pass grid (a core
-    // overrun), on which the host aligns again on an ordinary pass.
-    core.packetSeq.fetch_add(1);
-    pf::detail::PreCycle();
-    pf::detail::PostCycle();
-    core.overruns.fetch_add(1);
-    vTaskDelay(pdMS_TO_TICKS(periodMs));
   }
+  // later robots are registered after core's boot: the first pass below constructs them (the
+  // robot host aligns its schedule on the pass after that one)
 
   // the fake core's timeline (ms): disabled, one teleop-init pass, teleop
   constexpr int64_t kTeleopAtMs = 200;
@@ -234,6 +225,8 @@ void RunPeriod(uint32_t periodMs, bool first) {
   bool initDone = false;
   const uint32_t overrunsBefore = core.overruns.load();
   uint32_t overrunsInWindow = 0;
+  int64_t lastPassStart = 0;
+  int64_t passJitterMax = 0;  // pass start spacing vs the period (wake-up), in the window
   const int64_t origin = esp_timer_get_time();
   TickType_t wake = xTaskGetTickCount();
   for (;;) {
@@ -247,6 +240,11 @@ void RunPeriod(uint32_t periodMs, bool first) {
     if (inWindow && windowFrom == 0) {
       windowFrom = now;
     }
+    if (inWindow && lastPassStart != 0) {
+      const int64_t dev = now - lastPassStart - int64_t{core.periodMs.load()} * 1000;
+      passJitterMax = std::max(passJitterMax, std::abs(dev));
+    }
+    lastPassStart = now;
     core.packetSeq.fetch_add(1);  // a Driver Station packet every pass
     if (nowMs < kTeleopAtMs) {
       core.phase.store(pf::kCorePhaseStopped);
@@ -290,9 +288,14 @@ void RunPeriod(uint32_t periodMs, bool first) {
   std::vector<int64_t> starts;
   uint64_t userSumNs = 0;
   uint64_t userMaxNs = 0;
+  int64_t offsetMin = 0;
+  int64_t offsetMax = 0;
   for (size_t i = 0; i < robot->loopStart.size(); ++i) {
     const int64_t t = robot->loopStart[i];
     if (t >= windowFrom && t < windowTo) {
+      const int64_t offset = robot->loopOffset[i];
+      offsetMin = starts.empty() ? offset : std::min(offsetMin, offset);
+      offsetMax = starts.empty() ? offset : std::max(offsetMax, offset);
       starts.push_back(t);
       userSumNs += robot->loopUserNs[i];
       userMaxNs = std::max(userMaxNs, robot->loopUserNs[i]);
@@ -311,12 +314,14 @@ void RunPeriod(uint32_t periodMs, bool first) {
   Report(std::format("robot_loop_{}ms", periodMs), static_cast<uint64_t>(passes), passSumNs,
          std::format("period_ms={} core_period_ms={} max_us={:.1f} loops={} user_mean_us={:.1f} "
                      "user_max_us={:.1f} jitter_max_us={} jitter_rms_us={:.1f} overruns={} "
-                     "overruns_total={} headroom_pct={:.1f} headroom_min_pct={:.1f}",
+                     "overruns_total={} headroom_pct={:.1f} headroom_min_pct={:.1f} "
+                     "pass_jitter_max_us={} loop_offset_min_us={} loop_offset_max_us={}",
                      periodMs, core.periodMs.load(), double(passMaxNs) / 1000.0, starts.size(),
                      starts.empty() ? 0.0 : double(userSumNs) / 1000.0 / double(starts.size()),
                      double(userMaxNs) / 1000.0, jitterMax, jitterRms, overrunsInWindow,
                      core.overruns.load() - overrunsBefore, 100.0 * (periodD - meanUs) / periodD,
-                     100.0 * (periodD - double(passMaxNs) / 1000.0) / periodD));
+                     100.0 * (periodD - double(passMaxNs) / 1000.0) / periodD, passJitterMax,
+                     offsetMin, offsetMax));
 }
 
 }  // namespace

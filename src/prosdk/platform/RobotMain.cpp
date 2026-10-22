@@ -14,11 +14,17 @@
 //     timed from the opmode's construction, somewhere inside a pass) is moved to the nearest
 //     pass instead of shrinking the pass period; one with a period below 1 ms runs once per pass;
 //   - aligns the schedule with core's passes (it shifts the robot's start time and every
-//     expiration by less than half a pass). It re-aligns after a period change and after a late
-//     pass (core restarts its grid; no catch-up, like upstream's "skip the periods it is behind");
-//   - runs every callback that is due by the middle of the next pass (PeriodicPriorityQueue::
-//     RunDue with half a pass of lookahead: upstream order and rescheduling), so that the run-time
-//     jitter of the earlier pre-cycle callbacks never makes a due callback miss its pass.
+//     expiration by less than half a pass) on the pass start (CycleStartTime(): taken when core
+//     enters its pre-cycle hook, so neither the earlier pre-cycle callbacks nor a construction in
+//     that pass shift the schedule). It aligns at the first pass after the robot's construction
+//     pass, the first one on core's grid: core's first pass after boot starts right after the
+//     boot hook, off its tick grid, and a robot registered after boot is constructed inside a
+//     pass. It re-aligns after a period change and after a late pass (core restarts its grid; no
+//     catch-up, like upstream's "skip the periods it is behind");
+//   - runs every callback that is due before the middle of the pass (PeriodicPriorityQueue::
+//     RunDue with a horizon of half a pass after the pass start: upstream order and
+//     rescheduling), so that neither the run time of the earlier pre-cycle callbacks nor a pass
+//     that starts up to half a pass late moves a callback to another pass.
 
 #include <stdint.h>
 
@@ -216,9 +222,9 @@ void UpdatePassPeriod() {
 
 // Moves the schedule (and the robot's start time, which later AddPeriodic() calls use) so that
 // the pass grid falls on core's passes.
-void AlignSchedule(int64_t now) {
+void AlignSchedule(int64_t passStart) {
   const int64_t pass = static_cast<int64_t>(gHost.passMs) * kNsPerMs;
-  int64_t delta = Mod(now - gHost.startTime->count(), pass);
+  int64_t delta = Mod(passStart - gHost.startTime->count(), pass);
   if (delta > pass / 2) {
     delta -= pass;
   }
@@ -256,20 +262,26 @@ void RobotPass(void*) {
   if (gHost.callbacks->GetVersion() != gHost.version) {
     UpdatePassPeriod();
   }
+  const int64_t passStart = CycleStartTime();
   const int64_t now = prosdk::RobotController::GetMonotonicTime();
   const uint32_t overruns = LoopOverruns();
-  if (overruns != gHost.overruns) {
+  const bool late = overruns != gHost.overruns;
+  if (late) {
     gHost.overruns = overruns;
-    ReportOverruns(now, overruns);
     gHost.alignPass = pass;  // core restarted its pass grid with this pass
   }
   if (pass == gHost.alignPass) {
-    AlignSchedule(now);
+    AlignSchedule(passStart);
   }
 
-  const nanoseconds lookahead{static_cast<int64_t>(gHost.passMs) * kNsPerMs / 2};
-  if (!Guard([&] { gHost.callbacks->RunDue(nanoseconds{now}, lookahead); })) {
+  // due before the middle of this pass (the horizon is exclusive: RunDue's is inclusive)
+  const int64_t horizon = passStart + static_cast<int64_t>(gHost.passMs) * kNsPerMs / 2 - 1;
+  if (!Guard([&] { gHost.callbacks->RunDue(nanoseconds{now}, nanoseconds{horizon - now}); })) {
     Halt("its loop threw an exception");
+    return;
+  }
+  if (late) {
+    ReportOverruns(passStart, overruns);  // after the loop: the console write does not delay it
   }
 }
 
@@ -329,7 +341,9 @@ void BootRobot(void*) {
   gHost.startTime = loop.startTime;
   gHost.passes = 0;
   UpdatePassPeriod();
-  gHost.alignPass = 0;
+  // pass 0 is the construction pass (a late registration) or core's first pass, which starts
+  // right after the boot hook, off core's grid: align at the next one
+  gHost.alignPass = 1;
   gHost.overruns = LoopOverruns();
 
   gState.store(RobotProgramState::kRunning, std::memory_order_release);

@@ -26,6 +26,7 @@
 #include "prosdk/framework/TimesliceRobot.hpp"
 #include "prosdk/hal/DriverStationTypes.h"
 #include "prosdk/hal/HAL.h"
+#include "prosdk/hal/simulation/MockHooks.h"
 #include "prosdk/opmode/PeriodicOpMode.hpp"
 #include "prosdk/platform/CoreOps.hpp"
 #include "prosdk/platform/RobotHost.hpp"
@@ -98,6 +99,16 @@ RobotMode ModeOfPhase(uint8_t phase) {
   }
 }
 
+// Time the pre-cycle callbacks before the robot host's take in each pass (cycled; empty: none).
+std::vector<int64_t> gPreWorkNs;
+size_t gPreWorkIndex = 0;
+
+void PreCycleWork() {
+  if (!gPreWorkNs.empty()) {
+    HALSIM_StepTiming(gPreWorkNs[gPreWorkIndex++ % gPreWorkNs.size()]);
+  }
+}
+
 // core state -> HAL sim, like the ESP32 Driver Station pump (first pre-cycle callback)
 void MirrorCore(void*) {
   namespace ds = prosdk::sim;
@@ -112,6 +123,7 @@ void MirrorCore(void*) {
   ds::DriverStationSim::SetOpMode(
       id != 0 && HAL_OpMode_GetRobotMode(id) == static_cast<HAL_RobotMode>(mode) ? id : 0);
   ds::DriverStationSim::NotifyNewData();
+  PreCycleWork();
 }
 
 bool gBooted = false;
@@ -149,6 +161,8 @@ void StartProgram() {
   prosdk::sim::PauseTiming();
   prosdk::sim::DriverStationSim::ResetData();
   gCore = FakeCore{};
+  gPreWorkNs.clear();
+  gPreWorkIndex = 0;
   {
     std::scoped_lock lock{gConsoleMutex};
     gConsole.clear();
@@ -334,6 +348,135 @@ TEST_CASE("RobotHost runs each callback once per pass despite pass jitter", "[ro
     CHECK(robot->fastTimes.size() == ++fast);
   }
   CHECK(robot->loopTimes.size() == loops + 6);
+}
+
+namespace {
+
+// ---- pass timing on core's grid (monotonic ns) ----
+
+int64_t NowNs() {
+  return prosdk::RobotController::GetMonotonicTime();
+}
+
+// Core's pass grid. The spacing is core's tick period measured on the monotonic clock: in QEMU a
+// FreeRTOS tick measures 0.99985 ms on esp_timer (design/qemu-bench.md), so it can differ from
+// the period.
+struct PassGrid {
+  int64_t next = 0;     // the next grid point
+  int64_t spacing = 0;  // grid spacing
+  uint64_t index = 0;   // passes run
+
+  // One pass starting lateNs after the next grid point (wake latency, or core's first pass after
+  // boot, which starts off the grid); the pass must end before the following grid point.
+  void Pass(int64_t lateNs = 0) {
+    HALSIM_StepTiming(next + lateNs - NowNs());
+    ++index;
+    pf::detail::PreCycle();
+    pf::detail::PostCycle();
+    next += spacing;
+  }
+};
+PassGrid gGrid;
+
+// A TimedRobot with a configurable period and construction time; records its loops.
+class PassRobot : public prosdk::TimedRobot {
+ public:
+  static inline PassRobot* instance = nullptr;
+  static inline double periodMs = 20;
+  static inline int64_t constructionNs = 0;
+  std::vector<int64_t> loopNs;     // RobotPeriodic, monotonic ns
+  std::vector<uint64_t> loopPass;  // the pass it ran in (PassGrid::index)
+
+  PassRobot() : TimedRobot(prosdk::units::millisecond_t{periodMs}) {
+    instance = this;
+    HALSIM_StepTiming(constructionNs);
+  }
+  ~PassRobot() override { instance = nullptr; }
+  void RobotPeriodic() override {
+    loopNs.push_back(NowNs());
+    loopPass.push_back(gGrid.index);
+  }
+
+  size_t LoopsInPass(uint64_t pass) const {
+    size_t n = 0;
+    for (uint64_t p : loopPass) {
+      n += p == pass ? 1 : 0;
+    }
+    return n;
+  }
+};
+
+// Registers a PassRobot (late registration: core constructs it at the start of the next pass).
+PassRobot* StartPassRobot(double periodMs, int64_t constructionNs, int64_t gridSpacingNs) {
+  PassRobot::periodMs = periodMs;
+  PassRobot::constructionNs = constructionNs;
+  StartProgram<PassRobot>();
+  gGrid = PassGrid{NowNs(), gridSpacingNs, 0};
+  return PassRobot::instance;  // nullptr until the next pass
+}
+
+}  // namespace
+
+TEST_CASE("RobotHost starts the schedule on core's pass grid after a late boot", "[robothost]") {
+  // registered after core's boot: constructed inside the next pass, which the constructor
+  // (2.4 ms) and the earlier pre-cycle callbacks (0.3 / 0.1 ms) make end late
+  StartPassRobot(5, 2400000, 5000000);
+  gPreWorkNs = {300000, 100000};
+  gGrid.Pass();
+  auto* robot = PassRobot::instance;
+  REQUIRE(robot != nullptr);
+  CHECK(gCore.period == 5u);
+  for (int i = 0; i < 40; ++i) {
+    gGrid.Pass();
+  }
+  // upstream: the first loop one period after the TimedRobot constructor, i.e. at the next pass
+  // (not in the construction pass); then exactly one loop per pass
+  CHECK(robot->LoopsInPass(1) == 0u);
+  for (uint64_t pass = 2; pass <= gGrid.index; ++pass) {
+    INFO("pass " << pass);
+    CHECK(robot->LoopsInPass(pass) == 1u);
+  }
+}
+
+TEST_CASE("RobotHost aligns on core's grid when its first pass starts off the grid",
+          "[robothost]") {
+  // core's first pass after boot starts right after the boot hook, off the tick grid (here
+  // 0.9 ms after a grid point); its later passes are on the grid. 2 ms loop: half a pass is
+  // 1 ms. The earlier pre-cycle callbacks take 0.15 ms and 0 ms in turn.
+  StartPassRobot(2, 0, 2000000);
+  gPreWorkNs = {150000, 0};
+  gGrid.Pass(900000);
+  auto* robot = PassRobot::instance;
+  REQUIRE(robot != nullptr);
+  CHECK(gCore.period == 2u);
+  for (int i = 0; i < 100; ++i) {
+    gGrid.Pass();
+  }
+  for (uint64_t pass = 2; pass <= gGrid.index; ++pass) {
+    INFO("pass " << pass);
+    CHECK(robot->LoopsInPass(pass) == 1u);
+  }
+}
+
+TEST_CASE("RobotHost decides what is due from the pass start, not after the pre-cycle callbacks",
+          "[robothost]") {
+  // 5 ms loop. Every other pass the earlier pre-cycle callbacks take 3 ms, more than half a pass:
+  // a due horizon measured from the end of those callbacks would take in the next pass's loop
+  // too. Core's passes also come 1 us early per pass against the monotonic clock (200 ppm; in
+  // QEMU a FreeRTOS tick measures about 150 ppm short on esp_timer), which moves the loop
+  // deadlines by 0.4 ms over the run.
+  StartPassRobot(5, 0, 4999000);
+  gPreWorkNs = {0, 3000000};
+  gGrid.Pass();
+  auto* robot = PassRobot::instance;
+  REQUIRE(robot != nullptr);
+  for (int i = 0; i < 400; ++i) {
+    gGrid.Pass();
+  }
+  for (uint64_t pass = 2; pass <= gGrid.index; ++pass) {
+    INFO("pass " << pass);
+    CHECK(robot->LoopsInPass(pass) == 1u);
+  }
 }
 
 namespace {

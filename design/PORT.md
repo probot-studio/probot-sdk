@@ -221,13 +221,20 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   (`SetLoopPeriodMs`, R6). A callback whose phase is not whole milliseconds (a `PeriodicOpMode`
   callback is timed from the opmode's construction) is moved to the nearest pass instead of
   shrinking the period; one below 1 ms runs once per pass (reported). The schedule is aligned with
-  core's passes (start time and expirations shifted by less than half a pass) at the first pass,
-  after a period change and after a late pass (core restarts its grid). Each pass runs
-  `PeriodicPriorityQueue::RunDue(now, half a pass)`: every callback due by the middle of the next
-  pass, earliest first, rescheduled exactly as `RunCallbacks()` (skips the periods it is behind),
-  so jitter of the earlier pre-cycle callbacks never makes a callback miss its pass. Upstream
+  core's passes (start time and expirations shifted by less than half a pass) on the pass start
+  (`CycleStartTime()`, taken when core enters the pre-cycle hook, before the late boot and
+  pre-cycle callbacks) at the first pass after the robot's construction pass (core's first pass
+  after boot starts off its tick grid; a robot registered after boot is constructed inside a
+  pass), after a period change and after a late pass (core restarts its grid). Each pass runs
+  `PeriodicPriorityQueue::RunDue` for every callback due before the pass start plus half a pass,
+  earliest first, rescheduled exactly as `RunCallbacks()` (skips the periods it is behind), so
+  neither the run time of the earlier pre-cycle callbacks nor a pass that starts up to half a
+  pass late moves a callback to another pass. A pass that changes core's phase and ends late also
+  restarts core's grid, but core does not count it as an overrun (a one-shot hook pass), so the
+  schedule keeps its phase until the next counted overrun or period change; the robot's mode
+  init runs in the pass after the phase change, which core does count. Upstream
   watchdogs (`IterativeRobotBase`, `OpModeRobot`) still report loop overruns; core's late-pass
-  count is reported as a warning (at most once per second).
+  count is reported as a warning (at most once per second, after that pass's callbacks).
 - **Modes and opmodes** come only from the HAL Driver Station layer (`hal-esp32.md`): enabled = core
   `outputsEnabled()`, robot mode from the phase, the active opmode id in INIT/RUN and the selected
   one while idle (R7). `OpModeRobot::PublishOpModes()` sends the opmode list to core

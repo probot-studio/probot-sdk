@@ -12,6 +12,7 @@
 #include <string_view>
 #include <vector>
 
+#include "prosdk/hal/HAL.h"
 #include "prosdk/platform/Console.hpp"
 
 namespace prosdk::platform {
@@ -93,6 +94,8 @@ constinit CoreOps gOps = kDefaultOps;
 constinit std::atomic<uint64_t> gReservedPins{0};
 constinit std::atomic<bool> gEStopped{false};
 constinit std::atomic<bool> gBooted{false};
+// start of core's current loop pass (core's user task only)
+constinit int64_t gCycleStart = 0;
 
 // Core without R9: the text goes to core's telemetry ring, without its level.
 void DefConsoleLevel(uint8_t, const char* text, size_t len) {
@@ -437,6 +440,10 @@ bool EmergencyStopped() noexcept {
   return gEStopped.load(std::memory_order_acquire) || gOps.isEStopped();
 }
 
+int64_t CycleStartTime() noexcept {
+  return gCycleStart;
+}
+
 namespace detail {
 
 void Boot() {
@@ -445,6 +452,7 @@ void Boot() {
 }
 
 void PreCycle() {
+  gCycleStart = HAL_GetMonotonicTime();
   // boot callbacks registered after boot: run once, then drop
   if (gLateBoot.count.load(std::memory_order_acquire) != 0) {
     for (int i = 0; i < kMaxCoreCallbacks; ++i) {

@@ -361,6 +361,13 @@ bool AddEmergencyStopCallback(EmergencyStopCallback callback) noexcept;
 /** True after core reported an emergency stop through EmergencyStop() (latched). */
 bool EmergencyStopped() noexcept;
 
+/**
+ * The monotonic time (HAL_GetMonotonicTime, ns) at which core's current loop pass started: taken
+ * when core's pre-cycle hook is entered, before late boot callbacks and the pre-cycle callbacks,
+ * so it does not include their run time. 0 before the first pass. Core's user task only.
+ */
+int64_t CycleStartTime() noexcept;
+
 namespace detail {
 // Entry points for probot::framework::Hooks (installed by CoreBridge.hpp).
 void Boot();
