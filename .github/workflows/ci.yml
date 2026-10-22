@@ -8,7 +8,7 @@ name: CI
 
 on:
   push:
-    branches: [main, prosdk-2027]
+    branches: [stable, dev]
   pull_request:
 
 env:
