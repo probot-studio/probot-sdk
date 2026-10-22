@@ -226,7 +226,7 @@ All eight are merged into one sketch, **TemplateCommandItems**.
 
 | Kind | Upstream | Ported | Merged | Not ported |
 |---|---|---|---|---|
-| Examples | 38 | 29 | 1 (HAL) | 8 |
+| Examples | 38 | 30 | 1 (HAL) | 7 |
 | Snippets | 31 | 25 | 0 | 6 |
 | Templates | 12 | 7 | 0 | 5 |
 | Command templates | 8 | 0 | 8 (TemplateCommandItems) | 0 |
