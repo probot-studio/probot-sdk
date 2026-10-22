@@ -2,7 +2,9 @@
 # generated PWM motor controllers and GoBildaPinpoint) plus the hand-written prosdk drivers in
 # src/prosdk/drivers (Servo, BTS7960, VNH5019, MPU6050, PCA9685, ProHub; design/drivers.md).
 prosdk_generated_files(_drivers_src drivers "^src/prosdk/impl/drivers/.*\\.cpp$")
-file(GLOB_RECURSE _drivers_hand_src CONFIGURE_DEPENDS "${PROSDK_ROOT}/src/prosdk/drivers/*.cpp")
+# *.c: vendored C sources under src/prosdk/drivers keep their upstream names
+file(GLOB_RECURSE _drivers_hand_src CONFIGURE_DEPENDS "${PROSDK_ROOT}/src/prosdk/drivers/*.cpp"
+     "${PROSDK_ROOT}/src/prosdk/drivers/*.c")
 # re-run configure (header_check.py) when a hand-written driver header is added or removed
 file(GLOB_RECURSE _drivers_hand_headers CONFIGURE_DEPENDS "${PROSDK_ROOT}/src/prosdk/drivers/*.hpp")
 prosdk_add_module(drivers SOURCES ${_drivers_src} ${_drivers_hand_src})

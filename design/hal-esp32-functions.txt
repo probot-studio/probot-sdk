@@ -5,7 +5,7 @@
 # HALSIM_* (simulation/*.h) are needed on the target too: wpilibc's device *Sim classes
 # are compiled into the archive and reference them (systemcore/mockdata/*: stubs that
 # use HAL_SIMDATAVALUE_STUB_CAPI are the reference).
-# 695 functions to define; 36 already defined by the common code; 31 inline in headers.
+# 697 functions to define; 36 already defined by the common code; 31 inline in headers.
 
 ## prosdk/hal/AddressableLED.h (5)
 void HAL_FreeAddressableLED(HAL_AddressableLEDHandle handle)
@@ -592,16 +592,18 @@ void HALSIM_SetEncoderRate(int32_t index, double rate)
 void HALSIM_SetEncoderReset(int32_t index, HAL_Bool reset)
 void HALSIM_SetEncoderReverseDirection(int32_t index, HAL_Bool reverseDirection)
 
-## prosdk/hal/simulation/I2CData.h (9)
+## prosdk/hal/simulation/I2CData.h (11)
 void HALSIM_CancelI2CInitializedCallback(int32_t index, int32_t uid)
 void HALSIM_CancelI2CReadCallback(int32_t index, int32_t uid)
 void HALSIM_CancelI2CWriteCallback(int32_t index, int32_t uid)
 HAL_Bool HALSIM_GetI2CInitialized(int32_t index)
+int32_t HALSIM_GetI2CLastAddress(int32_t index)
 int32_t HALSIM_RegisterI2CInitializedCallback(int32_t index, HAL_NotifyCallback callback, void* param, HAL_Bool initialNotify)
 int32_t HALSIM_RegisterI2CReadCallback(int32_t index, HAL_BufferCallback callback, void* param)
 int32_t HALSIM_RegisterI2CWriteCallback(int32_t index, HAL_ConstBufferCallback callback, void* param)
 void HALSIM_ResetI2CData(int32_t index)
 void HALSIM_SetI2CInitialized(int32_t index, HAL_Bool initialized)
+void HALSIM_SetI2CResultCallback(int32_t index, HALSIM_I2CResultCallback callback, void* param)
 
 ## prosdk/hal/simulation/IMUData.h (10)
 void HALSIM_SetIMUAccelX(double accel)
