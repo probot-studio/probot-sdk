@@ -99,6 +99,8 @@ jobs:
             https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core update-index
           arduino-cli core install "esp32:esp32@${ARDUINO_ESP32_VERSION}"
+          # probot-core depends on it (library.properties depends=Adafruit NeoPixel)
+          arduino-cli lib install "Adafruit NeoPixel"
 
       - name: Archive
         run: tools/build/build.sh esp32s3 prosdk
