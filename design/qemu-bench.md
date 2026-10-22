@@ -197,53 +197,53 @@ Drivers left out, and why:
 
 ## Results
 
-Measured on 2026-10-22, prosdk-2027 at `0294919` plus this change, Arduino-ESP32 3.3.10, QEMU
-`esp-develop-9.2.2-20260417`. Commands: `tools/qemu/run.sh --bench --boots 2 --save-baseline`,
-then `tools/qemu/run.sh --bench --no-build --check` (PASS). Every `instr_per_op` was identical
-across the three boots.
+Measured on 2026-10-22 with the committed sources (prosdk-2027, Arduino-ESP32 3.3.10, QEMU
+`esp-develop-9.2.2-20260417`): `tools/qemu/run.sh --bench --check` (compile and one boot), then
+`tools/qemu/run.sh --bench --no-build --boots 2 --save-baseline`. The two boots had identical
+`instr_per_op`, and the table is the baseline in `tools/qemu/bench-baseline.json`.
 
 | benchmark | iters | per_op_us | instr_per_op | notes |
 |-----------|------:|----------:|-------------:|-------|
-| robot_loop_20ms | 100 | 886.560 | 221640.0 | max 972 us, user mean/max 447.7/534 us, jitter max 3 us (rms 2.7), overruns 0, headroom 95.6 % (min 95.1 %) |
-| robot_loop_10ms | 199 | 883.839 | 220959.8 | max 974 us, user 444.1/533 us, jitter max 998 us (rms 71.0), overruns 0, headroom 91.2 % (min 90.3 %) |
-| robot_loop_5ms | 400 | 893.747 | 223436.9 | max 1885 us, user 446.3/965 us, jitter max 1019 us (rms 662.7), overruns 0, headroom 82.1 % (min 62.3 %) |
-| robot_loop_2ms | 1000 | 886.231 | 221557.8 | max 1423 us, user 443.7/699 us, 999 loops, jitter max 1990 us (rms 170.8), overruns 0, headroom 55.7 % (min 28.9 %) |
-| scheduler_run_0cmd | 2000 | 142.227 | 35556.9 | heap_bytes -656 (nothing held) |
-| scheduler_run_10cmd | 1000 | 278.577 | 69644.2 | heap_bytes 9664 |
-| scheduler_run_50cmd | 400 | 884.683 | 221170.6 | heap_bytes 48212 |
-| scheduler_run_200cmd | 100 | 4919.570 | 1229892.5 | heap_bytes 196488 |
-| scheduler_run_10sub_default | 1000 | 639.863 | 159965.8 | heap_bytes 10884 |
-| scheduler_run_200cmd_10sub_default | 100 | 5454.490 | 1363622.5 | heap_bytes 205800 |
-| rotation2d_rotateby | 20000 | 10.170 | 2542.4 | |
-| pose2d_transformby | 20000 | 12.343 | 3085.9 | |
-| pose2d_exp_log | 10000 | 93.565 | 23391.2 | |
-| diff_odometry_update | 10000 | 75.158 | 18789.5 | |
-| diff_kinematics_to_wheels | 20000 | 1.337 | 334.2 | |
-| swerve_kinematics_to_module_velocities | 5000 | 67.730 | 16932.4 | |
-| swerve_pose_estimator_update | 2000 | 235.130 | 58782.4 | |
-| swerve_pose_estimator_vision | 200 | 629.370 | 157342.5 | |
-| lqr_construct_2x1 | 100 | 1013.970 | 253492.5 | |
-| kalman_2state_predict_correct | 2000 | 282.642 | 70660.4 | |
-| linear_system_loop_2state | 2000 | 314.715 | 78678.8 | |
-| pid_calculate | 20000 | 9.615 | 2403.7 | |
-| simple_motor_ff_calculate | 20000 | 16.942 | 4235.4 | |
-| profiled_pid_calculate | 10000 | 11.197 | 2799.2 | |
-| trapezoid_profile_calculate | 20000 | 8.060 | 2014.9 | |
-| trajectory_generate_2waypoints | 10 | 62251.700 | 15562925.0 | |
-| sleipnir_qp_2var | 20 | 8967.700 | 2241925.0 | |
-| sleipnir_arm_feedforward | 20 | 4466.300 | 1116575.0 | |
-| sleipnir_ellipse2d_nearest | 20 | 4428.750 | 1107187.5 | |
-| nmea_epoch_gga_rmc_gsa | 1000 | 241.759 | 60439.8 | |
-| ubx_navpvt_frame | 2000 | 15.996 | 3999.0 | |
-| mlx90640_extract_parameters | 20 | 63345.300 | 15836325.0 | |
+| robot_loop_20ms | 100 | 886.560 | 221640.0 | max 972 us, user mean/max 447.7/533 us, jitter max 3 us (rms 2.7), overruns 0, headroom 95.6 % (min 95.1 %) |
+| robot_loop_10ms | 199 | 883.884 | 220971.1 | max 973 us, user mean/max 444.1/533 us, jitter max 998 us (rms 71.0), overruns 0, headroom 91.2 % (min 90.3 %) |
+| robot_loop_5ms | 400 | 903.805 | 225951.2 | max 1885 us, user mean/max 450.4/968 us, jitter max 1019 us (rms 666.7), overruns 0, headroom 81.9 % (min 62.3 %) |
+| robot_loop_2ms | 1000 | 888.145 | 222036.2 | max 1809 us, user mean/max 444.9/964 us, 999 loops, jitter max 1990 us (rms 162.2), overruns 0, headroom 55.6 % (min 9.6 %) |
+| scheduler_run_0cmd | 2000 | 138.869 | 34717.1 | heap_bytes -656 (nothing held) |
+| scheduler_run_10cmd | 1000 | 273.666 | 68416.5 | heap_bytes 9664 |
+| scheduler_run_50cmd | 400 | 885.383 | 221345.6 | heap_bytes 48212 |
+| scheduler_run_200cmd | 100 | 4914.480 | 1228620.0 | heap_bytes 196488 |
+| scheduler_run_10sub_default | 1000 | 638.519 | 159629.8 | heap_bytes 10884 |
+| scheduler_run_200cmd_10sub_default | 100 | 5464.930 | 1366232.5 | heap_bytes 205800 |
+| rotation2d_rotateby | 20000 | 10.170 | 2542.5 |  |
+| pose2d_transformby | 20000 | 12.344 | 3085.9 |  |
+| pose2d_exp_log | 10000 | 93.564 | 23391.1 |  |
+| diff_odometry_update | 10000 | 75.158 | 18789.5 |  |
+| diff_kinematics_to_wheels | 20000 | 1.337 | 334.2 |  |
+| swerve_kinematics_to_module_velocities | 5000 | 67.730 | 16932.5 |  |
+| swerve_pose_estimator_update | 2000 | 235.131 | 58782.6 |  |
+| swerve_pose_estimator_vision | 200 | 629.375 | 157343.8 |  |
+| lqr_construct_2x1 | 100 | 1021.140 | 255285.0 |  |
+| kalman_2state_predict_correct | 2000 | 282.442 | 70610.4 |  |
+| linear_system_loop_2state | 2000 | 314.757 | 78689.1 |  |
+| pid_calculate | 20000 | 9.615 | 2403.7 |  |
+| simple_motor_ff_calculate | 20000 | 16.942 | 4235.6 |  |
+| profiled_pid_calculate | 10000 | 11.199 | 2799.8 |  |
+| trapezoid_profile_calculate | 20000 | 8.059 | 2014.7 |  |
+| trajectory_generate_2waypoints | 10 | 62250.500 | 15562625.0 |  |
+| sleipnir_qp_2var | 20 | 8968.100 | 2242025.0 |  |
+| sleipnir_arm_feedforward | 20 | 4466.100 | 1116525.0 |  |
+| sleipnir_ellipse2d_nearest | 20 | 4429.100 | 1107275.0 |  |
+| nmea_epoch_gga_rmc_gsa | 1000 | 241.759 | 60439.8 |  |
+| ubx_navpvt_frame | 2000 | 15.995 | 3998.9 |  |
+| mlx90640_extract_parameters | 20 | 63345.300 | 15836325.0 |  |
 | mlx90640_frame_to_768px | 20 | 11976.350 | 2994087.5 | Ta 39.184, pixel 367 80.18 (host values) |
-| bme688_compensate_sample | 2000 | 26.653 | 6663.2 | |
-| ms5611_compensate_sample | 10000 | 0.682 | 170.6 | |
-| tmag5170_crc4_frame | 20000 | 1.529 | 382.3 | |
-| opt4048_decode_channel_crc | 20000 | 1.045 | 261.1 | |
-| vl53l7cx_swap_buffer_1k | 2000 | 19.726 | 4931.5 | |
+| bme688_compensate_sample | 2000 | 26.653 | 6663.2 |  |
+| ms5611_compensate_sample | 10000 | 0.682 | 170.6 |  |
+| tmag5170_crc4_frame | 20000 | 1.529 | 382.3 |  |
+| opt4048_decode_channel_crc | 20000 | 1.045 | 261.1 |  |
+| vl53l7cx_swap_buffer_1k | 2000 | 19.727 | 4931.6 |  |
 
-Memory (boot of the `--check` run; the other boots differ by a few hundred bytes of heap):
+Memory (boot 1; other builds differ by a few hundred bytes of heap):
 
 | where | heap free | min ever free | largest block |
 |-------|----------:|--------------:|--------------:|
@@ -253,37 +253,41 @@ Memory (boot of the `--check` run; the other boots differ by a few hundred bytes
 | after math | 273964 | 23248 | 139252 |
 | after drivers | 273964 | 23248 | 139252 |
 
-- **Peak group stack (of 24576):** robot 4708, scheduler 3728, math 9088, drivers 5168.
+- **Peak group stack (of 24576):** robot 4708, scheduler 3696, math 9104, drivers 5168.
 - **Minimum free stack of the other tasks:** runner 14180 (of 16384), `prosdk` (HAL notifier)
   2784, `watchdog` 4648, `esp_timer` 7784, `ipc0`/`ipc1` 232/224, `IDLE0`/`IDLE1` 208/312.
 - **Static RAM** (`.data` + `.bss`, from the compile log): 41548 bytes (12 % of 327680).
 - **Flash:** 2034246 bytes (64 % of the 3 MB huge_app partition).
 - **Robot dashboard:** 22 topics, about 15800 sets over the four robots (`BENCH-INFO`).
 
-Determinism: `run.sh --bench --boots 2` printed `== determinism: 2 boots, every instr_per_op
-identical`, and the following `--check` boot matched the baseline exactly. Builds of the same
-sources that differ elsewhere (for example a debug line added in another file) moved some numbers
-by up to 2.4 % between earlier runs, most of all `scheduler_run_0cmd` and `robot_loop_5ms`. That
-comes from code and data layout: alignment, and literal pools in flash-mapped code. It is why the
-default threshold is 10 %, not 1 %.
+Determinism: one binary gives the same counts on every boot. `run.sh --bench --boots 2` printed
+`== determinism: 2 boots, every instr_per_op identical` for this binary and for the previous
+binary; a `--check` boot of the previous binary matched its two-boot baseline exactly. A rebuild
+changes this. After adding only the two-line copyright comment at the top of `QemuBench.ino`,
+which shifts the sketch's line numbers, the counts moved by up to 2.4 %:
+`scheduler_run_0cmd` -2.4 %, `scheduler_run_10cmd` -1.8 %, `robot_loop_5ms` +1.1 %,
+`lqr_construct_2x1` +0.7 %, and under 0.25 % for the rest. Static RAM and flash size were
+unchanged. Earlier builds that differed in unrelated files varied by the same amount. The likely
+cause is code and data placement (alignment, literal pools, flash-mapped code), and this is why
+the default threshold is 10 %, not 1 %.
 
 ## What the numbers mean
 
 - **The robot loop is dominated by fixed per-pass cost, not the period.** One pass costs about
-  886 us of guest time at every period. About 445 us of it is the user `RobotPeriodic`: the
+  885 to 905 us of guest time at every period. About 445 us of it is the user `RobotPeriodic`: the
   scheduler with a drive command, kinematics, two PIDs, feedforward, odometry and telemetry. The
   rest is the HAL/DS pre-cycle, `LoopFunc`, and the dashboard drain and flush.
   - At 20 ms that leaves 95 % headroom.
   - At 5 ms it is 82 % on average and 62 % in the worst pass.
-  - At 2 ms the mean headroom is 56 % and the worst pass leaves 29 %; earlier runs had 1 to 2
-    overruns at 2 ms.
+  - At 2 ms the mean headroom is 56 %, but the worst pass took 1809 us of the 2000 us
+    (10 % left; 29 % in the previous build); earlier runs had 1 to 2 overruns at 2 ms.
   - Given the caveats below, 5 ms looks comfortable and 2 ms marginal. A board has to confirm
     both.
 - **Jitter:** at 20 ms the loop starts land within 3 us of the period. At 10 ms and below some
   loops start one tick (about 1 ms) late. At 5 ms every other loop is about 1 ms late
-  (spacing alternating about 4 ms and 6 ms, rms 663 us). At 2 ms one loop in the window was
+  (spacing alternating about 4 ms and 6 ms, rms 667 us). At 2 ms one loop in the window was
   skipped (999 loops in 1000 passes, jitter max 1990 us). See the open items.
-- **The scheduler scales linearly.** Each `Run()` costs about 35.6k instructions with no commands,
+- **The scheduler scales linearly.** Each `Run()` costs about 34.7k instructions with no commands,
   plus about 6k per scheduled command; 200 commands take about 1.23M instructions, or 4.9 ms.
   Each subsystem with a periodic method and a default command costs about 12k instructions.
   Each scheduled command holds about 980 bytes of heap. With 200 commands the minimum free heap
@@ -349,8 +353,8 @@ default threshold is 10 %, not 1 %.
     run on the tick grid.
 
   It is not explained further here; it needs a look at the robot host's `RunDue` on a board.
-- **2 ms is marginal:** worst-pass headroom is 29 %, there were 1 to 2 overruns in earlier runs,
-  and one skipped loop in this run.
+- **2 ms is marginal:** worst-pass headroom is 10 % (29 % in the previous build), there were 1
+  to 2 overruns in earlier runs, and one loop was skipped in this run.
 - **Scheduler heap:** about 980 bytes per scheduled command (`cmd::Run(...).IgnoringDisable().
   WithName()`, plus the scheduler's bookkeeping); 200 commands brought the minimum free heap to
   23 KB. Worth a look at the command and scheduler allocations if large programs matter.
