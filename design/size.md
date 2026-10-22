@@ -9,7 +9,8 @@ go, why did the wave-3 robot examples grow by 19-36 KB in wave 4, and what can b
 removing API or features and without a global flag change that recompiles the whole archive?
 
 Sections 1-7 predate the Boardoza drivers (`design/boardoza.md`); section 8 measures the archive
-and the sketches with them.
+and the sketches with them; section 9 the sketches against probot-core `feat/small-items` (R14, the
+gzipped Driver Station page).
 
 ## 1. Method
 
@@ -220,7 +221,8 @@ detector; flash +8 B (alignment).
 
 - **Driver Station page compressed** (probot-core): `MAIN_page` is 138,439 B of uncompressed HTML in
   flash; `gzip -9` makes it 39,421 B. Serving it with `Content-Encoding: gzip` saves about 99 KB in
-  every sketch. Core's code, so core request R14 (`design/core-requests.md`).
+  every sketch. Core's code, so core request R14 (`design/core-requests.md`). Done since: core PR #35,
+  measured in section 9 (about 100 KB per sketch).
 - **Linker script `.eh_frame`** (section 3): about 113-150 KB per sketch, arduino-esp32.
 - **Split the explicit instantiations of the state-space classes** into one TU per instantiation.
   `LinearQuadraticRegulator.cpp` (12,612 B of `.eh_frame`), `KalmanFilter` (11,224),
@@ -250,8 +252,9 @@ comparing the object sizes (code + literals + rodata + `.eh_frame` + `.gcc_excep
 - **`-fno-asynchronous-unwind-tables`: no effect** (section 3): it is already off by default on Xtensa.
 - **`-fno-exceptions`: not an option.** WPILib reports errors by throwing; it would remove a feature.
 - The large remaining items are outside prosdk's flags: the linker script's `.eh_frame` placement
-  (section 3, 113-150 KB), probot-core's uncompressed DS page (R14, 99 KB) and libstdc++'s `std::format`
-  support (to_chars tables and locale facets, 250 KB, linked once).
+  (section 3, 113-150 KB) and libstdc++'s `std::format` support (to_chars tables and locale facets,
+  250 KB, linked once). probot-core's uncompressed DS page (R14, 99 KB) was the third; core serves it
+  gzipped since `feat/ds-gzip` (section 9).
 
 ## 8. Boardoza drivers (measured 2026-10-22)
 
@@ -296,3 +299,33 @@ Archive and sketches at `bd0d149` (the Boardoza merge `7174b6f` plus three test/
 
 BoardozaMultizoneToF carries the ST firmware image (about 84 KiB); BoardozaSdLog links ESP-IDF's
 FATFS and SD SPI drivers and `DataLogManager`. The largest is 64 % of the huge_app partition.
+
+## 9. Core small-items: R14 gzipped DS page (measured 2026-10-22)
+
+Archive and sketches at `3450336` (CoreOps ABI 5: core R12 part 1 and R13 wired), probot-core
+`.upstream/probot-core` `sdk-target` at `09a6fe4` (`feat/small-items`: PRs #35 R14, #36 R13, #37 R12
+part 1, stacked on `feat/wall-clock`), one `tools/build/build.sh examples <8 names>` run. "Before" is
+the last number recorded against `feat/wall-clock` (b46069e, now 3ebde55 with the same tree): the
+archive of `bd0d149` for TemplateTimed and DriversShowcase (section 8), of the R9/R10 day for the
+others (design/PORT.md 8.1, design/examples.md).
+
+| Sketch | Flash before | Flash after | Change | Static RAM before | after | Change |
+|---|---:|---:|---:|---:|---:|---:|
+| TemplateTimed | 1,871,876 | 1,771,768 | -100,108 | 71,220 | 71,252 | +32 |
+| TimedRobotDifferential | 1,946,484 | 1,846,484 | -100,000 | 72,196 | 72,276 | +80 |
+| CommandBasedRobot | 2,082,048 | 1,982,192 | -99,856 | 75,316 | 75,348 | +32 |
+| AprilTagFieldPose | 2,097,676 | 1,997,696 | -99,980 | 71,220 | 71,316 | +96 |
+| DriversShowcase | 1,998,728 | 1,898,592 | -100,136 | 72,828 | 72,844 | +16 |
+| HalSmoke | 1,692,585 | 1,591,645 | -100,940 | 73,220 | 73,308 | +88 |
+| BoardozaSdLog | 2,005,393 | 1,905,237 | -100,156 | 74,664 | 74,680 | +16 |
+| TankDriveGamepad | 1,905,864 | 1,805,856 | -100,008 | 71,556 | 71,636 | +80 |
+
+- The flash saving is core R14: the DS page is stored gzipped (about 99 KB less, section 6). The
+  remaining few hundred bytes either way are core's R12/R13 code and prosdk's ABI 5 entries and
+  mappings (the halt stop, RSL / comms-disable count, low voltage, the schema-limit messages), not
+  attributed further. Static RAM grows by 16-96 B (core's R12 state and the new entries); not
+  attributed further.
+- The largest sketch (AprilTagFieldPose) is now 63.5 % of the huge_app partition (was 66.7 %).
+- The HAL link test (`tools/build/hal_link_test.py --compile`, every HAL module linked) against the
+  same core: 1,687,713 B flash, 74,924 B static RAM.
+- The other examples were not re-measured; CI builds all of them against `feat/small-items`.

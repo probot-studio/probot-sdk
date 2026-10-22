@@ -295,6 +295,14 @@ flash) and DriversShowcase 1,998,728 / 72,828 (+160 B; 1,998,568 in design/PORT.
 driver is linked into them, the growth is the six-step e-stop hooks in `SmartIo.cpp` and the
 unwind tables of the SPI pin functions in `HalConfig.cpp` (design/size.md section 8).
 
+Rows marked "(small-items)" were re-measured later on 2026-10-22 with CoreOps ABI 5 (prosdk 3450336)
+against probot-core `feat/small-items` (09a6fe4, R12 part 1, R13 and R14, the core CI builds against);
+every other row was last measured against `feat/wall-clock` as above. Core R14 (the gzipped Driver
+Station page) makes every sketch about 100 KB smaller: 99,856-100,940 B less flash and 16-96 B more
+static RAM in the eight sketches re-measured (design/size.md section 9, which also lists
+TimedRobotDifferential, CommandBasedRobot, AprilTagFieldPose, DriversShowcase and HalSmoke; their
+numbers are in design/PORT.md 8.1). CI builds all examples on every push.
+
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|
 | ArcadeDriveGamepad | 1,906,064 | 71,556 |
@@ -306,7 +314,7 @@ unwind tables of the SPI pin functions in `HalConfig.cpp` (design/size.md sectio
 | BoardozaLoRa | 1,920,648 | 71,872 |
 | BoardozaMultizoneToF | 1,995,000 | 72,372 |
 | BoardozaRotaryArgb | 1,926,612 | 72,544 |
-| BoardozaSdLog | 2,005,393 | 74,664 |
+| BoardozaSdLog (small-items) | 1,905,237 | 74,680 |
 | BoardozaThermalCamera | 1,905,060 | 72,364 |
 | DifferentialDriveBot | 1,971,912 | 73,348 |
 | DifferentialDrivePoseEstimator | 2,093,956 | 75,844 |
@@ -360,12 +368,12 @@ unwind tables of the SPI pin functions in `HalConfig.cpp` (design/size.md sectio
 | SwerveBot | 2,116,600 | 73,348 |
 | SwerveDrivePoseEstimator | 2,127,292 | 75,908 |
 | SysIdRoutine | 2,080,340 | 75,084 |
-| TankDriveGamepad | 1,905,864 | 71,556 |
+| TankDriveGamepad (small-items) | 1,805,856 | 71,636 |
 | TemplateCommandItems | 1,923,316 | 71,348 |
 | TemplateCommandV2 | 1,930,184 | 71,468 |
 | TemplateCommandV2Skeleton | 1,904,380 | 71,348 |
 | TemplateOpMode | 1,871,184 | 71,220 |
-| TemplateTimed | 1,871,744 | 71,220 |
+| TemplateTimed (small-items) | 1,771,768 | 71,252 |
 | TemplateTimedSkeleton | 1,859,744 | 71,220 |
 | TemplateTimeslice | 1,874,968 | 71,220 |
 | TemplateTimesliceSkeleton | 1,863,092 | 71,220 |
