@@ -1,0 +1,109 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/hal/AddressableLED.h"
+
+#include <format>
+
+#include "DigitalInternal.hpp"
+#include "HALInitializer.hpp"
+#include "PortsInternal.hpp"
+#include "mockdata/AddressableLEDDataInternal.hpp"
+#include "prosdk/hal/ErrorHandling.hpp"
+#include "prosdk/hal/Errors.h"
+#include "prosdk/hal/handles/HandlesInternal.hpp"
+
+using namespace prosdk::hal;
+
+namespace prosdk::hal::init {
+void InitializeAddressableLED() {}
+}  // namespace prosdk::hal::init
+
+extern "C" {
+HAL_AddressableLEDHandle HAL_InitializeAddressableLED(
+    int32_t channel, const char* allocationLocation, int32_t* status) {
+  prosdk::hal::init::CheckInit();
+
+  if (channel < 0 || channel >= NUM_ADDRESSABLE_LE_DS) {
+    *status = MakeErrorIndexOutOfRange(HAL_RESOURCE_OUT_OF_RANGE,
+                                       "Invalid Index for AddressableLED", 0,
+                                       NUM_ADDRESSABLE_LE_DS - 1, channel);
+    return HAL_INVALID_HANDLE;
+  }
+
+  auto resource = digitalChannelHandles->Allocate(
+      channel, HAL_HandleEnum::ADDRESSABLE_LED, "AddressableLED");
+
+  if (!resource) {
+    *status = resource.error();
+    return HAL_INVALID_HANDLE;  // failed to allocate. Pass error back.
+  }
+
+  auto [handle, port] = *resource;
+  port->channel = static_cast<uint8_t>(channel);
+
+  SimAddressableLEDData[channel].start = 0;
+  SimAddressableLEDData[channel].length = 0;
+  SimAddressableLEDData[channel].initialized = true;
+  port->previousAllocation = allocationLocation ? allocationLocation : "";
+
+  return handle;
+}
+
+void HAL_FreeAddressableLED(HAL_AddressableLEDHandle handle) {
+  auto port =
+      digitalChannelHandles->Get(handle, HAL_HandleEnum::ADDRESSABLE_LED);
+  // no status, so no need to check for a proper free.
+  digitalChannelHandles->Free(handle, HAL_HandleEnum::ADDRESSABLE_LED);
+  if (port == nullptr) {
+    return;
+  }
+  SimAddressableLEDData[port->channel].initialized = false;
+}
+
+void HAL_SetAddressableLEDStart(HAL_AddressableLEDHandle handle, int32_t start,
+                                int32_t* status) {
+  auto port =
+      digitalChannelHandles->Get(handle, HAL_HandleEnum::ADDRESSABLE_LED);
+  if (!port) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+  if (start > HAL_ADDRESSABLE_LED_MAX_LEN || start < 0) {
+    *status = MakeError(
+        HAL_PARAMETER_OUT_OF_RANGE,
+        std::format(
+            "LED start must be less than or equal to {}. {} was requested",
+            HAL_ADDRESSABLE_LED_MAX_LEN, start));
+    return;
+  }
+  SimAddressableLEDData[port->channel].start = start;
+}
+
+void HAL_SetAddressableLEDLength(HAL_AddressableLEDHandle handle,
+                                 int32_t length, int32_t* status) {
+  auto port =
+      digitalChannelHandles->Get(handle, HAL_HandleEnum::ADDRESSABLE_LED);
+  if (!port) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+  if (length > HAL_ADDRESSABLE_LED_MAX_LEN || length < 0) {
+    *status = MakeError(
+        HAL_PARAMETER_OUT_OF_RANGE,
+        std::format(
+            "LED length must be less than or equal to {}. {} was requested",
+            HAL_ADDRESSABLE_LED_MAX_LEN, length));
+    return;
+  }
+  SimAddressableLEDData[port->channel].length = length;
+}
+
+void HAL_SetAddressableLEDData(int32_t start, int32_t length,
+                               HAL_AddressableLEDColorOrder colorOrder,
+                               const struct HAL_AddressableLEDData* data,
+                               int32_t* status) {
+  SimAddressableLEDDataBuffer->SetData(start, length, data);
+}
+}  // extern "C"

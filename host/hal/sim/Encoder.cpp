@@ -1,0 +1,327 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/hal/Encoder.h"
+
+#include "CounterInternal.hpp"
+#include "HALInitializer.hpp"
+#include "PortsInternal.hpp"
+#include "mockdata/EncoderDataInternal.hpp"
+#include "prosdk/hal/ErrorHandling.hpp"
+#include "prosdk/hal/Errors.h"
+#include "prosdk/hal/handles/HandlesInternal.hpp"
+#include "prosdk/hal/handles/LimitedHandleResource.hpp"
+
+using namespace prosdk::hal;
+
+namespace {
+struct Encoder {
+  HAL_Handle nativeHandle;
+  HAL_FPGAEncoderHandle fpgaHandle;
+  HAL_CounterHandle counterHandle;
+  HAL_EncoderEncodingType encodingType;
+  double distancePerPulse;
+  uint8_t index;
+};
+struct Empty {};
+}  // namespace
+
+static LimitedHandleResource<HAL_EncoderHandle, Encoder,
+                             NUM_ENCODERS + NUM_COUNTERS,
+                             HAL_HandleEnum::ENCODER>* encoderHandles;
+
+static LimitedHandleResource<HAL_FPGAEncoderHandle, Empty, NUM_ENCODERS,
+                             HAL_HandleEnum::FPGA_ENCODER>* fpgaEncoderHandles;
+
+namespace prosdk::hal::init {
+void InitializeEncoder() {
+  static LimitedHandleResource<HAL_FPGAEncoderHandle, Empty, NUM_ENCODERS,
+                               HAL_HandleEnum::FPGA_ENCODER>
+      feH;
+  fpgaEncoderHandles = &feH;
+  static LimitedHandleResource<HAL_EncoderHandle, Encoder,
+                               NUM_ENCODERS + NUM_COUNTERS,
+                               HAL_HandleEnum::ENCODER>
+      eH;
+  encoderHandles = &eH;
+}
+}  // namespace prosdk::hal::init
+
+namespace prosdk::hal {
+bool GetEncoderBaseHandle(HAL_EncoderHandle handle,
+                          HAL_FPGAEncoderHandle* fpgaHandle,
+                          HAL_CounterHandle* counterHandle) {
+  auto encoder = encoderHandles->Get(handle);
+  if (!encoder) {
+    return false;
+  }
+
+  *fpgaHandle = encoder->fpgaHandle;
+  *counterHandle = encoder->counterHandle;
+  return true;
+}
+}  // namespace prosdk::hal
+
+extern "C" {
+HAL_EncoderHandle HAL_InitializeEncoder(int32_t aChannel, int32_t bChannel,
+                                        HAL_Bool reverseDirection,
+                                        HAL_EncoderEncodingType encodingType,
+                                        int32_t* status) {
+  prosdk::hal::init::CheckInit();
+  HAL_Handle nativeHandle = HAL_INVALID_HANDLE;
+  if (encodingType == HAL_EncoderEncodingType::HAL_ENCODER_4X_ENCODING) {
+    // k4x, allocate encoder
+    nativeHandle = fpgaEncoderHandles->Allocate();
+  } else {
+    // k2x or k1x, allocate counter
+    nativeHandle = counterHandles->Allocate();
+  }
+  if (nativeHandle == HAL_INVALID_HANDLE) {
+    *status = HAL_NO_AVAILABLE_RESOURCES;
+    return HAL_INVALID_HANDLE;
+  }
+  auto handle = encoderHandles->Allocate();
+  if (handle == HAL_INVALID_HANDLE) {
+    *status = HAL_NO_AVAILABLE_RESOURCES;
+    return HAL_INVALID_HANDLE;
+  }
+  auto encoder = encoderHandles->Get(handle);
+  if (encoder == nullptr) {  // would only occur on thread issue
+    *status = HAL_HANDLE_ERROR;
+    return HAL_INVALID_HANDLE;
+  }
+  int16_t index = getHandleIndex(handle);
+  SimEncoderData[index].digitalChannelA = aChannel;
+  SimEncoderData[index].digitalChannelB = bChannel;
+  SimEncoderData[index].initialized = true;
+  SimEncoderData[index].reverseDirection = reverseDirection;
+  SimEncoderData[index].simDevice = 0;
+  // TODO: Add encoding type to Sim data
+  encoder->index = index;
+  encoder->nativeHandle = nativeHandle;
+  encoder->encodingType = encodingType;
+  encoder->distancePerPulse = 1.0;
+  if (encodingType == HAL_EncoderEncodingType::HAL_ENCODER_4X_ENCODING) {
+    encoder->fpgaHandle = nativeHandle;
+    encoder->counterHandle = HAL_INVALID_HANDLE;
+  } else {
+    encoder->fpgaHandle = HAL_INVALID_HANDLE;
+    encoder->counterHandle = nativeHandle;
+  }
+  return handle;
+}
+
+void HAL_FreeEncoder(HAL_EncoderHandle encoderHandle) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  encoderHandles->Free(encoderHandle);
+  if (encoder == nullptr) {
+    return;
+  }
+  if (isHandleType(encoder->nativeHandle, HAL_HandleEnum::FPGA_ENCODER)) {
+    fpgaEncoderHandles->Free(encoder->nativeHandle);
+  } else if (isHandleType(encoder->nativeHandle, HAL_HandleEnum::COUNTER)) {
+    counterHandles->Free(encoder->nativeHandle);
+  }
+  SimEncoderData[encoder->index].initialized = false;
+}
+
+void HAL_SetEncoderSimDevice(HAL_EncoderHandle handle,
+                             HAL_SimDeviceHandle device) {
+  auto encoder = encoderHandles->Get(handle);
+  if (encoder == nullptr) {
+    return;
+  }
+  SimEncoderData[encoder->index].simDevice = device;
+}
+
+static inline int EncodingScaleFactor(Encoder* encoder) {
+  switch (encoder->encodingType) {
+    case HAL_ENCODER_1X_ENCODING:
+      return 1;
+    case HAL_ENCODER_2X_ENCODING:
+      return 2;
+    case HAL_ENCODER_4X_ENCODING:
+      return 4;
+    default:
+      return 0;
+  }
+}
+
+static inline double DecodingScaleFactor(Encoder* encoder) {
+  switch (encoder->encodingType) {
+    case HAL_ENCODER_1X_ENCODING:
+      return 1.0;
+    case HAL_ENCODER_2X_ENCODING:
+      return 0.5;
+    case HAL_ENCODER_4X_ENCODING:
+      return 0.25;
+    default:
+      return 0.0;
+  }
+}
+
+int32_t HAL_GetEncoder(HAL_EncoderHandle encoderHandle, int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  return SimEncoderData[encoder->index].count;
+}
+int32_t HAL_GetEncoderRaw(HAL_EncoderHandle encoderHandle, int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  return SimEncoderData[encoder->index].count /
+         DecodingScaleFactor(encoder.get());
+}
+int32_t HAL_GetEncoderEncodingScale(HAL_EncoderHandle encoderHandle,
+                                    int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  return EncodingScaleFactor(encoder.get());
+}
+void HAL_ResetEncoder(HAL_EncoderHandle encoderHandle, int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+
+  SimEncoderData[encoder->index].reset = true;
+  SimEncoderData[encoder->index].count = 0;
+}
+HAL_Bool HAL_GetEncoderStopped(HAL_EncoderHandle encoderHandle,
+                               int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  return SimEncoderData[encoder->index].rate == 0;
+}
+HAL_Bool HAL_GetEncoderDirection(HAL_EncoderHandle encoderHandle,
+                                 int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  return SimEncoderData[encoder->index].direction;
+}
+double HAL_GetEncoderDistance(HAL_EncoderHandle encoderHandle,
+                              int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  return SimEncoderData[encoder->index].count * encoder->distancePerPulse;
+}
+double HAL_GetEncoderRate(HAL_EncoderHandle encoderHandle, int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  return SimEncoderData[encoder->index].rate;
+}
+void HAL_SetEncoderRateWindow(HAL_EncoderHandle encoderHandle,
+                              int32_t windowMilliseconds, int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+
+  if (windowMilliseconds < 5 || windowMilliseconds > 255) {
+    *status = HAL_PARAMETER_OUT_OF_RANGE;
+    return;
+  }
+
+  *status = 0;
+}
+void HAL_SetEncoderDistancePerPulse(HAL_EncoderHandle encoderHandle,
+                                    double distancePerPulse, int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+
+  if (distancePerPulse == 0.0) {
+    *status =
+        MakeError(HAL_PARAMETER_OUT_OF_RANGE, "distancePerPulse must not be 0");
+    return;
+  }
+  encoder->distancePerPulse = distancePerPulse;
+  SimEncoderData[encoder->index].distancePerPulse = distancePerPulse;
+}
+void HAL_SetEncoderReverseDirection(HAL_EncoderHandle encoderHandle,
+                                    HAL_Bool reverseDirection,
+                                    int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+
+  SimEncoderData[encoder->index].reverseDirection = reverseDirection;
+}
+int32_t HAL_GetEncoderFPGAIndex(HAL_EncoderHandle encoderHandle,
+                                int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  return encoder->index;
+}
+
+double HAL_GetEncoderDecodingScaleFactor(HAL_EncoderHandle encoderHandle,
+                                         int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0.0;
+  }
+
+  return DecodingScaleFactor(encoder.get());
+}
+
+double HAL_GetEncoderDistancePerPulse(HAL_EncoderHandle encoderHandle,
+                                      int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0.0;
+  }
+
+  return SimEncoderData[encoder->index].distancePerPulse;
+}
+
+HAL_EncoderEncodingType HAL_GetEncoderEncodingType(
+    HAL_EncoderHandle encoderHandle, int32_t* status) {
+  auto encoder = encoderHandles->Get(encoderHandle);
+  if (encoder == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return HAL_ENCODER_4X_ENCODING;  // default to k4x
+  }
+
+  return encoder->encodingType;
+}
+}  // extern "C"

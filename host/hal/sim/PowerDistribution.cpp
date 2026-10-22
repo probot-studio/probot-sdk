@@ -1,0 +1,201 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/hal/PowerDistribution.h"
+
+#include "CANAPIInternal.hpp"
+#include "HALInitializer.hpp"
+#include "PortsInternal.hpp"
+#include "mockdata/PowerDistributionDataInternal.hpp"
+#include "prosdk/hal/CANAPI.h"
+#include "prosdk/hal/ErrorHandling.hpp"
+#include "prosdk/hal/Errors.h"
+
+using namespace prosdk::hal;
+
+static constexpr HAL_CANManufacturer manufacturer =
+    HAL_CANManufacturer::HAL_CAN_MAN_CTRE;
+
+static constexpr HAL_CANDeviceType deviceType =
+    HAL_CANDeviceType::HAL_CAN_DEV_POWER_DISTRIBUTION;
+
+namespace prosdk::hal::init {
+void InitializePowerDistribution() {}
+}  // namespace prosdk::hal::init
+
+extern "C" {
+HAL_PowerDistributionHandle HAL_InitializePowerDistribution(
+    int32_t busId, int32_t module, HAL_PowerDistributionType type,
+    const char* allocationLocation, int32_t* status) {
+  if (type == HAL_POWER_DISTRIBUTION_AUTOMATIC) {
+    if (module != HAL_DEFAULT_POWER_DISTRIBUTION_MODULE) {
+      *status =
+          MakeError(HAL_PARAMETER_OUT_OF_RANGE,
+                    "Automatic PowerDistributionType must have default module");
+      return HAL_INVALID_HANDLE;
+    }
+
+    // TODO Make this not matter
+    type = HAL_POWER_DISTRIBUTION_CTRE;
+    module = 0;
+  }
+
+  if (!HAL_CheckPowerDistributionModule(module, type)) {
+    if (type == HAL_PowerDistributionType::HAL_POWER_DISTRIBUTION_CTRE) {
+      *status = MakeErrorIndexOutOfRange(HAL_RESOURCE_OUT_OF_RANGE,
+                                         "Invalid Index for CTRE PDP", 0,
+                                         NUM_CTREPDP_MODULES - 1, module);
+    } else {
+      *status = MakeErrorIndexOutOfRange(HAL_RESOURCE_OUT_OF_RANGE,
+                                         "Invalid Index for REV PDH", 1,
+                                         NUM_REVPDH_MODULES, module);
+    }
+    return HAL_INVALID_HANDLE;
+  }
+  prosdk::hal::init::CheckInit();
+  SimPowerDistributionData[module].initialized = true;
+  auto handle =
+      HAL_InitializeCAN(busId, manufacturer, module, deviceType, status);
+
+  if (*status != 0) {
+    HAL_CleanCAN(handle);
+    return HAL_INVALID_HANDLE;
+  }
+
+  return handle;
+}
+
+int32_t HAL_GetPowerDistributionModuleNumber(HAL_PowerDistributionHandle handle,
+                                             int32_t* status) {
+  auto module = prosdk::hal::can::GetCANModuleFromHandle(handle, status);
+  if (*status != 0) {
+    return 0;
+  }
+  return module;
+}
+
+HAL_Bool HAL_CheckPowerDistributionModule(int32_t module,
+                                          HAL_PowerDistributionType type) {
+  if (type == HAL_PowerDistributionType::HAL_POWER_DISTRIBUTION_CTRE) {
+    return module < NUM_CTREPDP_MODULES && module >= 0;
+  } else {
+    return module <= NUM_REVPDH_MODULES && module >= 1;
+  }
+}
+
+HAL_Bool HAL_CheckPowerDistributionChannel(HAL_PowerDistributionHandle handle,
+                                           int32_t channel) {
+  // TODO make this grab from the handle directly
+  if (false) {
+    return channel < NUM_CTREPDP_CHANNELS && channel >= 0;
+  } else {
+    return channel < NUM_REVPDH_CHANNELS && channel >= 0;
+  }
+}
+
+HAL_PowerDistributionType HAL_GetPowerDistributionType(
+    HAL_PowerDistributionHandle handle, int32_t* status) {
+  return HAL_PowerDistributionType::HAL_POWER_DISTRIBUTION_CTRE;
+}
+
+int32_t HAL_GetPowerDistributionNumChannels(HAL_PowerDistributionHandle handle,
+                                            int32_t* status) {
+  // TODO make this grab from the handle directly
+  if (false) {
+    return NUM_CTREPDP_CHANNELS;
+  } else {
+    return NUM_REVPDH_CHANNELS;
+  }
+}
+
+void HAL_CleanPowerDistribution(HAL_PowerDistributionHandle handle) {
+  HAL_CleanCAN(handle);
+}
+
+double HAL_GetPowerDistributionTemperature(HAL_PowerDistributionHandle handle,
+                                           int32_t* status) {
+  auto module = prosdk::hal::can::GetCANModuleFromHandle(handle, status);
+  if (*status != 0) {
+    return 0.0;
+  }
+  return SimPowerDistributionData[module].temperature;
+}
+double HAL_GetPowerDistributionVoltage(HAL_PowerDistributionHandle handle,
+                                       int32_t* status) {
+  auto module = prosdk::hal::can::GetCANModuleFromHandle(handle, status);
+  if (*status != 0) {
+    return 0.0;
+  }
+  return SimPowerDistributionData[module].voltage;
+}
+double HAL_GetPowerDistributionChannelCurrent(
+    HAL_PowerDistributionHandle handle, int32_t channel, int32_t* status) {
+  auto module = prosdk::hal::can::GetCANModuleFromHandle(handle, status);
+  if (*status != 0) {
+    return 0.0;
+  }
+  return SimPowerDistributionData[module].current[channel];
+}
+void HAL_GetPowerDistributionAllChannelCurrents(
+    HAL_PowerDistributionHandle handle, double* currents,
+    int32_t currentsLength, int32_t* status) {
+  auto module = prosdk::hal::can::GetCANModuleFromHandle(handle, status);
+  if (*status != 0) {
+    return;
+  }
+
+  auto& data = SimPowerDistributionData[module];
+  int toCopy = (std::min)(currentsLength, NUM_PD_SIM_CHANNELS);
+  for (int i = 0; i < toCopy; i++) {
+    currents[i] = data.current[i];
+  }
+}
+double HAL_GetPowerDistributionTotalCurrent(HAL_PowerDistributionHandle handle,
+                                            int32_t* status) {
+  auto module = prosdk::hal::can::GetCANModuleFromHandle(handle, status);
+  if (*status != 0) {
+    return 0.0;
+  }
+
+  double total = 0.0;
+  auto& data = SimPowerDistributionData[module];
+  for (int i = 0; i < NUM_PD_SIM_CHANNELS; i++) {
+    total += data.current[i];
+  }
+  return total;
+}
+double HAL_GetPowerDistributionTotalPower(HAL_PowerDistributionHandle handle,
+                                          int32_t* status) {
+  double voltage = HAL_GetPowerDistributionVoltage(handle, status);
+  double current = HAL_GetPowerDistributionTotalCurrent(handle, status);
+  return voltage * current;
+}
+double HAL_GetPowerDistributionTotalEnergy(HAL_PowerDistributionHandle handle,
+                                           int32_t* status) {
+  return 0.0;
+}
+void HAL_ResetPowerDistributionTotalEnergy(HAL_PowerDistributionHandle handle,
+                                           int32_t* status) {}
+void HAL_ClearPowerDistributionStickyFaults(HAL_PowerDistributionHandle handle,
+                                            int32_t* status) {}
+void HAL_SetPowerDistributionSwitchableChannel(
+    HAL_PowerDistributionHandle handle, HAL_Bool state, int32_t* status) {}
+
+HAL_Bool HAL_GetPowerDistributionSwitchableChannel(
+    HAL_PowerDistributionHandle handle, int32_t* status) {
+  return false;
+}
+
+void HAL_GetPowerDistributionVersion(HAL_PowerDistributionHandle handle,
+                                     HAL_PowerDistributionVersion* version,
+                                     int32_t* status) {}
+
+void HAL_GetPowerDistributionFaults(HAL_PowerDistributionHandle handle,
+                                    HAL_PowerDistributionFaults* faults,
+                                    int32_t* status) {}
+
+void HAL_GetPowerDistributionStickyFaults(
+    HAL_PowerDistributionHandle handle,
+    HAL_PowerDistributionStickyFaults* stickyFaults, int32_t* status) {}
+}  // extern "C"

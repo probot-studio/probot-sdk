@@ -1,0 +1,29 @@
+diff --git a/src/prosdk/impl/datalog/cpp/DataLog.cpp b/src/prosdk/impl/datalog/cpp/DataLog.cpp
+index e04daf1..6c9bae0 100644
+--- a/src/prosdk/impl/datalog/cpp/DataLog.cpp
++++ b/src/prosdk/impl/datalog/cpp/DataLog.cpp
+@@ -19,6 +19,7 @@
+ #include "prosdk/util/print.hpp"
+ #include "prosdk/util/string.hpp"
+ #include "prosdk/util/timestamp.hpp"
++#include "prosdk/platform/Console.hpp"
+ 
+ using namespace prosdk::log;
+ 
+@@ -26,10 +27,12 @@ static constexpr size_t RECORD_MAX_HEADER_SIZE = 17;
+ 
+ static void DefaultLog(unsigned int level, const char* file, unsigned int line,
+                        const char* msg) {
+-  if (level > prosdk::util::WPI_LOG_INFO) {
+-    prosdk::util::print(stderr, "DataLog: {}\n", msg);
+-  } else if (level == prosdk::util::WPI_LOG_INFO) {
+-    prosdk::util::print("DataLog: {}\n", msg);
++  // prosdk: platform console (DS console on the robot) instead of stdout/stderr
++  if (level >= prosdk::util::WPI_LOG_INFO) {
++    std::string text{"DataLog: "};
++    text += msg;
++    text += '\n';
++    prosdk::platform::ConsoleWrite(text);
+   }
+ }
+ 

@@ -1,0 +1,22 @@
+diff --git a/src/prosdk/impl/hal/cpp/FIRSTDriverStation.cpp b/src/prosdk/impl/hal/cpp/FIRSTDriverStation.cpp
+index 665608e..98f05db 100644
+--- a/src/prosdk/impl/hal/cpp/FIRSTDriverStation.cpp
++++ b/src/prosdk/impl/hal/cpp/FIRSTDriverStation.cpp
+@@ -15,6 +15,7 @@
+ #include "prosdk/hal/DashboardOpMode.hpp"
+ #include "prosdk/hal/cpp/MrcLibDs.hpp"
+ #include "prosdk/hal/monotonic_clock.hpp"
++#include "prosdk/platform/Console.hpp"
+ #include "prosdk/util/Synchronization.hpp"
+ #include "prosdk/util/mutex.hpp"
+ 
+@@ -24,7 +25,8 @@ prosdk::hal::MrcLibDs::~MrcLibDs() = default;
+ 
+ static void DefaultPrintErrorImpl(const struct WPI_String* line) {
+   if (line && line->str) {
+-    std::fwrite(line->str, line->len, 1, stderr);
++    // prosdk: diagnostics go to the platform console, never stdio (design/PORT.md section 7)
++    prosdk::platform::ConsoleWrite({line->str, line->len});
+   }
+ }
+ 

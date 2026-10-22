@@ -1,0 +1,112 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/hal/DutyCycle.h"
+
+#include <string>
+
+#include "HALInitializer.hpp"
+#include "PortsInternal.hpp"
+#include "mockdata/DutyCycleDataInternal.hpp"
+#include "prosdk/hal/Errors.h"
+#include "prosdk/hal/handles/HandlesInternal.hpp"
+#include "prosdk/hal/handles/IndexedHandleResource.hpp"
+
+using namespace prosdk::hal;
+
+namespace {
+struct DutyCycle {
+  uint8_t index;
+  std::string previousAllocation;
+};
+struct Empty {};
+}  // namespace
+
+static IndexedHandleResource<HAL_DutyCycleHandle, DutyCycle, NUM_DUTY_CYCLES,
+                             HAL_HandleEnum::DUTY_CYCLE>* dutyCycleHandles;
+
+namespace prosdk::hal::init {
+void InitializeDutyCycle() {
+  static IndexedHandleResource<HAL_DutyCycleHandle, DutyCycle, NUM_DUTY_CYCLES,
+                               HAL_HandleEnum::DUTY_CYCLE>
+      dcH;
+  dutyCycleHandles = &dcH;
+}
+}  // namespace prosdk::hal::init
+
+extern "C" {
+HAL_DutyCycleHandle HAL_InitializeDutyCycle(int32_t channel,
+                                            const char* allocationLocation,
+                                            int32_t* status) {
+  prosdk::hal::init::CheckInit();
+
+  auto resource = dutyCycleHandles->Allocate(channel, "Duty Cycle");
+
+  if (!resource) {
+    *status = resource.error();
+    return HAL_INVALID_HANDLE;  // failed to allocate. Pass error back.
+  }
+
+  auto [handle, dutyCycle] = *resource;
+  int16_t index = getHandleIndex(handle);
+  SimDutyCycleData[index].initialized = true;
+  SimDutyCycleData[index].simDevice = 0;
+  dutyCycle->index = index;
+  dutyCycle->previousAllocation = allocationLocation ? allocationLocation : "";
+  return handle;
+}
+void HAL_FreeDutyCycle(HAL_DutyCycleHandle dutyCycleHandle) {
+  auto dutyCycle = dutyCycleHandles->Get(dutyCycleHandle);
+  dutyCycleHandles->Free(dutyCycleHandle);
+  if (dutyCycle == nullptr) {
+    return;
+  }
+  SimDutyCycleData[dutyCycle->index].initialized = false;
+}
+
+void HAL_SetDutyCycleSimDevice(HAL_DutyCycleHandle handle,
+                               HAL_SimDeviceHandle device) {
+  auto dutyCycle = dutyCycleHandles->Get(handle);
+  if (dutyCycle == nullptr) {
+    return;
+  }
+  SimDutyCycleData[dutyCycle->index].simDevice = device;
+}
+
+double HAL_GetDutyCycleFrequency(HAL_DutyCycleHandle dutyCycleHandle,
+                                 int32_t* status) {
+  auto dutyCycle = dutyCycleHandles->Get(dutyCycleHandle);
+  if (dutyCycle == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+  return SimDutyCycleData[dutyCycle->index].frequency;
+}
+
+double HAL_GetDutyCycleOutput(HAL_DutyCycleHandle dutyCycleHandle,
+                              int32_t* status) {
+  auto dutyCycle = dutyCycleHandles->Get(dutyCycleHandle);
+  if (dutyCycle == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+  return SimDutyCycleData[dutyCycle->index].output;
+}
+
+int32_t HAL_GetDutyCycleHighTime(HAL_DutyCycleHandle dutyCycleHandle,
+                                 int32_t* status) {
+  auto dutyCycle = dutyCycleHandles->Get(dutyCycleHandle);
+  if (dutyCycle == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  if (SimDutyCycleData[dutyCycle->index].frequency == 0) {
+    return 0;
+  }
+
+  double period = 1e9 / SimDutyCycleData[dutyCycle->index].frequency;  // ns
+  return period * SimDutyCycleData[dutyCycle->index].output;
+}
+}  // extern "C"

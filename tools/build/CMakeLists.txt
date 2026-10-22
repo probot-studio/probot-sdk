@@ -98,6 +98,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/modules/platform.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/wpiutil.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/telemetry.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/tunables.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/modules/hal.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/modules/datalog.cmake")
 
 # libprosdk.a from every module's objects
 get_property(_modules GLOBAL PROPERTY PROSDK_MODULES)

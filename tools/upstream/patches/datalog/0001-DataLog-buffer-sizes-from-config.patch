@@ -1,0 +1,32 @@
+diff --git a/src/prosdk/datalog/DataLog.hpp b/src/prosdk/datalog/DataLog.hpp
+index 2d61dda..3f146da 100644
+--- a/src/prosdk/datalog/DataLog.hpp
++++ b/src/prosdk/datalog/DataLog.hpp
+@@ -27,6 +27,7 @@
+ #include "prosdk/util/string.h"
+ #include "prosdk/util/struct/Struct.hpp"
+ #include "prosdk/util/timestamp.hpp"
++#include "prosdk/platform/DataLogConfig.hpp"  // prosdk: MCU buffer sizes
+ 
+ namespace prosdk::util {
+ class Logger;
+@@ -380,7 +381,7 @@ class DataLog {
+                          int64_t timestamp);
+ 
+  protected:
+-  static constexpr size_t BLOCK_SIZE = 16 * 1024;
++  static constexpr size_t BLOCK_SIZE = PROSDK_DATALOG_BLOCK_SIZE;
+   static prosdk::util::Logger s_defaultMessageLog;
+ 
+   class Buffer {
+@@ -487,8 +488,8 @@ class DataLog {
+   virtual bool BufferFull() = 0;
+ 
+  private:
+-  static constexpr size_t MAX_BUFFER_COUNT = 1024 * 1024 / BLOCK_SIZE;
+-  static constexpr size_t MAX_FREE_COUNT = 256 * 1024 / BLOCK_SIZE;
++  static constexpr size_t MAX_BUFFER_COUNT = PROSDK_DATALOG_MAX_BUFFER_COUNT;
++  static constexpr size_t MAX_FREE_COUNT = PROSDK_DATALOG_MAX_FREE_COUNT;
+ 
+   // must be called with m_mutex held
+   int StartImpl(std::string_view name, std::string_view type,

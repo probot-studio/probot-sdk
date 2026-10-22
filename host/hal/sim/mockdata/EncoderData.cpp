@@ -1,0 +1,118 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "../PortsInternal.hpp"
+#include "EncoderDataInternal.hpp"
+
+using namespace prosdk::hal;
+
+namespace prosdk::hal::init {
+void InitializeEncoderData() {
+  static EncoderData sed[NUM_ENCODERS];
+  ::prosdk::hal::SimEncoderData = sed;
+}
+}  // namespace prosdk::hal::init
+
+EncoderData* prosdk::hal::SimEncoderData;
+void EncoderData::ResetData() {
+  digitalChannelA = 0;
+  digitalChannelB = 0;
+  initialized.Reset(false);
+  simDevice = 0;
+  count.Reset(0);
+  rate.Reset(0);
+  reset.Reset(false);
+  direction.Reset(false);
+  reverseDirection.Reset(false);
+  distancePerPulse.Reset(1);
+}
+
+extern "C" {
+int32_t HALSIM_FindEncoderForChannel(int32_t channel) {
+  for (int i = 0; i < NUM_ENCODERS; ++i) {
+    if (!SimEncoderData[i].initialized) {
+      continue;
+    }
+    if (SimEncoderData[i].digitalChannelA == channel ||
+        SimEncoderData[i].digitalChannelB == channel) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void HALSIM_ResetEncoderData(int32_t index) {
+  SimEncoderData[index].ResetData();
+}
+
+int32_t HALSIM_GetEncoderDigitalChannelA(int32_t index) {
+  return SimEncoderData[index].digitalChannelA;
+}
+
+int32_t HALSIM_GetEncoderDigitalChannelB(int32_t index) {
+  return SimEncoderData[index].digitalChannelB;
+}
+
+HAL_SimDeviceHandle HALSIM_GetEncoderSimDevice(int32_t index) {
+  return SimEncoderData[index].simDevice;
+}
+
+#define DEFINE_CAPI(TYPE, CAPINAME, LOWERNAME)                  \
+  HAL_SIMDATAVALUE_DEFINE_CAPI(TYPE, HALSIM, Encoder##CAPINAME, \
+                               SimEncoderData, LOWERNAME)
+
+DEFINE_CAPI(HAL_Bool, Initialized, initialized)
+DEFINE_CAPI(double, Rate, rate)
+DEFINE_CAPI(HAL_Bool, Reset, reset)
+DEFINE_CAPI(HAL_Bool, Direction, direction)
+DEFINE_CAPI(HAL_Bool, ReverseDirection, reverseDirection)
+DEFINE_CAPI(double, DistancePerPulse, distancePerPulse)
+
+int32_t HALSIM_RegisterEncoderCountCallback(int32_t index,
+                                            HAL_NotifyCallback callback,
+                                            void* param,
+                                            HAL_Bool initialNotify) {
+  return SimEncoderData[index].count.RegisterCallback(callback, param,
+                                                      initialNotify);
+}
+
+void HALSIM_CancelEncoderCountCallback(int32_t index, int32_t uid) {
+  SimEncoderData[index].count.CancelCallback(uid);
+}
+
+int32_t HALSIM_GetEncoderCount(int32_t index) {
+  return SimEncoderData[index].count;
+}
+
+void HALSIM_SetEncoderCount(int32_t index, int32_t count) {
+  SimEncoderData[index].count = count;
+  SimEncoderData[index].reset = false;
+}
+
+void HALSIM_SetEncoderDistance(int32_t index, double distance) {
+  auto& simData = SimEncoderData[index];
+  simData.count = distance / simData.distancePerPulse;
+  simData.reset = false;
+}
+
+double HALSIM_GetEncoderDistance(int32_t index) {
+  auto& simData = SimEncoderData[index];
+  return simData.count * simData.distancePerPulse;
+}
+
+#define REGISTER(NAME) \
+  SimEncoderData[index].NAME.RegisterCallback(callback, param, initialNotify)
+
+void HALSIM_RegisterEncoderAllCallbacks(int32_t index,
+                                        HAL_NotifyCallback callback,
+                                        void* param, HAL_Bool initialNotify) {
+  REGISTER(initialized);
+  REGISTER(count);
+  REGISTER(rate);
+  REGISTER(reset);
+  REGISTER(direction);
+  REGISTER(reverseDirection);
+  REGISTER(distancePerPulse);
+}
+}  // extern "C"

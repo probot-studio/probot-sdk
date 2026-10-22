@@ -1,0 +1,84 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/hal/simulation/PWMData.h"
+
+#include <string>
+
+#include <catch2/catch_test_macros.hpp>
+
+#include "prosdk/hal/Errors.h"
+#include "prosdk/hal/HAL.h"
+#include "prosdk/hal/PWM.h"
+#include "prosdk/hal/handles/HandlesInternal.hpp"
+
+namespace prosdk::hal {
+
+std::string gTestPwmCallbackName;
+HAL_Value gTestPwmCallbackValue;
+
+void TestPwmInitializationCallback(const char* name, void* param,
+                                   const struct HAL_Value* value) {
+  gTestPwmCallbackName = name;
+  gTestPwmCallbackValue = *value;
+}
+
+TEST_CASE("PWMSimTest PwmInitialization", "[hal][mockdata]") {
+  const int INDEX_TO_TEST = 7;
+
+  int callbackParam = 0;
+  int callbackId = HALSIM_RegisterPWMInitializedCallback(
+      INDEX_TO_TEST, &TestPwmInitializationCallback, &callbackParam, false);
+  REQUIRE(0 != callbackId);
+
+  int32_t status = 0;
+  int32_t channel = 0;
+  HAL_DigitalHandle pwmHandle;
+
+  // Use out of range index
+  channel = 8000;
+  gTestPwmCallbackName = "Unset";
+  pwmHandle = HAL_InitializePWMPort(channel, nullptr, &status);
+  CHECK(HAL_INVALID_HANDLE == pwmHandle);
+  CHECK(HAL_USE_LAST_ERROR == status);
+  HAL_GetLastError(&status);
+  CHECK(HAL_RESOURCE_OUT_OF_RANGE == status);
+  CHECK("Unset" == gTestPwmCallbackName);
+
+  // Successful setup
+  status = 0;
+  channel = INDEX_TO_TEST;
+  gTestPwmCallbackName = "Unset";
+  pwmHandle = HAL_InitializePWMPort(channel, nullptr, &status);
+  CHECK(HAL_INVALID_HANDLE != pwmHandle);
+  CHECK(0 == status);
+  CHECK("Initialized" == gTestPwmCallbackName);
+
+  // Double initialize... should fail
+  status = 0;
+  channel = INDEX_TO_TEST;
+  gTestPwmCallbackName = "Unset";
+  pwmHandle = HAL_InitializePWMPort(channel, nullptr, &status);
+  CHECK(HAL_INVALID_HANDLE == pwmHandle);
+  CHECK(HAL_USE_LAST_ERROR == status);
+  HAL_GetLastError(&status);
+  CHECK(HAL_RESOURCE_IS_ALLOCATED == status);
+  CHECK("Unset" == gTestPwmCallbackName);
+
+  // Reset, should allow you to re-register
+  prosdk::hal::HandleBase::ResetGlobalHandles();
+  HALSIM_ResetPWMData(INDEX_TO_TEST);
+  callbackId = HALSIM_RegisterPWMInitializedCallback(
+      INDEX_TO_TEST, &TestPwmInitializationCallback, &callbackParam, false);
+
+  status = 0;
+  channel = INDEX_TO_TEST;
+  gTestPwmCallbackName = "Unset";
+  pwmHandle = HAL_InitializePWMPort(channel, nullptr, &status);
+  CHECK(HAL_INVALID_HANDLE != pwmHandle);
+  CHECK(0 == status);
+  CHECK("Initialized" == gTestPwmCallbackName);
+  HALSIM_CancelPWMInitializedCallback(INDEX_TO_TEST, callbackId);
+}
+}  // namespace prosdk::hal

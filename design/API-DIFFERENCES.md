@@ -30,6 +30,7 @@ the Java names are the same upper-case words, so there is no other spelling to u
 |---|---|---|
 | `wpi::util::Alert::Level::HIGH` / `MEDIUM` / `LOW` | `prosdk::util::Alert::Level::kHigh` / `kMedium` / `kLow` | `HIGH`, `LOW` |
 | `wpi::tunables::TunableConfig::Polling::DEFAULT` / `ALWAYS_GET` / `GET_ON_CHANGE` | `prosdk::tunables::TunableConfig::Polling::kDefault` / `kAlwaysGet` / `kGetOnChange` | `DEFAULT` |
+| `wpi::hal::SimDevice::Direction::INPUT` / `OUTPUT` / `BIDIR` | `prosdk::hal::SimDevice::Direction::kInput` / `kOutput` / `kBidir` (the WPILib Java spelling) | `INPUT`, `OUTPUT` |
 
 Other Arduino macro names used inside vendored headers (internal names, parameters, `F`, `likely`, ...)
 need no rename: each public header is wrapped in `#pragma push_macro` / `#undef` / `#pragma pop_macro` for
@@ -48,6 +49,13 @@ exactly the macros it uses (computed by the script from the installed core heade
 | `prosdk::util::Now()` default | ESP32: `esp_timer_get_time()` (monotonic since boot) | `wpiutil/0007` |
 | `prosdk::util::Demangle` | none (build fix: the `__cxa_demangle` status variable is `int`; `int32_t` is `long` on Xtensa) | `wpiutil/0008` |
 | Telemetry and tunables default warning reporters | write to the platform console (`prosdk::platform::ConsoleWrite`) instead of `std::print(stderr)`; never throw | `telemetry/0001`, `tunables/0001` |
+| HAL backend | host: the WPILib simulation backend (`host/hal/sim`, outside the Arduino tree; `HAL_GetRuntimeType()` is `HAL_RUNTIME_SIMULATION`). ESP32: the prosdk backend in `src/prosdk/platform/hal/esp32` (SystemCore's backend is its reference). The function contract is `design/hal-esp32-functions.txt` | layout |
+| HAL handle version check (`getHandleTypedIndex`, `handles/HandlesInternal.hpp`) | `__FIRST_SYSTEMCORE__` replaced by `PROSDK_TARGET_HW`: like SystemCore, the ESP32 does not check the handle version byte; the host build checks it | `hal/0001` |
+| `HAL_SetPrintErrorImpl` default (text printed by `HAL_SendError`) | written to the platform console instead of `fwrite(stderr)` | `hal/0002` |
+| Dashboard opmode chooser (`DashboardOpMode.hpp`: `InitializeDashboardOpMode`, `SetDashboardOpModeOptions`, `StartDashboardOpMode`, `EnableDashboardOpMode`, `GetDashboardSelectedOpMode`) | no-op: options are ignored and a dashboard never selects an opmode (`GetDashboardSelectedOpMode` returns 0). Upstream publishes ntcore string choosers (`/SmartDashboard/* OpMode`); ntcore is not ported and the probot-core Driver Station selects the opmode | hand-written `src/prosdk/platform/hal/DashboardOpMode.cpp` |
+| `prosdk::log::DataLog` buffers (`BLOCK_SIZE`, `MAX_BUFFER_COUNT`, `MAX_FREE_COUNT`) | ESP32: 2 KiB blocks, logging pauses at 16 outgoing buffers (32 KiB), 4 free buffers kept (8 KiB). Upstream (kept on the host): 16 KiB, 64 (1 MiB), 16 (256 KiB). Set by `PROSDK_DATALOG_*` in `prosdk/platform/DataLogConfig.hpp`; a different value needs an archive rebuilt with the same `-D` | `datalog/0001` |
+| `DataLog` default message logger | writes `DataLog: ...` lines (info and above) to the platform console instead of stdout/stderr | `datalog/0002` |
+| `prosdk::log::DataLogBackgroundWriter` | writer thread started through `ScopedThreadConfig` (name `datalog`, stack `PROSDK_DATALOG_THREAD_STACK_SIZE` = 6144, prosdk thread priority and core). Minimum free space `PROSDK_DATALOG_MIN_FREE_SPACE`: ESP32 64 KiB, host 5 MiB (upstream). The ESP32 toolchain has no `statvfs`, so `fs::space` fails and the free-space check is skipped (the upstream fallback, free space = unlimited): logging stops only when a write fails, which is reported. `fsync` after each flush on ESP32 (upstream syncs only on Linux/macOS). Random file names use `esp_random()` on ESP32 (no `std::random_device` there) | `datalog/0003` |
 
 ## 4. Excluded files (vendored modules)
 
@@ -70,6 +78,19 @@ exactly the macros it uses (computed by the script from the installed core heade
 | wpiutil (tests) | `wpiutil/src/test/native/cpp/argparse/*` | argparse is not vendored (CLI parser) |
 | wpiutil (tests) | `wpiutil/src/test/native/cpp/debugging/*` | debugging thirdparty is not vendored |
 | wpiutil (tests) | `wpiutil/src/test/native/cpp/JniUtilTest.cpp` | JNI |
+| hal | `hal/src/main/native/include/wpi/hal/SystemServer.h` | returns an ntcore instance (`NT_Inst`) for the SystemCore system server; ntcore is not ported and there is no system server (its only users are the ExpansionHub classes) |
+| hal | `hal/src/main/native/include/wpi/hal/cpp/MrcLibAlert.hpp` | SystemCore mrclib alert transport; its implementation (`cpp/mrclib`) is not ported |
+| hal | `hal/src/main/native/include/wpi/hal/.clang-tidy` | lint configuration, not source |
+| hal | `hal/src/main/native/cpp/DashboardOpMode.cpp` | publishes the opmode choosers over ntcore (not ported); replaced by a hand-written no-op (section 3) |
+| hal | `hal/src/main/native/cpp/mrclib/*` | SystemCore mrclib Driver Station and alert transport; the probot-core Driver Station backend replaces it |
+| hal | `hal/src/main/native/cpp/jni/*` | JNI (no JVM on the MCU) |
+| hal | `hal/src/main/native/sim/SystemServer.cpp` | implements `HAL_GetSystemServerHandle` (`SystemServer.h`, not vendored) |
+| datalog | `datalog/src/main/native/include/wpi/datalog/DataLogReader.hpp`, `cpp/DataLogReader.cpp` | reader side (desktop log tools); needs `MemoryBuffer` (mmap). Vendored only as host test support (`test/datalog/support`, with `MemoryBuffer`, `SmallVectorMemoryBuffer` and `MappedFileRegion`) so the upstream writer tests can read back what they wrote |
+| datalog | `datalog/src/main/native/include/wpi/datalog/DataLogReaderThread.hpp`, `cpp/DataLogReaderThread.cpp` | reader side; needs upb, sigslot and DynamicStruct (desktop log viewer) |
+| datalog | `datalog/src/main/native/include/wpi/datalog/FileLogger.hpp`, `cpp/FileLogger.cpp` | tails a Linux log file with inotify (no inotify on ESP32); DataLogManager uses it for system logs |
+| datalog | `datalog/src/main/native/cpp/jni/*` | JNI (no JVM on the MCU) |
+| datalog (tests) | `datalog/src/test/native/cpp/DataLogReaderThreadTest.cpp` | DataLogReaderThread is not vendored (upb) |
+| datalog (tests) | `datalog/src/test/native/cpp/FileLoggerTest.cpp` | FileLogger is not vendored (inotify) |
 
 Whole upstream trees not vendored:
 
@@ -82,6 +103,12 @@ Whole upstream trees not vendored:
 | `wpiutil/src/main/native/thirdparty/nanopb/generator` | protoc plugin; generated .npb files are vendored instead |
 | `wpiutil/src/main/native/windows` | Windows only |
 | `wpiutil/src/main/native/resources` | desktop GUI icon |
+| `hal/src/main/native/systemcore` | SystemCore (Linux) hardware backend; reference for the hand-written ESP32 backend (`src/prosdk/platform/hal/esp32`), never compiled as is |
+| `hal/src/main/java`, `hal/src/test/java` | Java bindings and tests (no JVM on the MCU) |
+| `hal/src/main/python`, `hal/src/test/python` | Python bindings and tests |
+| `hal/src/dev` | desktop development executable |
+| `datalog/src/main/java`, `datalog/src/main/python` | Java and Python bindings |
+| `datalog/examples`, `datalog/src/dev` | desktop example programs (printlog, writelog) and development executable |
 
 The source of truth for these lists is the module data in `tools/upstream/modules/*.py`; this table is
 updated with it.

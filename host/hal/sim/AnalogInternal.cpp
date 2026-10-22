@@ -1,0 +1,23 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "AnalogInternal.hpp"
+
+#include "PortsInternal.hpp"
+#include "prosdk/hal/handles/IndexedHandleResource.hpp"
+
+namespace prosdk::hal {
+IndexedHandleResource<HAL_AnalogInputHandle, prosdk::hal::AnalogPort,
+                      NUM_ANALOG_INPUTS, HAL_HandleEnum::ANALOG_INPUT>*
+    analogInputHandles;
+}  // namespace prosdk::hal
+
+namespace prosdk::hal::init {
+void InitializeAnalogInternal() {
+  static IndexedHandleResource<HAL_AnalogInputHandle, prosdk::hal::AnalogPort,
+                               NUM_ANALOG_INPUTS, HAL_HandleEnum::ANALOG_INPUT>
+      aiH;
+  analogInputHandles = &aiH;
+}
+}  // namespace prosdk::hal::init

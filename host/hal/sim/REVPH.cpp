@@ -1,0 +1,259 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/hal/REVPH.h"
+
+#include <string>
+
+#include "HALInitializer.hpp"
+#include "PortsInternal.hpp"
+#include "mockdata/REVPHDataInternal.hpp"
+#include "prosdk/hal/ErrorHandling.hpp"
+#include "prosdk/hal/Errors.h"
+#include "prosdk/hal/handles/IndexedHandleResource.hpp"
+
+using namespace prosdk::hal;
+
+namespace {
+struct PCM {
+  int32_t module;
+  prosdk::util::mutex lock;
+  std::string previousAllocation;
+};
+}  // namespace
+
+static IndexedHandleResource<HAL_REVPHHandle, PCM, NUM_REVPH_MODULES,
+                             HAL_HandleEnum::REV_PH>* pcmHandles;
+
+namespace prosdk::hal::init {
+void InitializeREVPH() {
+  static IndexedHandleResource<HAL_REVPHHandle, PCM, NUM_REVPH_MODULES,
+                               HAL_HandleEnum::REV_PH>
+      pH;
+  pcmHandles = &pH;
+}
+}  // namespace prosdk::hal::init
+
+HAL_REVPHHandle HAL_InitializeREVPH(int32_t busId, int32_t module,
+                                    const char* allocationLocation,
+                                    int32_t* status) {
+  prosdk::hal::init::CheckInit();
+
+  if (!HAL_CheckREVPHModuleNumber(module)) {
+    *status = MakeErrorIndexOutOfRange(HAL_RESOURCE_OUT_OF_RANGE,
+                                       "Invalid Index for REV PH", 1,
+                                       NUM_REVPH_MODULES, module);
+    return HAL_INVALID_HANDLE;
+  }
+
+  // Module starts at 1
+  auto resource = pcmHandles->Allocate(module - 1, "REV PH", 1);
+
+  if (!resource) {
+    *status = resource.error();
+    return HAL_INVALID_HANDLE;  // failed to allocate. Pass error back.
+  }
+
+  auto [handle, pcm] = *resource;
+  pcm->previousAllocation = allocationLocation ? allocationLocation : "";
+  pcm->module = module;
+
+  SimREVPHData[module].initialized = true;
+  // Enable closed loop
+  SimREVPHData[module].compressorConfigType =
+      HAL_REVPH_COMPRESSOR_CONFIG_DIGITAL;
+
+  return handle;
+}
+
+void HAL_FreeREVPH(HAL_REVPHHandle handle) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    pcmHandles->Free(handle);
+    return;
+  }
+  SimREVPHData[pcm->module].initialized = false;
+  pcmHandles->Free(handle);
+}
+
+HAL_Bool HAL_CheckREVPHModuleNumber(int32_t module) {
+  return module >= 1 && module <= NUM_REVPH_MODULES;
+}
+
+HAL_Bool HAL_CheckREVPHSolenoidChannel(int32_t channel) {
+  return channel < NUM_REVPH_CHANNELS && channel >= 0;
+}
+
+HAL_Bool HAL_GetREVPHCompressor(HAL_REVPHHandle handle, int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return false;
+  }
+
+  return SimREVPHData[pcm->module].compressorOn;
+}
+
+void HAL_SetREVPHCompressorConfig(HAL_REVPHHandle handle,
+                                  const HAL_REVPHCompressorConfig* config,
+                                  int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+  // TODO
+  // SimREVPHData[pcm->module].compressorConfigType = config.
+}
+void HAL_SetREVPHClosedLoopControlDisabled(HAL_REVPHHandle handle,
+                                           int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+  SimREVPHData[pcm->module].compressorConfigType =
+      HAL_REVPH_COMPRESSOR_CONFIG_DISABLED;
+}
+
+void HAL_SetREVPHClosedLoopControlDigital(HAL_REVPHHandle handle,
+                                          int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+  SimREVPHData[pcm->module].compressorConfigType =
+      HAL_REVPH_COMPRESSOR_CONFIG_DIGITAL;
+}
+
+void HAL_SetREVPHClosedLoopControlAnalog(HAL_REVPHHandle handle,
+                                         double minAnalogVoltage,
+                                         double maxAnalogVoltage,
+                                         int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+  SimREVPHData[pcm->module].compressorConfigType =
+      HAL_REVPH_COMPRESSOR_CONFIG_ANALOG;
+}
+
+void HAL_SetREVPHClosedLoopControlHybrid(HAL_REVPHHandle handle,
+                                         double minAnalogVoltage,
+                                         double maxAnalogVoltage,
+                                         int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+  SimREVPHData[pcm->module].compressorConfigType =
+      HAL_REVPH_COMPRESSOR_CONFIG_HYBRID;
+}
+
+HAL_REVPHCompressorConfigType HAL_GetREVPHCompressorConfig(
+    HAL_REVPHHandle handle, int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return HAL_REVPH_COMPRESSOR_CONFIG_DISABLED;
+  }
+  return SimREVPHData[pcm->module].compressorConfigType;
+}
+
+HAL_Bool HAL_GetREVPHPressureSwitch(HAL_REVPHHandle handle, int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return false;
+  }
+
+  return SimREVPHData[pcm->module].pressureSwitch;
+}
+
+double HAL_GetREVPHAnalogVoltage(HAL_REVPHHandle handle, int32_t channel,
+                                 int32_t* status) {
+  return 0;
+}
+
+double HAL_GetREVPHCompressorCurrent(HAL_REVPHHandle handle, int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  return SimREVPHData[pcm->module].compressorCurrent;
+}
+
+int32_t HAL_GetREVPHSolenoids(HAL_REVPHHandle handle, int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  std::scoped_lock lock{pcm->lock};
+  auto& data = SimREVPHData[pcm->module].solenoidOutput;
+  int32_t ret = 0;
+  for (int i = 0; i < NUM_REVPH_CHANNELS; i++) {
+    ret |= (data[i] << i);
+  }
+  return ret;
+}
+void HAL_SetREVPHSolenoids(HAL_REVPHHandle handle, int32_t mask, int32_t values,
+                           int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+
+  auto& data = SimREVPHData[pcm->module].solenoidOutput;
+  std::scoped_lock lock{pcm->lock};
+  for (int i = 0; i < NUM_REVPH_CHANNELS; i++) {
+    auto indexMask = (1 << i);
+    if ((mask & indexMask) != 0) {
+      data[i] = (values & indexMask) != 0;
+    }
+  }
+}
+
+void HAL_FireREVPHOneShot(HAL_REVPHHandle handle, int32_t index, int32_t durMs,
+                          int32_t* status) {}
+
+double HAL_GetREVPHVoltage(HAL_REVPHHandle handle, int32_t* status) {
+  return 0;
+}
+
+double HAL_GetREVPH5VVoltage(HAL_REVPHHandle handle, int32_t* status) {
+  return 0;
+}
+
+double HAL_GetREVPHSolenoidCurrent(HAL_REVPHHandle handle, int32_t* status) {
+  return 0;
+}
+
+double HAL_GetREVPHSolenoidVoltage(HAL_REVPHHandle handle, int32_t* status) {
+  return 0;
+}
+
+void HAL_GetREVPHVersion(HAL_REVPHHandle handle, HAL_REVPHVersion* version,
+                         int32_t* status) {}
+
+void HAL_GetREVPHFaults(HAL_REVPHHandle handle, HAL_REVPHFaults* faults,
+                        int32_t* status) {}
+
+void HAL_GetREVPHStickyFaults(HAL_REVPHHandle handle,
+                              HAL_REVPHStickyFaults* stickyFaults,
+                              int32_t* status) {}
+
+int32_t HAL_GetREVPHSolenoidDisabledList(HAL_REVPHHandle handle,
+                                         int32_t* status) {
+  return 0;
+}
+
+void HAL_ClearREVPHStickyFaults(HAL_REVPHHandle handle, int32_t* status) {}

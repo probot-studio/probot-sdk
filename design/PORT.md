@@ -48,11 +48,15 @@ src/
     thirdparty/{eigen,gcem,sleipnir,nanopb,...}/                         vendored thirdparty (generated)
     cxx/                  hand-written C++23 compatibility shims (section 6)
     platform/             hand-written ESP32 and host platform glue (HAL backend, threads, time, console)
+      platform/hal/       hand-written replacements for backend-independent HAL files (DashboardOpMode no-op)
+      platform/hal/esp32/ the ESP32 HAL backend (target only; contract: design/hal-esp32-functions.txt)
     probot/               hand-written probot-core bridge (header side compiled in the sketch, section 8)
     drivers/              hand-written prosdk devices (BTS7960, VNH5019, MPU6050, ProHub, Servo, ...)
   esp32s3/libprosdk.a     precompiled archive (build output, section 9)
 tools/upstream/           vendoring script, module selection, patches, lock
 tools/build/              CMake toolchain + build wrapper
+host/hal/sim/             WPILib HAL simulation backend (generated), compiled only in the host build; never
+                          under src/, so the Arduino tree never sees it
 test/                     host tests (upstream unit tests + prosdk tests); never under src/
 examples/                 Arduino sketches
 design/                   this file and the probot-core contract

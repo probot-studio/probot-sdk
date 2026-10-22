@@ -1,0 +1,366 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/hal/HAL.h"
+
+#include <cstdio>
+#include <cstring>
+#include <utility>
+#include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#pragma comment(lib, "Winmm.lib")
+#pragma comment(lib, "ntdll.lib")
+extern "C" NTSYSAPI NTSTATUS NTAPI NtSetTimerResolution(
+    ULONG DesiredResolution, BOOLEAN SetResolution, PULONG CurrentResolution);
+extern "C" NTSYSAPI NTSTATUS NTAPI
+NtQueryTimerResolution(PULONG MinimumResolution, PULONG MaximumResolution,
+                       PULONG CurrentResolution);
+#endif  // _WIN32
+
+#include "HALInitializer.hpp"
+#include "MockHooksInternal.hpp"
+#include "mockdata/RoboRioDataInternal.hpp"
+#include "prosdk/hal/CAN.h"
+#include "prosdk/hal/Errors.h"
+#include "prosdk/hal/Extensions.h"
+#include "prosdk/hal/simulation/DriverStationData.h"
+#include "prosdk/hal/simulation/MockHooks.h"
+#include "prosdk/hal/simulation/SimCallbackRegistry.hpp"
+#include "prosdk/util/mutex.hpp"
+#include "prosdk/util/spinlock.hpp"
+
+using namespace prosdk::hal;
+
+namespace {
+class SimPeriodicCallbackRegistry : public impl::SimCallbackRegistryBase {
+ public:
+  int32_t Register(HALSIM_SimPeriodicCallback callback, void* param) {
+    std::scoped_lock lock(m_mutex);
+    return DoRegister(reinterpret_cast<RawFunctor>(callback), param);
+  }
+
+  void operator()() const {
+    std::scoped_lock lock(m_mutex);
+    if (m_callbacks) {
+      for (auto&& cb : *m_callbacks) {
+        reinterpret_cast<HALSIM_SimPeriodicCallback>(cb.callback)(cb.param);
+      }
+    }
+  }
+};
+}  // namespace
+
+static HAL_RuntimeType runtimeType{HAL_RUNTIME_SIMULATION};
+static prosdk::util::spinlock gOnShutdownMutex;
+static std::vector<std::pair<void*, void (*)(void*)>> gOnShutdown;
+static SimPeriodicCallbackRegistry gSimPeriodicBefore;
+static SimPeriodicCallbackRegistry gSimPeriodicAfter;
+
+namespace prosdk::hal {
+void InitializeDriverStation();
+}  // namespace prosdk::hal
+
+namespace prosdk::hal::init {
+void InitializeHAL() {
+  InitializeAddressableLEDData();
+  InitializeAnalogInData();
+  InitializeCanData();
+  InitializeCANAPI();
+  InitializeDigitalPWMData();
+  InitializeDutyCycleData();
+  InitializeDIOData();
+  InitializeDriverStationData();
+  InitializeEncoderData();
+  InitializeIMUData();
+  InitializeI2CData();
+  InitializeCTREPCMData();
+  InitializeREVPHData();
+  InitializePowerDistributionData();
+  InitializePWMData();
+  InitializeRoboRioData();
+  InitializeSimDeviceData();
+  InitializeAddressableLED();
+  InitializeAnalogInput();
+  InitializeAnalogInternal();
+  InitializeCAN();
+  InitializeCounter();
+  InitializeDigitalInternal();
+  InitializeDIO();
+  InitializeDutyCycle();
+  InitializeDriverStation();
+  InitializeEncoder();
+  InitializeExtensions();
+  InitializeI2C();
+  InitializeMain();
+  InitializeMockHooks();
+  InitializeNotifier();
+  InitializePowerDistribution();
+  InitializePorts();
+  InitializePower();
+  InitializeCTREPCM();
+  InitializeREVPH();
+  InitializePWM();
+  InitializeSerialPort();
+  InitializeSimDevice();
+  InitializeThreads();
+}
+}  // namespace prosdk::hal::init
+
+extern "C" {
+
+const char* HAL_GetErrorMessage(int32_t code) {
+  switch (code) {
+    case 0:
+      return "";
+    case HAL_VOLTAGE_OUT_OF_RANGE:
+      return HAL_VOLTAGE_OUT_OF_RANGE_MESSAGE;
+    case HAL_INCOMPATIBLE_STATE:
+      return HAL_INCOMPATIBLE_STATE_MESSAGE;
+    case HAL_NO_AVAILABLE_RESOURCES:
+      return HAL_NO_AVAILABLE_RESOURCES_MESSAGE;
+    case HAL_RESOURCE_IS_ALLOCATED:
+      return HAL_RESOURCE_IS_ALLOCATED_MESSAGE;
+    case HAL_RESOURCE_OUT_OF_RANGE:
+      return HAL_RESOURCE_OUT_OF_RANGE_MESSAGE;
+    case HAL_HANDLE_ERROR:
+      return HAL_HANDLE_ERROR_MESSAGE;
+    case HAL_NULL_PARAMETER:
+      return HAL_NULL_PARAMETER_MESSAGE;
+    case HAL_PARAMETER_OUT_OF_RANGE:
+      return HAL_PARAMETER_OUT_OF_RANGE_MESSAGE;
+    case HAL_COUNTER_NOT_SUPPORTED:
+      return HAL_COUNTER_NOT_SUPPORTED_MESSAGE;
+    case HAL_ERR_CANSessionMux_InvalidBuffer:
+      return HAL_ERR_CANSessionMux_InvalidBuffer_MESSAGE;
+    case HAL_ERR_CANSessionMux_MessageNotFound:
+      return HAL_ERR_CANSessionMux_MessageNotFound_MESSAGE;
+    case HAL_WARN_CANSessionMux_NoToken:
+      return HAL_WARN_CANSessionMux_NoToken_MESSAGE;
+    case HAL_ERR_CANSessionMux_NotAllowed:
+      return HAL_ERR_CANSessionMux_NotAllowed_MESSAGE;
+    case HAL_ERR_CANSessionMux_NotInitialized:
+      return HAL_ERR_CANSessionMux_NotInitialized_MESSAGE;
+    case HAL_CAN_TIMEOUT:
+      return HAL_CAN_TIMEOUT_MESSAGE;
+    case HAL_SIM_NOT_SUPPORTED:
+      return HAL_SIM_NOT_SUPPORTED_MESSAGE;
+    case HAL_CAN_BUFFER_OVERRUN:
+      return HAL_CAN_BUFFER_OVERRUN_MESSAGE;
+    case HAL_USE_LAST_ERROR:
+      return HAL_USE_LAST_ERROR_MESSAGE;
+    default:
+      return "Unknown error status";
+  }
+}
+
+HAL_RuntimeType HAL_GetRuntimeType(void) {
+  return runtimeType;
+}
+
+void HALSIM_SetRuntimeType(HAL_RuntimeType type) {
+  runtimeType = type;
+}
+
+void HAL_GetSerialNumber(struct WPI_String* serialNumber) {
+  HALSIM_GetRoboRioSerialNumber(serialNumber);
+}
+
+void HAL_GetComments(struct WPI_String* comments) {
+  HALSIM_GetRoboRioComments(comments);
+}
+
+int32_t HAL_GetTeamNumber(void) {
+  return HALSIM_GetRoboRioTeamNumber();
+}
+
+int64_t HAL_GetMonotonicTime(void) {
+  return prosdk::hal::GetMonotonicTime();
+}
+
+HAL_Bool HAL_GetSystemActive(int32_t* status) {
+  return HALSIM_GetDriverStationEnabled();
+}
+
+HAL_Bool HAL_GetBrownedOut(int32_t* status) {
+  return false;  // Figure out if we need to detect a brownout condition
+}
+
+int32_t HAL_GetCommsDisableCount(int32_t* status) {
+  return 0;
+}
+
+HAL_Bool HAL_GetRSLState(int32_t* status) {
+  return false;
+}
+
+HAL_Bool HAL_Initialize(void) {
+  static std::atomic_bool initialized{false};
+  static prosdk::util::mutex initializeMutex;
+  // Initial check, as if it's true initialization has finished
+  if (initialized) {
+    return true;
+  }
+
+  std::scoped_lock lock(initializeMutex);
+  // Second check in case another thread was waiting
+  if (initialized) {
+    return true;
+  }
+
+  prosdk::hal::init::InitializeHAL();
+
+  prosdk::hal::init::HAL_IsInitialized.store(true);
+
+  prosdk::hal::InitializeDriverStation();
+
+  initialized = true;
+
+// Set Timer Precision to 0.5ms on Windows
+#ifdef _WIN32
+  // Use timeGetDevCaps as well to prevent Java from interfering
+  TIMECAPS tc;
+  if (timeGetDevCaps(&tc, sizeof(tc)) == TIMERR_NOERROR) {
+    UINT target = (std::max)(static_cast<UINT>(1), tc.wPeriodMin);
+    timeBeginPeriod(target);
+    std::atexit([]() {
+      TIMECAPS tc;
+      if (timeGetDevCaps(&tc, sizeof(tc)) == TIMERR_NOERROR) {
+        UINT target = (std::max)(static_cast<UINT>(1), tc.wPeriodMin);
+        timeEndPeriod(target);
+      }
+    });
+  }
+  // https://stackoverflow.com/questions/3141556/how-to-setup-timer-resolution-to-0-5-ms
+  ULONG min, max, current;
+  if (NtQueryTimerResolution(&min, &max, &current) == 0) {
+    ULONG currentRes;
+    if (NtSetTimerResolution(max, TRUE, &currentRes) == 0) {
+      std::atexit([]() {
+        ULONG currentRes;
+        NtSetTimerResolution(0, FALSE, &currentRes);
+      });
+    }
+  }
+
+  // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setprocessinformation
+  // Enable HighQoS to achieve maximum performance, and turn off power saving.
+
+  // https://forums.oculusvr.com/t5/General/SteamVR-has-fixed-the-problems-with-Windows-11/td-p/956413
+  // Always honor Timer Resolution Requests. This is to ensure that the timer
+  // resolution set-up above sticks through transitions of the main window (eg:
+  // minimization).
+  // This setting was introduced in Windows 11 and the definition is not
+  // available in older headers.
+#ifndef PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+  const auto PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION = 0x4U;
+#endif
+
+  // Try both at once, and if that doesn't succeed, only set HighQoS
+  PROCESS_POWER_THROTTLING_STATE PowerThrottling{};
+  PowerThrottling.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+  PowerThrottling.ControlMask =
+      PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION |
+      PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+  PowerThrottling.StateMask = 0;
+
+  auto status =
+      SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling,
+                            &PowerThrottling, sizeof(PowerThrottling));
+
+  // setting both failed, fall back to HighQoS only
+  if (status == 0) {
+    PowerThrottling.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+    PowerThrottling.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+    PowerThrottling.StateMask = 0;
+
+    SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling,
+                          &PowerThrottling, sizeof(PowerThrottling));
+  }
+#endif  // _WIN32
+
+#ifndef _WIN32
+  setlinebuf(stdin);
+  setlinebuf(stdout);
+#endif
+
+  if (HAL_LoadExtensions() < 0) {
+    return false;
+  }
+
+  return true;  // Add initialization if we need to at a later point
+}
+
+void HAL_Shutdown(void) {
+  std::vector<std::pair<void*, void (*)(void*)>> funcs;
+  {
+    std::scoped_lock lock(gOnShutdownMutex);
+    funcs.swap(gOnShutdown);
+  }
+  for (auto&& func : funcs) {
+    func.second(func.first);
+  }
+}
+
+void HAL_OnShutdown(void* param, void (*func)(void*)) {
+  std::scoped_lock lock(gOnShutdownMutex);
+  gOnShutdown.emplace_back(param, func);
+}
+
+void HAL_SimPeriodicBefore(void) {
+  gSimPeriodicBefore();
+}
+
+void HAL_SimPeriodicAfter(void) {
+  gSimPeriodicAfter();
+}
+
+int32_t HALSIM_RegisterSimPeriodicBeforeCallback(
+    HALSIM_SimPeriodicCallback callback, void* param) {
+  return gSimPeriodicBefore.Register(callback, param);
+}
+
+void HALSIM_CancelSimPeriodicBeforeCallback(int32_t uid) {
+  gSimPeriodicBefore.Cancel(uid);
+}
+
+int32_t HALSIM_RegisterSimPeriodicAfterCallback(
+    HALSIM_SimPeriodicCallback callback, void* param) {
+  return gSimPeriodicAfter.Register(callback, param);
+}
+
+void HALSIM_CancelSimPeriodicAfterCallback(int32_t uid) {
+  gSimPeriodicAfter.Cancel(uid);
+}
+
+void HALSIM_CancelAllSimPeriodicCallbacks(void) {
+  gSimPeriodicBefore.Reset();
+  gSimPeriodicAfter.Reset();
+}
+
+void HAL_ReportUsage(const struct WPI_String* resource,
+                     const struct WPI_String* data) {
+  // Do nothing for now
+}
+
+int32_t HAL_PublishCanVersion(uint8_t busId, uint32_t deviceId,
+                              const struct WPI_String* name,
+                              const struct WPI_String* version) {
+  // Do nothing for now
+  return 0;
+}
+
+int32_t HAL_PublishVersion(const struct WPI_String* name,
+                           const struct WPI_String* version) {
+  // Do nothing for now
+  return 0;
+}
+
+int32_t HAL_PublishWpilibVersion(const struct WPI_String* version) {
+  // Do nothing for now
+  return 0;
+}
+
+}  // extern "C"

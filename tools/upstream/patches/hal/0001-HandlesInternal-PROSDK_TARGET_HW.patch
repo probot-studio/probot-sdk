@@ -1,0 +1,21 @@
+diff --git a/src/prosdk/hal/handles/HandlesInternal.hpp b/src/prosdk/hal/handles/HandlesInternal.hpp
+index 8d2023d..ed27965 100644
+--- a/src/prosdk/hal/handles/HandlesInternal.hpp
++++ b/src/prosdk/hal/handles/HandlesInternal.hpp
+@@ -10,6 +10,7 @@
+ #include <string_view>
+ 
+ #include "prosdk/hal/Types.h"
++#include "prosdk/platform/config.hpp"
+ #include "prosdk/util/Synchronization.hpp"
+ 
+ /* General Handle Data Layout
+@@ -141,7 +142,7 @@ inline int16_t getHandleTypedIndex(HAL_Handle handle, HAL_HandleEnum enumType,
+   if (!isHandleType(handle, enumType)) {
+     return INVALID_HANDLE_INDEX;
+   }
+-#if !defined(__FIRST_SYSTEMCORE__)
++#if !PROSDK_TARGET_HW
+   if (!isHandleCorrectVersion(handle, version)) {
+     return INVALID_HANDLE_INDEX;
+   }

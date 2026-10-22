@@ -1,0 +1,212 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/hal/CTREPCM.h"
+
+#include <string>
+
+#include "HALInitializer.hpp"
+#include "PortsInternal.hpp"
+#include "mockdata/CTREPCMDataInternal.hpp"
+#include "prosdk/hal/Errors.h"
+#include "prosdk/hal/handles/IndexedHandleResource.hpp"
+
+using namespace prosdk::hal;
+
+namespace {
+struct PCM {
+  int32_t module;
+  prosdk::util::mutex lock;
+  std::string previousAllocation;
+};
+}  // namespace
+
+static IndexedHandleResource<HAL_CTREPCMHandle, PCM, NUM_CTREPCM_MODULES,
+                             HAL_HandleEnum::CTRE_PCM>* pcmHandles;
+
+namespace prosdk::hal::init {
+void InitializeCTREPCM() {
+  static IndexedHandleResource<HAL_CTREPCMHandle, PCM, NUM_CTREPCM_MODULES,
+                               HAL_HandleEnum::CTRE_PCM>
+      pH;
+  pcmHandles = &pH;
+}
+}  // namespace prosdk::hal::init
+
+HAL_CTREPCMHandle HAL_InitializeCTREPCM(int32_t busId, int32_t module,
+                                        const char* allocationLocation,
+                                        int32_t* status) {
+  prosdk::hal::init::CheckInit();
+
+  auto resource = pcmHandles->Allocate(module, "CTRE PCM");
+
+  if (!resource) {
+    *status = resource.error();
+    return HAL_INVALID_HANDLE;  // failed to allocate. Pass error back.
+  }
+
+  auto [handle, pcm] = *resource;
+  pcm->previousAllocation = allocationLocation ? allocationLocation : "";
+  pcm->module = module;
+
+  SimCTREPCMData[module].initialized = true;
+  // Enable closed loop
+  SimCTREPCMData[module].closedLoopEnabled = true;
+
+  return handle;
+}
+
+void HAL_FreeCTREPCM(HAL_CTREPCMHandle handle) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    pcmHandles->Free(handle);
+    return;
+  }
+  SimCTREPCMData[pcm->module].initialized = false;
+  pcmHandles->Free(handle);
+}
+
+HAL_Bool HAL_CheckCTREPCMSolenoidChannel(int32_t channel) {
+  return channel < NUM_CTRE_SOLENOID_CHANNELS && channel >= 0;
+}
+
+HAL_Bool HAL_GetCTREPCMCompressor(HAL_CTREPCMHandle handle, int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return false;
+  }
+
+  return SimCTREPCMData[pcm->module].compressorOn;
+}
+
+void HAL_SetCTREPCMClosedLoopControl(HAL_CTREPCMHandle handle, HAL_Bool enabled,
+                                     int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+
+  SimCTREPCMData[pcm->module].closedLoopEnabled = enabled;
+}
+
+HAL_Bool HAL_GetCTREPCMClosedLoopControl(HAL_CTREPCMHandle handle,
+                                         int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return false;
+  }
+
+  return SimCTREPCMData[pcm->module].closedLoopEnabled;
+}
+
+HAL_Bool HAL_GetCTREPCMPressureSwitch(HAL_CTREPCMHandle handle,
+                                      int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return false;
+  }
+
+  return SimCTREPCMData[pcm->module].pressureSwitch;
+}
+
+double HAL_GetCTREPCMCompressorCurrent(HAL_CTREPCMHandle handle,
+                                       int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  return SimCTREPCMData[pcm->module].compressorCurrent;
+}
+
+HAL_Bool HAL_GetCTREPCMCompressorCurrentTooHighFault(HAL_CTREPCMHandle handle,
+                                                     int32_t* status) {
+  return false;
+}
+
+HAL_Bool HAL_GetCTREPCMCompressorCurrentTooHighStickyFault(
+    HAL_CTREPCMHandle handle, int32_t* status) {
+  return false;
+}
+
+HAL_Bool HAL_GetCTREPCMCompressorShortedStickyFault(HAL_CTREPCMHandle handle,
+                                                    int32_t* status) {
+  return false;
+}
+
+HAL_Bool HAL_GetCTREPCMCompressorShortedFault(HAL_CTREPCMHandle handle,
+                                              int32_t* status) {
+  return false;
+}
+
+HAL_Bool HAL_GetCTREPCMCompressorNotConnectedStickyFault(
+    HAL_CTREPCMHandle handle, int32_t* status) {
+  return false;
+}
+
+HAL_Bool HAL_GetCTREPCMCompressorNotConnectedFault(HAL_CTREPCMHandle handle,
+                                                   int32_t* status) {
+  return false;
+}
+
+int32_t HAL_GetCTREPCMSolenoids(HAL_CTREPCMHandle handle, int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+
+  std::scoped_lock lock{pcm->lock};
+  auto& data = SimCTREPCMData[pcm->module].solenoidOutput;
+  uint8_t ret = 0;
+  for (int i = 0; i < NUM_CTRE_SOLENOID_CHANNELS; i++) {
+    ret |= (data[i] << i);
+  }
+  return ret;
+}
+void HAL_SetCTREPCMSolenoids(HAL_CTREPCMHandle handle, int32_t mask,
+                             int32_t values, int32_t* status) {
+  auto pcm = pcmHandles->Get(handle);
+  if (pcm == nullptr) {
+    *status = HAL_HANDLE_ERROR;
+    return;
+  }
+
+  auto& data = SimCTREPCMData[pcm->module].solenoidOutput;
+  std::scoped_lock lock{pcm->lock};
+  for (int i = 0; i < NUM_CTRE_SOLENOID_CHANNELS; i++) {
+    auto indexMask = (1 << i);
+    if ((mask & indexMask) != 0) {
+      data[i] = (values & indexMask) != 0;
+    }
+  }
+}
+
+int32_t HAL_GetCTREPCMSolenoidDisabledList(HAL_CTREPCMHandle handle,
+                                           int32_t* status) {
+  return 0;
+}
+
+HAL_Bool HAL_GetCTREPCMSolenoidVoltageStickyFault(HAL_CTREPCMHandle handle,
+                                                  int32_t* status) {
+  return false;
+}
+
+HAL_Bool HAL_GetCTREPCMSolenoidVoltageFault(HAL_CTREPCMHandle handle,
+                                            int32_t* status) {
+  return false;
+}
+
+void HAL_ClearAllCTREPCMStickyFaults(HAL_CTREPCMHandle handle,
+                                     int32_t* status) {}
+
+void HAL_FireCTREPCMOneShot(HAL_CTREPCMHandle handle, int32_t index,
+                            int32_t* status) {}
+void HAL_SetCTREPCMOneShotDuration(HAL_CTREPCMHandle handle, int32_t index,
+                                   int32_t durMs, int32_t* status) {}

@@ -96,6 +96,11 @@ ARDUINO_RENAMES = [
         "names": {"DEFAULT": "kDefault", "ALWAYS_GET": "kAlwaysGet",
                   "GET_ON_CHANGE": "kGetOnChange"},
     },
+    {
+        "enum": "Direction",
+        "define_file": "wpi/hal/SimDevice.hpp",
+        "names": {"INPUT": "kInput", "OUTPUT": "kOutput", "BIDIR": "kBidir"},
+    },
 ]
 
 # Baseline for the Arduino macro set: every macro defined after <Arduino.h> that is not already

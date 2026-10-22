@@ -1,0 +1,41 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include <string>
+
+#include <catch2/catch_test_macros.hpp>
+
+#include "prosdk/hal/PowerDistribution.h"
+#include "prosdk/hal/simulation/PowerDistributionData.h"
+
+namespace prosdk::hal {
+
+std::string gTestPdpCallbackName;
+HAL_Value gTestPdpCallbackValue;
+
+void TestPdpInitializationCallback(const char* name, void* param,
+                                   const struct HAL_Value* value) {
+  gTestPdpCallbackName = name;
+  gTestPdpCallbackValue = *value;
+}
+
+TEST_CASE("PdpSimTest PdpInitialization", "[hal][mockdata]") {
+  const int INDEX_TO_TEST = 1;
+
+  int callbackParam = 0;
+  int callbackId = HALSIM_RegisterPowerDistributionInitializedCallback(
+      INDEX_TO_TEST, &TestPdpInitializationCallback, &callbackParam, false);
+  REQUIRE(0 != callbackId);
+
+  int32_t status = 0;
+
+  // Use out of range index
+  gTestPdpCallbackName = "Unset";
+  HAL_InitializePowerDistribution(0, INDEX_TO_TEST, HAL_POWER_DISTRIBUTION_CTRE,
+                                  nullptr, &status);
+  CHECK(0 == status);
+  CHECK("Initialized" == gTestPdpCallbackName);
+}
+
+}  // namespace prosdk::hal

@@ -1,0 +1,85 @@
+diff --git a/src/prosdk/impl/datalog/cpp/DataLogBackgroundWriter.cpp b/src/prosdk/impl/datalog/cpp/DataLogBackgroundWriter.cpp
+index f048925..f81900a 100644
+--- a/src/prosdk/impl/datalog/cpp/DataLogBackgroundWriter.cpp
++++ b/src/prosdk/impl/datalog/cpp/DataLogBackgroundWriter.cpp
+@@ -27,10 +27,29 @@
+ #include "prosdk/util/Logger.hpp"
+ #include "prosdk/util/fs.hpp"
+ #include "prosdk/util/string.hpp"
++#include "prosdk/platform/DataLogConfig.hpp"
++#include "prosdk/platform/Thread.hpp"
++
++#if PROSDK_TARGET_HW
++#include <esp_random.h>
++#endif
+ 
+ using namespace prosdk::log;
+ 
+-static constexpr uintmax_t MIN_FREE_SPACE = 5 * 1024 * 1024;
++// prosdk: configurable, MCU default 64 KiB (prosdk/platform/DataLogConfig.hpp). On ESP32 the
++// toolchain has no statvfs, so fs::space() reports an error and the free-space check is skipped
++// (freeSpace = UINTMAX_MAX, the upstream fallback): logging continues until a write fails, which
++// is reported through the message logger.
++static constexpr uintmax_t MIN_FREE_SPACE = PROSDK_DATALOG_MIN_FREE_SPACE;
++
++// prosdk: the writer thread never runs with the ESP-IDF pthread defaults (design/PORT.md
++// section 7): explicit stack, priority below the probot-core loop, core 1.
++template <typename F>
++static std::thread StartWriterThread(F&& func) {
++  prosdk::platform::ScopedThreadConfig threadConfig{
++      {.name = "datalog", .stackSize = PROSDK_DATALOG_THREAD_STACK_SIZE}};
++  return std::thread{std::forward<F>(func)};
++}
+ 
+ static std::string FormatBytesSize(uintmax_t value) {
+   static constexpr uintmax_t KIB = 1024;
+@@ -62,7 +81,8 @@ DataLogBackgroundWriter::DataLogBackgroundWriter(prosdk::util::Logger& msglog,
+     : DataLog{msglog, extraHeader},
+       m_period{period < 0.0 ? 0.0 : period},
+       m_newFilename{filename},
+-      m_thread{[this, dir = std::string{dir}] { WriterThreadMain(dir); }} {}
++      m_thread{StartWriterThread(
++          [this, dir = std::string{dir}] { WriterThreadMain(dir); })} {}
+ 
+ DataLogBackgroundWriter::DataLogBackgroundWriter(
+     std::function<void(std::span<const uint8_t> data)> write, double period,
+@@ -76,9 +96,9 @@ DataLogBackgroundWriter::DataLogBackgroundWriter(
+     std::string_view extraHeader)
+     : DataLog{msglog, extraHeader},
+       m_period{period < 0.0 ? 0.0 : period},
+-      m_thread{[this, write = std::move(write)] {
++      m_thread{StartWriterThread([this, write = std::move(write)] {
+         WriterThreadMain(std::move(write));
+-      }} {}
++      })} {}
+ 
+ DataLogBackgroundWriter::~DataLogBackgroundWriter() {
+   {
+@@ -168,9 +188,16 @@ static void WriteToFile(prosdk::fs::file_t f, std::span<const uint8_t> data,
+ 
+ static std::string MakeRandomFilename() {
+   // build random filename
++#if PROSDK_TARGET_HW
++  // prosdk: hardware RNG; no std::random_device (no /dev/urandom on ESP32) and no static
++  // 2.5 KB std::mt19937
++  auto dist = [](auto&) { return static_cast<int>(esp_random() & 15); };
++  int rng = 0;
++#else
+   static std::random_device dev;
+   static std::mt19937 rng(dev());
+   std::uniform_int_distribution<int> dist(0, 15);
++#endif
+   const char* v = "0123456789abcdef";
+   std::string filename = "wpilog_";
+   for (int i = 0; i < 16; i++) {
+@@ -414,8 +441,8 @@ void DataLogBackgroundWriter::WriterThreadMain(std::string_view dir) {
+         // sync to storage
+ #if defined(__linux__)
+         ::fdatasync(state.f);
+-#elif defined(__APPLE__)
+-        ::fsync(state.f);
++#elif defined(__APPLE__) || PROSDK_TARGET_HW
++        ::fsync(state.f);  // prosdk: also on ESP32 (VFS: LittleFS/FAT)
+ #endif
+         lock.lock();
+         if (blocked) {
