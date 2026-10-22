@@ -354,3 +354,24 @@ follow-up line where there is one, against `feat/small-items` 09a6fe4).
   and prosdk's ABI 6 persistence and ABI 7 entries; not attributed further.
 - The largest of these (CommandBasedRobot) is 63.7 % of the huge_app partition.
 - The other examples were not re-measured; CI builds all of them against `feat/loop-grid-restarts`.
+
+## 11. Core stack rebased again, persistence rule (measured 2026-10-22)
+
+Archive at `d641c18` (the tunable backend's republish memory back to accepted values,
+`PROBOT_HAS_DASH_PERSIST` gate; CoreOps ABI 7 unchanged), probot-core `sdk-target` at `e40fa3d`
+(`feat/loop-grid-restarts` after core's second rebase: #38 352b555, #39 3e9189b, #40 634cd40), one
+`tools/build/build.sh examples <4 names>` run. "Before" is section 10 (dbf9d1f).
+
+| Sketch | Flash before | Flash after | Change | Static RAM before | after | Change |
+|---|---:|---:|---:|---:|---:|---:|
+| TemplateTimed | 1,791,940 | 1,793,820 | +1,880 | 72,292 | 72,292 | 0 |
+| CommandBasedRobot | 2,002,516 | 2,004,148 | +1,632 | 76,388 | 76,404 | +16 |
+| DriversShowcase | 1,918,840 | 1,920,676 | +1,836 | 73,900 | 73,900 | 0 |
+| HalSmoke | 1,607,945 | 1,609,889 | +1,944 | 74,284 | 74,364 | +80 |
+| HAL link test | 1,704,033 | 1,705,937 | +1,904 | 75,900 | 75,980 | +80 |
+
+- Most of the growth is core's rebased #38/#39 (candidate/accepted value handling in the dashboard
+  store, VFS shares and `unshare()`, the regenerated DS page) and prosdk's backend change. Not
+  attributed further.
+- CommandBasedRobot is 63.7 % of the huge_app partition. The HAL link test against
+  `feat/dashboard-store` 9217ae4 (no persistence, no R15) is 1,745,189 / 68,940 B.

@@ -118,8 +118,10 @@ timestamps and file names.
 DS lists and downloads files that prosdk writes to LittleFS/SD (WPILib DataLog `.wpilog`). A generic
 `registerUri()` extension point would also do.
 
-Status: delivered as draft PR #38 (`feat/ds-files` f48ef22, agreed design under "R12 part 2 and R11 in
-progress" below); in the pinned core since 2026-10-22, not wired yet.
+Status: delivered as draft PR #38 (`feat/ds-files` 352b555, agreed design under "R12 part 2 and R11
+design" below; the rebase added `share(name, vfsDir)` for ESP-IDF VFS mounts, `unshare(name)`, replacing a
+share by name, and the `PROBOT_HAS_FILES_SHARE` macro); in the pinned core since 2026-10-22, not wired
+yet.
 
 ### R12. Small items
 
@@ -134,11 +136,11 @@ progress" below); in the pinned core since 2026-10-22, not wired yet.
   WPILib `HAL_GetCommsDisableCount`).
 
 Status: part 1 (everything except persistence) delivered as draft PR #37 and wired (CoreOps ABI 5, see
-"P1 R12 part 1 delivered" below). Persistence is in progress on core branch `feat/dash-persist`; the
-prosdk side is wired against its local commit 5513bb0 (CoreOps ABI 6, see "R12 part 2 persistence: prosdk
-side wired" below); delivered as draft PR #39 (`feat/dash-persist` abef559), in the pinned core since
-2026-10-22 ("P1 R15 delivered" below). Core declined storing only DS-written values (it stores the topic's current value,
-like NT persistent topics) and adds no feature macro; prosdk follows both (same section).
+"P1 R12 part 1 delivered" below). Persistence is delivered as draft PR #39 (`feat/dash-persist` 3e9189b)
+and wired (CoreOps ABI 6, see "R12 part 2 persistence: prosdk side wired" below), in the pinned core since
+2026-10-22. Core's final rule is the one prosdk asked for: only Driver Station writes the robot accepted
+are stored, never a value the robot sets, and `PROBOT_HAS_DASH_PERSIST` marks it; prosdk follows both
+("Core stack rebased again" below; earlier drafts stored the topic's current value and had no macro).
 
 ### R13. Dashboard schemas larger than a value
 
@@ -237,7 +239,8 @@ Header `<probot/dashboard/dashboard.hpp>` (also in `<probot/api.hpp>`), namespac
   PROBOT_DASH_MAX_VALUE 1024, PROBOT_DASH_POOL_BYTES 32768, PROBOT_DASH_WRITE_QUEUE 2048, PROBOT_DASH_PERIOD_MS 50,
   PROBOT_DASH_MAX_BYTES_PER_TICK 8192. Tables allocated on first publish.
 - Wire and DS page ("Veri" tab): as specified; widgets Selectable and Command done; PIDController, Alerts,
-  Field2d, Mechanism2d pending.
+  Field2d, Mechanism2d pending at #28. Update: the pinned core has the Alerts widget and the PIDController
+  order, and #40 (`feat/dash-widgets`) adds Scheduler, Field2d and Mechanism2d (layouts below).
 
 Widget layouts sent to probot-core (2026-10-22):
 - PIDController (upstream `PIDController.cpp`): tunable table `.type`="PIDController" with mutable doubles
@@ -487,11 +490,11 @@ test/prosdk/robot/RobotHostTest.cpp (halts stop the DS, later starts are stopped
 "not available"), test/target QemuSmoke (FakeCore leaves ABI 5 null: `HAL_HANDLE_ERROR` for RSL and
 comms-disable count). CI builds the sketches against `feat/small-items` (PROBOT_CORE_REF).
 
-### R12 part 2 and R11 in progress (agreed design, 2026-10-22)
+### R12 part 2 and R11 design (agreed 2026-10-22; delivered as #39 and #38)
 
-Core branches `feat/dash-persist` and `feat/ds-files` (work in progress). prosdk is wired against
-`feat/dash-persist` 5513bb0 (next section; sdk-target and CI stay on `feat/small-items`); `feat/ds-files` is
-not wired yet.
+Superseded status (kept for history): written while both were core work in progress, with sdk-target and
+CI on `feat/small-items`. Both are now draft PRs in the pinned core (#38, #39; "Core stack rebased
+again" below); persistence is wired, files are not.
 
 - R12 tunable persistence (`feat/dash-persist`): a topic published with `PERSISTENT` gets its stored value
   back after a reboot. Core saves values of such topics to NVS (own namespace) with a debounced write, and
@@ -511,11 +514,14 @@ not wired yet.
 
 ### R12 part 2 persistence: prosdk side wired (CoreOps ABI 6), 2026-10-22
 
-Wired against the local core commit `feat/dash-persist` 5513bb0 (not a PR yet; the branch was since
-rebased onto `feat/ds-files` as 25a34e8 with the same dashboard code, and prosdk links against that too).
-sdk-target and CI stay on `feat/small-items`, so the archive and the sketches build with the field null.
+First wired against the local core commit `feat/dash-persist` 5513bb0 (then 25a34e8), with sdk-target and
+CI on `feat/small-items`; since "P1 R15 delivered" the pinned core has #39. The store rule and the
+republish rule below were revised for core's final rule ("Core stack rebased again" below): the bullets
+"Core's answer", "Republish rule", "Detection" and "Tests" describe the current state, except the first
+answer, kept for history.
 
-Core's answer to prosdk's two questions (final, 2026-10-22):
+Core's first answer to prosdk's two questions (2026-10-22; superseded by #39 3e9189b, which stores only
+DS writes the robot accepted and adds `PROBOT_HAS_DASH_PERSIST`):
 - Store only DS-accepted values: declined. Core keeps storing the topic's current value, i.e. what the
   robot last `set()` on the topic (a DS write changes it only once the robot applies and echoes it),
   2 s after it last changed and only while no OpMode runs, the same as an NT persistent topic stores
@@ -540,50 +546,56 @@ Core's answer to prosdk's two questions (final, 2026-10-22):
   decode or type-check is answered with `rejectWrite()`, which erases the record. A tunable published
   before the store is ready gets its value when it is published by `FlushPending()` or `Update()`. The
   dashboard router lock is recursive so a participant's `FlushPending()` can drain.
-- Republish rule (core's rule, see the answer above): published again in the same run (Remove and Publish,
-  or a new tunable object on the same path), the tunable gets the last value set on that path in this run,
-  whoever set it: the backend remembers every value the store took for a persistent topic (the robot
-  program's `Set()` or a getter, published by the next `Update()`; a DS write once applied and echoed; a
-  restore), under its value type and type string. So a republish applies the value core's topic last
-  held; core's record can be older (2 s debounce, saved only while idle and only for a live topic: core
-  does not save on unpublish, so a value set on an OpMode-scoped tunable removed at OpMode end is never
-  stored unless the path is published again and stays published while idle), so core's restored write is
-  then dropped without `rejectWrite()` (the record is not erased). Like a restore, the remembered value is
-  applied through the DS write path whoever set it: a robot-set value comes back with a tune revision,
-  onRemoteSet and onTune, and it overwrites a `Set()` made while the tunable was not published. A restored
-  or remembered value equal to the tunable's own is not applied (no onTune or tune revision, the record
-  stays; e.g. Remove and Publish of the same object, or a stored value equal to the code default); a `Set()`
-  not yet published by an update when the tunable is removed is not on the path, for core or for the
-  republish; a tunable of another value type or type string on the path takes core's record.
-  `ClearPersistedTunables()` also forgets the remembered values (a counter the backend compares under its
-  lock), as core stores a topic again only once its value changes: a republish after the clear keeps the
-  new tunable's own value (which its publish sets and core then stores) until a value is set again.
-- Detection: CoreBridge.hpp looks up `probot::dashboard::clearPersisted()` with a requires-expression on a
+- Republish rule (core's final rule: only DS writes the robot accepted are stored): published again in the
+  same run (Remove and Publish, or a new tunable object on the same path), the tunable gets the last value
+  core accepted on that path in this run: the backend remembers, under its value type and type string,
+  core's restore (applied, or equal to the tunable's own value) and every DS write the robot applied (a
+  write prosdk refuses, in `OfferWrite` during the drain or with `rejectWrite()` in the `Update()` that
+  follows it, is neither stored by core nor remembered), never a value the robot program sets. Core's
+  record can be older (it saves an accepted write only while no OpMode runs, and drops it when the topic
+  is unpublished first: a tune of an OpMode-scoped tunable removed when the OpMode ends may not reach the
+  next reboot; prosdk has no way to store it), so core's restored write is then dropped without
+  `rejectWrite()` (the record is not erased). Like a restore, the remembered value is applied through the
+  DS write path: tune revision, onRemoteSet and onTune, and it overwrites a `Set()` made while the tunable
+  was not published or since the tune, as after a reboot. A restored or remembered value equal to the
+  tunable's own is not applied (no onTune or tune revision, the record stays; e.g. Remove and Publish of
+  the same object, or a stored value equal to the code default); a tunable of another value type or type
+  string on the path takes core's record. `ClearPersistedTunables()` also forgets the remembered values (a
+  counter the backend compares under its lock), as core erases its records and the accepted writes not
+  stored yet and stores the next DS write: a republish after the clear keeps the new tunable's own value
+  until it is tuned again. (Between 4940136 and this revision the backend remembered every value the
+  store took, robot `Set()` included, to follow core's first answer.)
+- Detection: CoreBridge.hpp requires core's `PROBOT_HAS_DASH_PERSIST` macro (the final rule; the earlier
+  drafts with the old rule have `clearPersisted()` but no macro and are not wired) and looks up
+  `probot::dashboard::clearPersisted()` with a requires-expression on a
   dependent call (nothing is declared in core's namespaces) and fills the ABI 6 field `dashClearPersisted`.
   A core without it leaves the field null: the opt-in is a no-op with one console warning per path (a
   republish does not repeat it; "properties.persistent: this probot-core does not keep dashboard values
   across reboots ..."), the flag is not set. `prosdk::platform::ClearPersistedTunables()` (Dashboard.hpp)
   calls `clearPersisted()` (false without it); `prosdk::platform::DashPersistenceSupported()` reports the
   field.
-- Tests: test/prosdk/dashboard/TunablePersistenceTest.cpp (the fake store restores a stored record on
-  publish like 5513bb0: synchronous restore with value, onTune and revision; no or mismatching record;
-  refused restore erases the record; robust/Selectable/immutable not persistent; other drained writes kept;
-  published before ready via FlushPending and Update; republish keeps the run's value; a robot `Set()`
-  after a tune is what the republish applies and what core then stores; an always-get tunable; a `Set()`
-  not yet published is not on the path; republish with its own last value is not tuned; a stored value
-  equal to the code value is not a tune; ClearPersistedTunables, also before a republish, and a value set
-  after the clear is remembered (the fake stores a topic again after a clear only once it changes, like
-  core's `savedGen = valueGen`); refused restore on the before-ready path; republish with
-  another type takes core's record), test/prosdk/dashboard_legacy/PersistFallbackTest.cpp (own executable,
-  field null: no flag, one warning per path also across a republish, DS tunes still work), Cancel and
-  Preferences mirrors not PERSISTENT, CoreOpsTest (no-core and fake defaults), FakeCore.hpp leaves ABI 6
-  null. A single-TU compile of CoreBridge.hpp detects persistence against 5513bb0 (and 25a34e8) and not
-  against `feat/small-items`.
+- Tests: test/prosdk/dashboard/TunablePersistenceTest.cpp (the fake store follows core 3e9189b: a drained
+  DS write to a PERSISTENT topic is a candidate until `rejectWrite()` or a newer drained write; the idle
+  save stores accepted writes, never set values; unpublish and `clearPersisted()` drop what is not stored
+  yet. Cases: synchronous restore with value, onTune and revision; no or mismatching record; refused
+  restore erases the record; robust/Selectable/immutable not persistent; other drained writes kept;
+  published before ready via FlushPending and Update; republish keeps the run's tune; a robot `Set()` is
+  neither stored nor remembered, also for an always-get tunable; a robot `Set()` after a tune: the
+  republish and core both get the tune; DS writes refused during and after the drain are not stored or
+  remembered; a stored value equal to the code value is not a tune and is still what the path gets;
+  ClearPersistedTunables, also before a republish, and it drops a tune not stored yet; refused restore on
+  the before-ready path; republish with another type takes core's record), mutation-checked (dropping the
+  remembered tune or the remembered equal restore fails 3 cases),
+  test/prosdk/dashboard_legacy/PersistFallbackTest.cpp (own executable, field null: no flag, one warning
+  per path also across a republish, DS tunes still work), Cancel and Preferences mirrors not PERSISTENT,
+  CoreOpsTest (no-core and fake defaults), FakeCore.hpp leaves ABI 6 null. A single-TU compile of
+  CoreBridge.hpp detects persistence against #39 3e9189b and later, and not against abef559 (old rule,
+  no macro) or `feat/small-items`.
 
 ### P1 R15 delivered (2026-10-22): draft PR #41 (branch `feat/loop-grid-restarts`, dbf9d1f, stacked on #40)
 
 Core rebased its stacked drafts for a docs-only `API.md` line in #37 (`git diff 09a6fe4 2eb1a72`: that
-line only). Current shas: #37 `feat/small-items` 2eb1a72 (was 09a6fe4), #38 `feat/ds-files` f48ef22, #39
+line only). Shas at delivery (rebased again since: "Core stack rebased again" below): #37 `feat/small-items` 2eb1a72 (was 09a6fe4), #38 `feat/ds-files` f48ef22, #39
 `feat/dash-persist` abef559, #40 `feat/dash-widgets` 960c63c, #41 `feat/loop-grid-restarts` dbf9d1f.
 `.upstream/probot-core` `sdk-target` and CI (`PROBOT_CORE_REF`) now pin `feat/loop-grid-restarts`, the top
 of the stack, so the pinned core also has R11 files (#38, not wired yet), R12 part 2 persistence (#39) and
@@ -604,7 +616,10 @@ Wired (prosdk 9ec2023, CoreOps ABI 7: `loopGridRestarts`):
 - Bridge: `kCoreHasGridRestarts`, a requires-check on a dependent call of `loopGridRestarts()` looked up
   through a using-directive (as for `clearPersisted()`); without it the field stays null.
   `dashMaxSchemaBytes` reads `dashboard::limits().maxSchemaBytes` when `limits()` exists (same kind of
-  check), else `detail::g_store` under the store's lock as before; prosdk reads no other core internals.
+  check), else `detail::g_store` under the store's lock as before. That was prosdk's only read of core's
+  store internals; outside core's `API.md` the bridge still uses `probot::core::kMinLoopPeriodMs` /
+  `kMaxLoopPeriodMs` (a `static_assert` against prosdk's copies) and `probot::core::MuxGuard` (the lock
+  of that `g_store` fallback).
   The archive never keeps the value: it is read when a refused schema is reported, which happens only
   once the store is configured (a schema refused before that is kept and retried), so a zero read before
   `runtime_setup()` never sticks.
@@ -616,10 +631,15 @@ Wired (prosdk 9ec2023, CoreOps ABI 7: `loopGridRestarts`):
   off it, and a late registration constructs the robot inside pass 0 either way.
 - Tests: test/prosdk/robot/RobotHostTest.cpp, built twice (`prosdk_robot_tests` with the count,
   `prosdk_robot_legacy_tests` with the field null): a late one-shot pass moves core's grid by 2.4 ms of a
-  5 ms pass, then passes start up to 1.5 ms late; every pass runs the loop exactly once and nothing is
-  reported as an overrun (the legacy build needs a counted overrun to re-align). CoreOpsTest: no core and
-  a null field report "not available". QEMU FakeCore leaves ABI 7 null.
-- R12 part 2 against the rebased #39: the ABI 6 wiring builds unchanged against the pinned core (archive,
+  5 ms pass, then passes start up to 1.5 ms late; with R15 every pass runs the loop exactly once and
+  nothing is reported as an overrun. The legacy build pins the degraded case PORT.md describes: the same
+  passes put the loop in the wrong pass (some pass runs it twice or not at all) until a counted overrun,
+  after which every pass runs it once (revised after review: it first injected the overrun with the
+  one-shot restart, which only re-ran the overrun path). CoreOpsTest: no core and a null field report
+  "not available". QEMU FakeCore leaves ABI 7 null, and the QEMU sketches drive the hooks themselves, so
+  the R15 path is checked on the host fake and by the target link only, never against core's real pacer.
+- R12 part 2 against #39 abef559 (superseded: #39 changed its store rule at 45112ae/3e9189b, see the next
+  section): the ABI 6 wiring builds unchanged against the pinned core (archive,
   HAL link test and examples, no worktree). Core changes since 25a34e8 that prosdk follows without code:
   stored values are limited to 2048 bytes (PB-E308 above that), a restored value is erased by
   `rejectWrite()` only before another write to that topic is delivered (prosdk rejects it right after the
@@ -629,3 +649,47 @@ Wired (prosdk 9ec2023, CoreOps ABI 7: `loopGridRestarts`):
   syntax check of `CoreBridge.hpp` with core's test stubs detects R15 on dbf9d1f, not on #40 960c63c
   (the `g_store` path of `dashMaxSchemaBytes` compiles there) nor on `feat/dashboard-store`. Sizes:
   design/size.md section 10.
+
+### Core stack rebased again (2026-10-22, after 9ec2023): R12 part 2 final rule, repinned to e40fa3d
+
+Core force-pushed #38-#41 twice more within minutes of the R15 wiring (23:32 and 23:36). Current shas
+(`gh pr list`, and the clone after `git fetch`): #37 `feat/small-items` 2eb1a72 (unchanged), #38
+`feat/ds-files` 352b555, #39 `feat/dash-persist` 3e9189b, #40 `feat/dash-widgets` 634cd40, #41
+`feat/loop-grid-restarts` e40fa3d. `.upstream/probot-core` `sdk-target` is at e40fa3d; CI's
+`PROBOT_CORE_REF` names the branch (`feat/loop-grid-restarts`), so it already builds that. The R15 API is
+unchanged (`git diff dbf9d1f e40fa3d` touches no loop timing file; `limits()`, `Limits`,
+`clearPersisted()` and `loopGridRestarts()` keep their signatures). The core stack is still moving: a
+later force-push needs the same check.
+
+What changed for prosdk:
+- #39 (abef559 -> 45112ae -> 3e9189b) reversed core's first persistence answer: only Driver Station
+  writes the robot code accepted are stored. A drained write is a candidate until `rejectWrite()`
+  refuses it (inside the drain callback, or before the next write for the topic is drained and within
+  about 2 s), then it is stored once no OpMode runs; a value the robot `set()`s is never stored and does
+  not change the record. `clearPersisted()` also drops accepted writes not stored yet, and the next DS
+  write is stored again; unpublishing a topic drops them too. Stored values are at most 2048 bytes and
+  `PROBOT_DASH_MAX_VALUE`. `PROBOT_HAS_DASH_PERSIST` (in `<probot/dashboard/dashboard.hpp>`) marks the
+  feature.
+- #38 adds `PROBOT_HAS_FILES_SHARE`, `share(name, vfsDir)` and `unshare(name)` (R11, not wired).
+- #40 and #41 changed only by the rebase (and `API.md` lines).
+
+prosdk changes (d641c18, CoreOps ABI unchanged at 7):
+- Tunable backend: the republish memory holds the last value core accepted on the path (restore or applied
+  DS write), not every value the store took; `UpdateNetwork()` no longer reports what it set. This is the
+  rule before 4940136, plus remembering a restore equal to the tunable's own value (a later object with
+  another default gets core's record, as after a reboot). Docs: section "R12 part 2 persistence: prosdk
+  side wired" above, design/API-DIFFERENCES.md section 7, design/PORT.md, the backend and Dashboard.hpp
+  comments.
+- Detection: `kCoreHasDashPersist` also requires `PROBOT_HAS_DASH_PERSIST`, so the drafts with the old
+  rule (no macro) are not wired.
+- Fake store (test/prosdk/dashboard/FakeDashboardStore.*) models the new rule; tests above.
+- Known edge, not fixed (core has no way to undo it): prosdk keeps only the newest undrained DS write per
+  topic until `Update()`. If two writes for one topic are drained before an `Update()` and the newer one
+  does not decode, core has already accepted the older one (a newer write was drained) and stores it,
+  though the robot never applied it.
+
+Checked against e40fa3d: host tests, the incremental archive, the HAL link test (persistence, grid
+restart and limits probes in the ELF) and the four size examples; the HAL link test against
+`feat/dashboard-store` 9217ae4 (no probes); a host syntax check of `CoreBridge.hpp` with core's test
+stubs (persistence detected on e40fa3d and 634cd40, not on abef559; R15 only on e40fa3d); QEMU smoke and
+bench. Sizes: design/size.md section 11.

@@ -296,7 +296,8 @@ driver is linked into them, the growth is the six-step e-stop hooks in `SmartIo.
 unwind tables of the SPI pin functions in `HalConfig.cpp` (design/size.md section 8).
 
 Rows marked "(small-items)" were re-measured later on 2026-10-22 with CoreOps ABI 5 (prosdk 3450336)
-against probot-core `feat/small-items` (09a6fe4, R12 part 1, R13 and R14, the core CI builds against);
+against probot-core `feat/small-items` (09a6fe4, R12 part 1, R13 and R14; CI has since moved to
+`feat/loop-grid-restarts`, where four sketches were re-measured: design/size.md sections 10 and 11);
 every other row was last measured against `feat/wall-clock` as above. Core R14 (the gzipped Driver
 Station page) makes every sketch about 100 KB smaller: 99,856-100,940 B less flash and 16-96 B more
 static RAM in the eight sketches re-measured (design/size.md section 9, which also lists

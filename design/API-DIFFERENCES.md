@@ -283,13 +283,13 @@ They are ported by hand, not by `tools/upstream/wpilib.py`; `tools/upstream/exam
 the upstream files at the pin and `tools/upstream/examples.py --check` (CI) reports upstream
 changes.
 
-The robot side builds on probot-core's requests R1-R10 and R12-R14 (`design/core-requests.md`,
-CoreOps ABI 5): gamepads on ports 0-5 with analog triggers and names (R8), leveled console lines
+The robot side builds on probot-core's requests R1-R10 and R12-R15 (`design/core-requests.md`,
+CoreOps ABI 7): gamepads on ports 0-5 with analog triggers and names (R8), leveled console lines
 (R9), the Driver Station's wall clock (R10), the RSL state, comms-disable count, low-voltage flag
 and the halt stop (R12 part 1) and the schema size limit (R13) are in section 3; R14 (the gzip DS
-page) only saves flash. Not delivered yet: R11 (file download). R12's dashboard persistence
-(CoreOps ABI 6, the opt-in persistent tunables of section 7) is wired against core's local branch
-`feat/dash-persist` (5513bb0, rebased as 25a34e8), not yet published by core.
+page) only saves flash; R12's dashboard persistence (ABI 6, core draft PR #39) is the opt-in
+persistent tunables of section 7; R15's grid restarts (ABI 7, #41) only keep the robot loop's
+callbacks in their passes. R11 (file download, #38) is in the pinned core but not wired yet.
 
 ## 7. prosdk additions (not in WPILib 2027)
 
@@ -350,32 +350,29 @@ revision, `onRemoteSet`, `onTune` after the initial publish), as upstream applie
 retained value. A tunable published before core's store exists gets its stored value when it is
 published (the pre-cycle flush, before the robot loop). A stored value that does not decode any more
 is refused, which erases it. `ROBUST` alone never persists (section 3), immutable tunables and the
-`.type` topics of complex tunables are never persistent. What core stores is the topic's current
-value, whoever set it (the robot program's `Set()`, a getter, a Driver Station write once applied and
-echoed), 2 s after it last changed and only while no OpMode runs, like an NT persistent topic or
-`Preferences`: after a reboot a persistent tunable's stored value wins over its code default, so
-changing the default in code has no effect on a robot that stored a value; call
-`ClearPersistedTunables()` once after changing a default. Core saves only published topics and not
-on removal: a value set or tuned during an OpMode on a tunable removed when the OpMode ends (an
-OpMode-scoped object) is stored only if the path is published again in this run and stays published
-while the robot is idle for 2 s; otherwise a reboot restores the older record. Published again in
-the same run (`Remove` and `Publish`, or a new tunable object on the same path), a persistent
-tunable gets the last value set on that path in this run, the value core's topic last held (core's
-record can be older: debounce, idle-only save, or never saved as above). Restored or remembered, the
-value is applied as a Driver Station write whoever set it: a value the robot program set comes back
-with a tune revision, `onRemoteSet` and `onTune`, and it overwrites a `Set()` made while the tunable
-was not published (between `Remove` and `Publish`, or a new object's `Set()` before its `Publish()`),
-as after a reboot. A restored or remembered value equal to the tunable's own is not applied (no tune
-revision, no `onTune`; core's record stays), and a tunable of another value type or type string takes
-core's record. A value is on the path once the backend publishes it, at the next
-`TunableRegistry::Update()` after a `Set()`; a `Set()` not yet published when the tunable is removed
-is lost, for core and for the republish.
-`prosdk::platform::ClearPersistedTunables()` (`<prosdk.h>`) erases every stored value (core's
-`clearPersisted()`; flash write: call it while the robot is stopped) and also what the backend
-remembers for republishing (core stores a topic again only once its value changes), so a tunable
-published again afterwards keeps its own value until a value is set on the path again. With a
-probot-core without persistence the opt-in does nothing: the tunable starts from its code value and
-one console warning per path says so (a republish does not repeat it); `ClearPersistedTunables()`
-returns false. The bridge detects persistence with a requires-check on
-`probot::dashboard::clearPersisted()`, the check core intends (no feature macro; after a core release
-with persistence, `PROBOT_VERSION >= PROBOT_VERSION_OF(0,5,0)` also works).
+`.type` topics of complex tunables are never persistent. Core stores only Driver Station writes the
+robot accepted, never a value the robot program sets (`Set()`, a getter): a write the backend refuses
+(type mismatch, a payload that does not decode) is not stored, an applied one is, once no OpMode
+runs (a flash write stalls both cores). After a reboot a persistent tunable's stored tune wins over
+its code default, so changing the default in code has no effect on a robot that stored a tune; call
+`ClearPersistedTunables()` once after changing a default. Stored values are limited to 2048 bytes
+and to `PROBOT_DASH_MAX_VALUE` (larger: PB-E308 on the console, not stored); keep numbers and short
+strings. Core drops an accepted tune not stored yet when its topic is removed: a tune made during an
+OpMode on a tunable removed when the OpMode ends (an OpMode-scoped object) may not reach the next
+reboot. Published again in the same run (`Remove` and `Publish`, or a new tunable object on the same
+path), a persistent tunable gets the last value core accepted on that path in this run (a tune the
+robot applied, or core's restore), not core's possibly older record. Restored or remembered, the value
+is applied as a Driver Station write: it comes back with a tune revision, `onRemoteSet` and `onTune`,
+and it overwrites a `Set()` made while the tunable was not published (between `Remove` and `Publish`,
+or a new object's `Set()` before its `Publish()`) or since the tune, as after a reboot. A restored or
+remembered value equal to the tunable's own is not applied (no tune revision, no `onTune`; core's
+record stays), and a tunable of another value type or type string takes core's record.
+`prosdk::platform::ClearPersistedTunables()` (`<prosdk.h>`) erases every stored value and the tunes
+not stored yet (core's `clearPersisted()`; flash write: call it while the robot is stopped) and also
+what the backend remembers for republishing, so a tunable published again afterwards keeps its own
+value until it is tuned again (core stores the next Driver Station write). With a probot-core without
+persistence the opt-in does nothing: the tunable starts from its code value and one console warning
+per path says so (a republish does not repeat it); `ClearPersistedTunables()` returns false. The
+bridge detects persistence with core's `PROBOT_HAS_DASH_PERSIST` macro and a requires-check on
+`probot::dashboard::clearPersisted()` (earlier drafts of core's persistence stored the robot's own
+values and had no macro; they are not wired).

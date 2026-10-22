@@ -187,19 +187,21 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `ds::commsDisableCount()`, an accepted `SetBrownoutVoltages` to core's low-voltage threshold
   (`io::battery::setLowVoltage`) and a halted robot program to `probot::requestStop()` (R12); opt-in
   persistent tunables (`properties` `{"persistent": true}`) to core's `PERSISTENT` topics (core stores
-  the topic's current value, whoever set it, like NT persistent topics; a republish in the same run
-  applies the last value set on the path) and `ClearPersistedTunables()` to
+  only Driver Station writes the robot accepted, never a value the robot sets; a republish in the same
+  run applies the last value core accepted on the path: a tune the robot applied, or core's restore)
+  and `ClearPersistedTunables()` to
   `dashboard::clearPersisted()` (R12 part 2); the
   refused-schema report to core's per-schema limit (R13, `PROBOT_DASH_MAX_SCHEMA_BYTES`). Battery
   current (`io::battery::currentAmps()`, NaN without a sensor) has no WPILib 2027 API and is not
-  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (6 since R12
-  persistence), and the bridge leaves a field null when the core lacks the feature (detected with
-  `__has_include`, R13 on `dashboard::Limits`, R12 persistence with a requires-check on
-  `dashboard::clearPersisted()`, the check core intends: it adds no feature macro), so the archive
+  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (7 since R15
+  grid restarts), and the bridge leaves a field null when the core lacks the feature (detected with
+  `__has_include`, R13 on `dashboard::Limits`, R12 persistence with core's `PROBOT_HAS_DASH_PERSIST`
+  macro plus a requires-check on `dashboard::clearPersisted()`, R15 with requires-checks on
+  `loopGridRestarts()` and `dashboard::limits()`), so the archive
   falls back (text-only console, the 2024-01-01 clock
   heuristic, `HAL_HANDLE_ERROR` for the RSL state and comms-disable count, no DS stop on a halt, the
   `PROBOT_DASH_MAX_VALUE` advice for a refused schema, no `PERSISTENT` flag and one warning per
-  persistent tunable path).
+  persistent tunable path, re-alignment on counted overruns only).
 - Outputs (PWM, motor controllers) are zeroed whenever core reports "outputs disabled" and immediately
   on e-stop (core calls a registered e-stop callback on its own task).
 - Features prosdk needs from probot-core are listed in `design/core-requests.md` and are sent to the
@@ -273,11 +275,12 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   table, driving core's hooks on simulated time (disabled -> auto -> teleop -> utility -> e-stop,
   callback order, `AddPeriodic`/timeslice timing, jitter, late pass and late one-shot pass,
   opmode selection, halts); built twice, with core R15's grid-restart count and without it
-  (`prosdk_robot_legacy_tests`).
+  (`prosdk_robot_legacy_tests`, which also pins the degraded case above: after a late one-shot pass a
+  late pass runs the loop in the wrong pass until a counted overrun re-aligns the schedule).
 - **Examples** (`esp32:esp32:esp32s3:PartitionScheme=huge_app`, `tools/build/build.sh examples` with
   CoreOps ABI 5 (3450336) against probot-core `feat/small-items` 09a6fe4, 2026-10-22; flash / static
   RAM; four of them re-measured with ABI 7 against `feat/loop-grid-restarts` in design/size.md
-  section 10): `TimedRobotDifferential` 1846484 / 72276 bytes, `CommandBasedRobot` (commandsv2: scheduler,
+  sections 10 and 11): `TimedRobotDifferential` 1846484 / 72276 bytes, `CommandBasedRobot` (commandsv2: scheduler,
   drive subsystem, `CommandXboxController`, PID command, autonomous `Selectable`, `SysIdRoutine`)
   1982192 / 75348, `DriversShowcase` (one of each `drivers/` device: Spark, Servo, BTS7960, VNH5019,
   PCA9685 with ProHubMotor and a servo, MPU6050, GoBildaPinpoint, ProHub encoders) 1898592 / 72844,
