@@ -1256,6 +1256,7 @@ wpilibc src/prosdk/driverstation/XboxController.hpp
 wpilibc src/prosdk/driverstation/internal/DriverStationBackend.hpp
 wpilibc src/prosdk/event/BooleanEvent.hpp
 wpilibc src/prosdk/event/EventLoop.hpp
+wpilibc src/prosdk/event/NetworkBooleanEvent.hpp
 wpilibc src/prosdk/framework/IterativeRobotBase.hpp
 wpilibc src/prosdk/framework/OpModeRobot.hpp
 wpilibc src/prosdk/framework/RobotBase.hpp
@@ -1309,6 +1310,7 @@ wpilibc src/prosdk/impl/wpilibc/cpp/driverstation/Joystick.cpp
 wpilibc src/prosdk/impl/wpilibc/cpp/driverstation/internal/DriverStationBackend.cpp
 wpilibc src/prosdk/impl/wpilibc/cpp/event/BooleanEvent.cpp
 wpilibc src/prosdk/impl/wpilibc/cpp/event/EventLoop.cpp
+wpilibc src/prosdk/impl/wpilibc/cpp/event/NetworkBooleanEvent.cpp
 wpilibc src/prosdk/impl/wpilibc/cpp/framework/IterativeRobotBase.cpp
 wpilibc src/prosdk/impl/wpilibc/cpp/framework/OpModeRobot.cpp
 wpilibc src/prosdk/impl/wpilibc/cpp/framework/RobotBase.cpp
@@ -1535,6 +1537,7 @@ wpilibc test/wpilibc/cpp/drive/DifferentialDriveTest.cpp
 wpilibc test/wpilibc/cpp/drive/MecanumDriveTest.cpp
 wpilibc test/wpilibc/cpp/event/BooleanEventTest.cpp
 wpilibc test/wpilibc/cpp/event/EventLoopTest.cpp
+wpilibc test/wpilibc/cpp/event/NetworkBooleanEventTest.cpp
 wpilibc test/wpilibc/cpp/hardware/counter/TachometerTest.cpp
 wpilibc test/wpilibc/cpp/main.cpp
 wpilibc test/wpilibc/cpp/motorcontrol/MockMotorController.cpp

@@ -1,0 +1,349 @@
+diff --git a/src/prosdk/event/NetworkBooleanEvent.hpp b/src/prosdk/event/NetworkBooleanEvent.hpp
+index 5fac107..f064218 100644
+--- a/src/prosdk/event/NetworkBooleanEvent.hpp
++++ b/src/prosdk/event/NetworkBooleanEvent.hpp
+@@ -4,21 +4,31 @@
+ 
+ #pragma once
+ 
+-#include <memory>
+ #include <string_view>
+ 
+ #include "prosdk/event/BooleanEvent.hpp"
+ 
+-namespace prosdk::nt {
+-class BooleanSubscriber;
+-class BooleanTopic;
+-class NetworkTable;
+-class NetworkTableInstance;
+-}  // namespace prosdk::nt
++// prosdk: NetworkTables is not ported. The boolean is a tunable
++// (prosdk::tunables), which the Driver Station shows under /Tunables and can
++// toggle; the NetworkTables types of the upstream constructors are replaced by
++// a tunable name, a tunable table or a boolean tunable.
++namespace prosdk::tunables {
++template <typename T, typename... I>
++class Tunable;
++class TunableTable;
++}  // namespace prosdk::tunables
+ 
+ namespace prosdk {
+ /**
+  * A Button that uses a NetworkTable boolean field.
++ *
++ * prosdk: the field is a boolean tunable. The event is active while a Driver
++ * Station is attached (upstream: while the NetworkTables instance is
++ * connected) and the tunable is true. Events created from the same name share
++ * one tunable, published with the value false by the first of them; it stays
++ * published while one of them exists. Driver Station edits are applied by
++ * prosdk::tunables::TunableRegistry::Update() (every robot loop), so poll the
++ * event loop on the robot thread.
+  */
+ class NetworkBooleanEvent : public BooleanEvent {
+  public:
+@@ -26,41 +36,39 @@ class NetworkBooleanEvent : public BooleanEvent {
+    * Creates a new event with the given boolean topic determining whether it is
+    * active.
+    *
++   * prosdk: replaces the BooleanTopic constructor.
++   *
+    * @param loop the loop that polls this event
+-   * @param topic The boolean topic that contains the value
++   * @param name The tunable name (for example "Buttons/Shoot"; Driver Station
++   *     path /Tunables/Buttons/Shoot)
+    */
+-  NetworkBooleanEvent(EventLoop* loop, prosdk::nt::BooleanTopic topic);
++  NetworkBooleanEvent(EventLoop* loop, std::string_view name);
+ 
+   /**
+    * Creates a new event with the given boolean subscriber determining whether
+    * it is active.
+    *
+-   * @param loop the loop that polls this event
+-   * @param sub The boolean subscriber that provides the value
+-   */
+-  NetworkBooleanEvent(EventLoop* loop, prosdk::nt::BooleanSubscriber sub);
+-
+-  /**
+-   * Creates a new event with the given boolean topic determining whether it is
+-   * active.
++   * prosdk: replaces the BooleanSubscriber constructor. The event takes over
++   * the tunable (for example prosdk::tunables::Add<bool>("Buttons/Shoot")); it
++   * stays published while the event exists.
+    *
+    * @param loop the loop that polls this event
+-   * @param table The NetworkTable that contains the topic
+-   * @param topicName The topic name within the table that contains the value
++   * @param tunable The boolean tunable that provides the value
+    */
+   NetworkBooleanEvent(EventLoop* loop,
+-                      std::shared_ptr<prosdk::nt::NetworkTable> table,
+-                      std::string_view topicName);
++                      prosdk::tunables::Tunable<bool> tunable);
+ 
+   /**
+    * Creates a new event with the given boolean topic determining whether it is
+    * active.
+    *
++   * prosdk: replaces the NetworkTable constructor.
++   *
+    * @param loop the loop that polls this event
+-   * @param tableName The NetworkTable name that contains the topic
+-   * @param topicName The topic name within the table that contains the value
++   * @param table The tunable table that contains the tunable
++   * @param topicName The tunable name within the table
+    */
+-  NetworkBooleanEvent(EventLoop* loop, std::string_view tableName,
++  NetworkBooleanEvent(EventLoop* loop, prosdk::tunables::TunableTable table,
+                       std::string_view topicName);
+ 
+   /**
+@@ -68,11 +76,10 @@ class NetworkBooleanEvent : public BooleanEvent {
+    * active.
+    *
+    * @param loop the loop that polls this event
+-   * @param inst The NetworkTable instance to use
+-   * @param tableName The NetworkTable that contains the topic
+-   * @param topicName The topic name within the table that contains the value
++   * @param tableName The tunable table name that contains the tunable
++   * @param topicName The tunable name within the table
+    */
+-  NetworkBooleanEvent(EventLoop* loop, prosdk::nt::NetworkTableInstance inst,
+-                      std::string_view tableName, std::string_view topicName);
++  NetworkBooleanEvent(EventLoop* loop, std::string_view tableName,
++                      std::string_view topicName);
+ };
+-}  // namespace wpi
++}  // namespace prosdk
+diff --git a/src/prosdk/impl/wpilibc/cpp/event/NetworkBooleanEvent.cpp b/src/prosdk/impl/wpilibc/cpp/event/NetworkBooleanEvent.cpp
+index 28b538d..14206e9 100644
+--- a/src/prosdk/impl/wpilibc/cpp/event/NetworkBooleanEvent.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/event/NetworkBooleanEvent.cpp
+@@ -4,40 +4,67 @@
+ 
+ #include "prosdk/event/NetworkBooleanEvent.hpp"
+ 
++#include <map>
+ #include <memory>
++#include <mutex>
++#include <string>
+ #include <utility>
+ 
+-#include "prosdk/nt/BooleanTopic.hpp"
+-#include "prosdk/nt/NetworkTable.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
++#include "prosdk/driverstation/RobotState.hpp"
++#include "prosdk/tunables/Tunable.hpp"
++#include "prosdk/tunables/TunableTable.hpp"
++#include "prosdk/tunables/Tunables.hpp"
++#include "prosdk/tunables/detail/PathUtil.hpp"
++#include "prosdk/util/mutex.hpp"
+ 
+ using namespace prosdk;
+ 
+-NetworkBooleanEvent::NetworkBooleanEvent(EventLoop* loop,
+-                                         prosdk::nt::BooleanTopic topic)
+-    : NetworkBooleanEvent{loop, topic.Subscribe(false)} {}
++// prosdk: the NetworkTables boolean topic is a boolean tunable (ntcore is not
++// ported); "connected" is a Driver Station being attached.
++namespace {
++using BooleanTunable = prosdk::tunables::Tunable<bool>;
++
++// one tunable per name, shared by the events created from that name
++std::shared_ptr<BooleanTunable> GetNamedTunable(std::string_view name) {
++  static prosdk::util::mutex mutex;
++  static std::map<std::string, std::weak_ptr<BooleanTunable>, std::less<>>
++      tunables;
++  std::string buf;
++  std::string_view path = prosdk::tunables::detail::NormalizeName(name, buf);
++  std::scoped_lock lock{mutex};
++  auto& weak = tunables[std::string{path}];
++  if (auto tunable = weak.lock()) {
++    return tunable;
++  }
++  auto tunable = std::make_shared<BooleanTunable>(false);
++  prosdk::tunables::Publish(path, *tunable);
++  weak = tunable;
++  return tunable;
++}
++
++std::function<bool()> MakeSignal(std::shared_ptr<BooleanTunable> tunable) {
++  return [tunable = std::move(tunable)] {
++    return RobotState::IsDSAttached() && tunable->Get();
++  };
++}
++}  // namespace
+ 
+ NetworkBooleanEvent::NetworkBooleanEvent(EventLoop* loop,
+-                                         prosdk::nt::BooleanSubscriber sub)
+-    : BooleanEvent{
+-          loop,
+-          [sub = std::make_shared<prosdk::nt::BooleanSubscriber>(std::move(sub))] {
+-            return sub->GetTopic().GetInstance().IsConnected() && sub->Get();
+-          }} {}
++                                         std::string_view name)
++    : BooleanEvent{loop, MakeSignal(GetNamedTunable(name))} {}
+ 
+ NetworkBooleanEvent::NetworkBooleanEvent(
+-    EventLoop* loop, std::shared_ptr<prosdk::nt::NetworkTable> table,
+-    std::string_view topicName)
+-    : NetworkBooleanEvent{loop, table->GetBooleanTopic(topicName)} {}
++    EventLoop* loop, prosdk::tunables::Tunable<bool> tunable)
++    : BooleanEvent{loop, MakeSignal(std::make_shared<BooleanTunable>(
++                             std::move(tunable)))} {}
+ 
+ NetworkBooleanEvent::NetworkBooleanEvent(EventLoop* loop,
+-                                         std::string_view tableName,
++                                         prosdk::tunables::TunableTable table,
+                                          std::string_view topicName)
+-    : NetworkBooleanEvent{loop, prosdk::nt::NetworkTableInstance::GetDefault(),
+-                          tableName, topicName} {}
++    : NetworkBooleanEvent{loop, table.GetPath(), topicName} {}
+ 
+ NetworkBooleanEvent::NetworkBooleanEvent(EventLoop* loop,
+-                                         prosdk::nt::NetworkTableInstance inst,
+                                          std::string_view tableName,
+                                          std::string_view topicName)
+-    : NetworkBooleanEvent{loop, inst.GetTable(tableName), topicName} {}
++    : NetworkBooleanEvent{
++          loop, std::string{tableName} + "/" + std::string{topicName}} {}
+diff --git a/test/wpilibc/cpp/event/NetworkBooleanEventTest.cpp b/test/wpilibc/cpp/event/NetworkBooleanEventTest.cpp
+index 91e2179..48d0a4f 100644
+--- a/test/wpilibc/cpp/event/NetworkBooleanEventTest.cpp
++++ b/test/wpilibc/cpp/event/NetworkBooleanEventTest.cpp
+@@ -4,25 +4,53 @@
+ 
+ #include "prosdk/event/NetworkBooleanEvent.hpp"
+ 
++#include <memory>
++
+ #include <catch2/catch_test_macros.hpp>
+ #include <catch2/matchers/catch_matchers_floating_point.hpp>
+ 
++#include "prosdk/driverstation/internal/DriverStationBackend.hpp"
+ #include "prosdk/event/EventLoop.hpp"
+-#include "prosdk/nt/BooleanTopic.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
++#include "prosdk/simulation/DriverStationSim.hpp"
++#include "prosdk/tunables/MockTunableBackend.hpp"
++#include "prosdk/tunables/Tunable.hpp"
++#include "prosdk/tunables/TunableRegistry.hpp"
++#include "prosdk/tunables/Tunables.hpp"
+ 
+ using namespace prosdk;
+ 
++// prosdk: NetworkTables is not ported; the topic is a tunable on a mock tunable
++// backend, and "connected" is the simulated Driver Station being attached.
+ class NetworkBooleanEventTest {
+  public:
+   NetworkBooleanEventTest() {
+-    m_inst = prosdk::nt::NetworkTableInstance::Create();
+-    m_inst.StartLocal();
++    prosdk::tunables::TunableRegistry::Reset();
++    m_backend = std::make_shared<prosdk::tunables::MockTunableBackend>();
++    prosdk::tunables::TunableRegistry::RegisterBackend("", m_backend);
++    SetDsAttached(true);
++  }
++
++  ~NetworkBooleanEventTest() {
++    prosdk::tunables::TunableRegistry::Reset();
++    prosdk::sim::DriverStationSim::ResetData();
++  }
++
++  void Set(bool value) {
++    m_backend->SetBool("/TestTable/Test", value);
++    prosdk::tunables::TunableRegistry::Update();
+   }
+ 
+-  ~NetworkBooleanEventTest() { prosdk::nt::NetworkTableInstance::Destroy(m_inst); }
++  static void SetDsAttached(bool attached) {
++    // new DS data attaches the simulated DS, so a detach sends none (as
++    // DriverStationSimTest and OpModeLifecycleTest do)
++    prosdk::sim::DriverStationSim::SetDsAttached(attached);
++    if (attached) {
++      prosdk::sim::DriverStationSim::NotifyNewData();
++    }
++    prosdk::internal::DriverStationBackend::RefreshData();
++  }
+ 
+-  prosdk::nt::NetworkTableInstance m_inst;
++  std::shared_ptr<prosdk::tunables::MockTunableBackend> m_backend;
+ };
+ 
+ TEST_CASE_METHOD(NetworkBooleanEventTest, "NetworkBooleanEventTest Set",
+@@ -30,18 +58,70 @@ TEST_CASE_METHOD(NetworkBooleanEventTest, "NetworkBooleanEventTest Set",
+   EventLoop loop;
+   int counter = 0;
+ 
+-  auto pub = m_inst.GetTable("TestTable")->GetBooleanTopic("Test").Publish();
++  NetworkBooleanEvent(&loop, "TestTable", "Test").IfHigh([&] {
++    ++counter;
++  });
++  Set(false);
++  loop.Poll();
++  CHECK(0 == counter);
++  Set(true);
++  loop.Poll();
++  CHECK(1 == counter);
++  Set(false);
++  loop.Poll();
++  CHECK(1 == counter);
++}
++
++// prosdk: the cases below cover the tunable-specific behavior
+ 
+-  NetworkBooleanEvent(&loop, m_inst, "TestTable", "Test").IfHigh([&] {
++TEST_CASE_METHOD(NetworkBooleanEventTest,
++                 "NetworkBooleanEventTest PublishesFalse", "[wpilibc][event]") {
++  EventLoop loop;
++  NetworkBooleanEvent event{&loop, "TestTable/Test"};
++  prosdk::tunables::TunableRegistry::Update();
++  CHECK_FALSE(m_backend->GetBool("/TestTable/Test"));
++  CHECK_FALSE(event.GetAsBoolean());
++}
++
++TEST_CASE_METHOD(NetworkBooleanEventTest,
++                 "NetworkBooleanEventTest InactiveWithoutDriverStation",
++                 "[wpilibc][event]") {
++  EventLoop loop;
++  int counter = 0;
++  NetworkBooleanEvent(&loop, "TestTable", "Test").IfHigh([&] {
+     ++counter;
+   });
+-  pub.Set(false);
++  SetDsAttached(false);
++  Set(true);
+   loop.Poll();
+   CHECK(0 == counter);
+-  pub.Set(true);
++  SetDsAttached(true);
+   loop.Poll();
+   CHECK(1 == counter);
+-  pub.Set(false);
++}
++
++TEST_CASE_METHOD(NetworkBooleanEventTest,
++                 "NetworkBooleanEventTest SameNameSharesTunable",
++                 "[wpilibc][event]") {
++  EventLoop loop;
++  int first = 0;
++  int second = 0;
++  NetworkBooleanEvent(&loop, "TestTable", "Test").IfHigh([&] { ++first; });
++  NetworkBooleanEvent(&loop, prosdk::tunables::GetTable("TestTable"), "Test")
++      .IfHigh([&] { ++second; });
++  Set(true);
++  loop.Poll();
++  CHECK(1 == first);
++  CHECK(1 == second);
++}
++
++TEST_CASE_METHOD(NetworkBooleanEventTest, "NetworkBooleanEventTest Tunable",
++                 "[wpilibc][event]") {
++  EventLoop loop;
++  int counter = 0;
++  NetworkBooleanEvent(&loop, prosdk::tunables::Add<bool>("TestTable/Test"))
++      .IfHigh([&] { ++counter; });
++  Set(true);
+   loop.Poll();
+   CHECK(1 == counter);
+ }
