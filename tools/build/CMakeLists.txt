@@ -35,10 +35,11 @@ endif()
 add_library(prosdk_sketch_options INTERFACE)
 target_include_directories(prosdk_sketch_options INTERFACE "${PROSDK_ROOT}/src")
 if(NOT CMAKE_CROSSCOMPILING)
-  # host: same language mode as the target (gnu++20, no RTTI, exceptions)
+  # host: same language mode as the target (gnu++20, no RTTI, exceptions). -g1 (line tables
+  # only) keeps usable backtraces at a fraction of the size of full DWARF in the build tree.
   target_compile_options(prosdk_sketch_options INTERFACE
     $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++20 -fno-rtti -fexceptions>
-    -O1 -g -ffunction-sections -fdata-sections)
+    -O1 -g1 -ffunction-sections -fdata-sections)
 endif()
 
 # Usage requirements shared by every prosdk translation unit of the archive and the host tests.
@@ -138,9 +139,9 @@ if(CMAKE_CROSSCOMPILING)
     COMMAND "${PROSDK_SIZE}" -t "${_prosdk_archive}"
     DEPENDS prosdk VERBATIM USES_TERMINAL)
 else()
-  # Host objects carry -g, so a regular archive is over 1 GB and rewritten on every relink. A thin
-  # archive (ar T) only stores paths to the objects in this build tree; the test binaries link it
-  # from here.
+  # Host objects carry debug line tables, so a regular archive is large and rewritten on every
+  # relink. A thin archive (ar T) only stores paths to the objects in this build tree; the test
+  # binaries link it from here.
   foreach(lang C CXX)
     set(CMAKE_${lang}_ARCHIVE_CREATE "<CMAKE_AR> qcT <TARGET> <LINK_FLAGS> <OBJECTS>")
     set(CMAKE_${lang}_ARCHIVE_APPEND "<CMAKE_AR> qT <TARGET> <LINK_FLAGS> <OBJECTS>")
