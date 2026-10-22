@@ -150,7 +150,8 @@ Related, still open in R12: persistence of DS-written robust tunables. Core keep
 so prosdk publishes a robust tunable with its code default (upstream NT restores the last tuned value).
 
 Status: delivered as draft PR #36 (`PROBOT_DASH_MAX_SCHEMA_BYTES`) and wired, see "P1 R13 delivered" below.
-The `PROBOT_DASH_MAX_VALUE` 2048 workaround above is only for a core without it.
+The `PROBOT_DASH_MAX_VALUE` workaround above is only for a core without it, and 2048 is not enough for
+every descriptor: `kinematics.proto` is 4332 B (the others 639-1999 B).
 
 ### R14. Compressed Driver Station page (flash)
 
@@ -365,17 +366,23 @@ sketches, design/size.md section 9.
 
 `PROBOT_DASH_MAX_SCHEMA_BYTES` (default 4096, 16-32768, PB-E108; counted in `PROBOT_DASH_POOL_BYTES`) limits
 each schema; `PROBOT_DASH_MAX_VALUE` no longer applies to schemas. `dashboard::Limits` gets
-`maxSchemaBytes` as its last field. With the defaults `geometry2d.proto` (about 1.3 KB) is accepted.
+`maxSchemaBytes` as its last field. With the defaults `geometry2d.proto` (1360 B) and every other wpimath
+descriptor are accepted except `kinematics.proto` (4332 B, the largest): a kinematics type sent as
+protobuf needs `#define PROBOT_DASH_MAX_SCHEMA_BYTES 8192` (or at least 4332). Not asked of core as a
+larger default: the DS frame buffer is sized from this limit (`frameCapacity()`), so every sketch would
+pay about 4 KB more heap for a path only explicit protobuf users take (telemetry prefers the struct).
 
 Wired (prosdk, CoreOps ABI 5): CoreOps `dashMaxSchemaBytes` returns the store's configured limit (0 before
 `runtime_setup()`). There is no new header to detect, so the bridge checks `Limits::maxSchemaBytes` on the
 type at compile time (a constexpr `requires` check; a core without it leaves the field null). A refused
 schema is reported once: larger than the limit -> its size and `PROBOT_DASH_MAX_SCHEMA_BYTES`; otherwise
-the schema table or the pool; with a core without R13 the old message, including the
-`#define PROBOT_DASH_MAX_VALUE 2048` workaround. Tests (test/prosdk/dashboard, the fake store follows
-R13 with 4096 by default): a Translation2d protobuf descriptor (over 1024 B) is stored with core defaults
-(telemetry and tunable), a too-small `PROBOT_DASH_MAX_SCHEMA_BYTES` and an older core are reported once
-with the right advice, and `PROBOT_DASH_MAX_VALUE` 2048 still works on an older core.
+the schema table or the pool; with a core without R13 the old message, advising
+`#define PROBOT_DASH_MAX_VALUE <the schema's size> or more`. Tests (test/prosdk/dashboard, the fake store
+follows R13 with 4096 by default): a Translation2d protobuf descriptor (over 1024 B) is stored with core
+defaults (telemetry and tunable), `kinematics.proto` (ChassisVelocities) is refused with the defaults and
+reported with 4332 bytes and stored with 8192, a too-small `PROBOT_DASH_MAX_SCHEMA_BYTES` and an older core
+are reported once with the right advice, and `PROBOT_DASH_MAX_VALUE` 2048 still stores geometry2d.proto on
+an older core.
 
 ### P1 R12 part 1 delivered (2026-10-22): draft PR #37 (branch `feat/small-items`, 09a6fe4, stacked on #36)
 
@@ -399,10 +406,12 @@ last header of PR #37); without it the four fields stay null and the archive kee
 - `HAL_GetRSLState` -> `ds::rslState()`, `HAL_GetCommsDisableCount` -> `ds::commsDisableCount()`
   (`HAL_SUCCESS`); without R12 both report `HAL_HANDLE_ERROR` as on systemcore.
 - Brownout: `RobotController::SetBrownoutVoltages` / `IsBrownedOut` keep prosdk's computation (default
-  6.75 V, recovery 7.25 V, hysteresis, reported only). The brownout voltage is also core's
-  `setLowVoltage()` threshold, set at HAL initialization (when the sketch links the power module) and on
-  every `SetBrownoutVoltages`, so core's `isLowVoltage()` agrees with prosdk's entry voltage. WPILib 2027 has
-  no `GetBrownoutVoltage`.
+  6.75 V, recovery 7.25 V, hysteresis, reported only). An accepted `SetBrownoutVoltages` (in range) also
+  sets core's `setLowVoltage()` threshold to the brownout voltage, so core's `isLowVoltage()` agrees with
+  prosdk's entry voltage. The 6.75 V default is not forwarded at HAL initialization (it was in the first
+  wiring): core's flag is a low-battery warning, off by default, and 6.75 V would turn it on in every
+  sketch, far below a 3S LiPo cutoff, and overwrite a threshold the sketch set from a static
+  initializer. WPILib 2027 has no `GetBrownoutVoltage`.
 - `currentAmps()`: not wrapped. WPILib 2027 has no robot input current (`GetInputCurrent`/`HAL_GetVinCurrent`
   are gone; total current is a PowerDistribution reading, which the ESP32 HAL does not support), and no
   prosdk code read it. A sketch reads it from core and checks `std::isnan()`; NaN logged through prosdk

@@ -184,7 +184,7 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   telemetry/tunables backends to core's dashboard store; alerts to the DS alert widget; console lines with
   their level to core's console (R9, `console::write`); `HAL_GetSystemTimeValid` to core's wall-clock flag
   (R10, `ds::systemTimeValid()`); `HAL_GetRSLState` / `HAL_GetCommsDisableCount` to `ds::rslState()` /
-  `ds::commsDisableCount()`, the brownout voltage to core's low-voltage threshold
+  `ds::commsDisableCount()`, an accepted `SetBrownoutVoltages` to core's low-voltage threshold
   (`io::battery::setLowVoltage`) and a halted robot program to `probot::requestStop()` (R12); the
   refused-schema report to core's per-schema limit (R13, `PROBOT_DASH_MAX_SCHEMA_BYTES`). Battery
   current (`io::battery::currentAmps()`, NaN without a sensor) has no WPILib 2027 API and is not
@@ -286,7 +286,9 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
 - Sketch builds: `arduino-cli compile --build-path <persistent dir> --jobs 2`, never `--clean`.
   `tools/build/build.sh examples [sketch...]` compiles `examples/*` that way (huge_app, build folders
   `.build/examples/<name>`, probot-core from `$PROBOT_CORE` or `.upstream/probot-core`); CI runs it and
-  `tools/build/hal_link_test.py` against probot-core at `PROBOT_CORE_REF` (`.github/workflows/ci.yml`).
+  `tools/build/hal_link_test.py` against probot-core at `PROBOT_CORE_REF` (`.github/workflows/ci.yml`),
+  and the HAL link test again against `PROBOT_CORE_OLDEST_REF` (`feat/dashboard-store`, the oldest core
+  the bridge supports), so every fallback branch of `CoreBridge.hpp` is compiled.
 - Flash/RAM numbers are measured from real sketch builds (`xtensa-esp32s3-elf-size`) and recorded.
 
 ## 10. Scope
@@ -309,7 +311,8 @@ tables: tag36h11 4,696 B, tag16h5 240 B). **Decision: the detector ships.** It c
 huge_app partition, only sketches that call it pay for it (archive linking), and a camera board can pass
 grayscale frames to `Detect()` although the kit has no camera. Detection heap is not measured (no camera;
 estimate in `design/API-DIFFERENCES.md` section 3). The field images are not vendored (9.3 MB; upstream
-builds them only for its GUI). `examples/AprilTagFieldPose`: 2,097,676 B flash (66 %), 71,220 B RAM.
+builds them only for its GUI). `examples/AprilTagFieldPose`: 1,997,696 B flash (63.5 %), 71,316 B RAM (against core
+`feat/small-items`, 8.1).
 
 Re-implemented for this platform: `NetworkButton` and `NetworkBooleanEvent` over tunables
 (`wpilibc/0011`); Preferences on the DS as robust tunables `/Preferences/<key>` written back to NVS

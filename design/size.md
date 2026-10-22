@@ -306,8 +306,8 @@ Archive and sketches at `3450336` (CoreOps ABI 5: core R12 part 1 and R13 wired)
 `.upstream/probot-core` `sdk-target` at `09a6fe4` (`feat/small-items`: PRs #35 R14, #36 R13, #37 R12
 part 1, stacked on `feat/wall-clock`), one `tools/build/build.sh examples <8 names>` run. "Before" is
 the last number recorded against `feat/wall-clock` (b46069e, now 3ebde55 with the same tree): the
-archive of `bd0d149` for TemplateTimed and DriversShowcase (section 8), of the R9/R10 day for the
-others (design/PORT.md 8.1, design/examples.md).
+archive of `bd0d149` for TemplateTimed, DriversShowcase and BoardozaSdLog (section 8), of the R9/R10
+day for the others (design/PORT.md 8.1, design/examples.md).
 
 | Sketch | Flash before | Flash after | Change | Static RAM before | after | Change |
 |---|---:|---:|---:|---:|---:|---:|
@@ -328,4 +328,8 @@ others (design/PORT.md 8.1, design/examples.md).
 - The largest sketch (AprilTagFieldPose) is now 63.5 % of the huge_app partition (was 66.7 %).
 - The HAL link test (`tools/build/hal_link_test.py --compile`, every HAL module linked) against the
   same core: 1,687,713 B flash, 74,924 B static RAM.
+- Follow-up (same day): the brownout voltage is no longer forwarded to core's low-voltage threshold at
+  HAL initialization (only on an accepted `SetBrownoutVoltages`), and the older-core schema message
+  prints the schema's size. TemplateTimed 1,771,660 B (-108), HalSmoke 1,591,573 B (-72), HAL link
+  test 1,687,629 B (-84); static RAM unchanged. The table above keeps the `3450336` numbers.
 - The other examples were not re-measured; CI builds all of them against `feat/small-items`.

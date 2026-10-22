@@ -301,7 +301,8 @@ every other row was last measured against `feat/wall-clock` as above. Core R14 (
 Station page) makes every sketch about 100 KB smaller: 99,856-100,940 B less flash and 16-96 B more
 static RAM in the eight sketches re-measured (design/size.md section 9, which also lists
 TimedRobotDifferential, CommandBasedRobot, AprilTagFieldPose, DriversShowcase and HalSmoke; their
-numbers are in design/PORT.md 8.1). CI builds all examples on every push.
+numbers are in design/PORT.md 8.1). CI builds all examples on pushes to `dev` and `stable`, on pull
+requests and on manual runs.
 
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|

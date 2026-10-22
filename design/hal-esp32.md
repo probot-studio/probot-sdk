@@ -94,7 +94,8 @@ Driver Station (design/PORT.md section 8).
   after an e-stop periodic frames stop and new sends fail with
   `HAL_ERR_CANSessionMux_NotAllowed`.
 - **Brownout** is reported only (`HAL_GetBrownedOut`); outputs are not cut by hardware as on the
-  roboRIO. With probot-core R12 the brownout voltage is also core's low-voltage threshold (Power).
+  roboRIO. With probot-core R12 an accepted `SetBrownoutVoltages` also sets core's low-voltage
+  threshold (Power).
 
 ## Modules
 
@@ -323,13 +324,15 @@ Driver Station (design/PORT.md section 8).
   `PROBOT_BATTERY_ADC_PIN` or `PROBOT_BATTERY_INA`). Brownout from it with hysteresis (defaults
   6.75 V / 7.25 V, settable 4..13 V; never browned out below 0.5 V, i.e. no sensor).
 - Core's low-voltage flag (R12 `io::battery::setLowVoltage()` / `isLowVoltage()`, core's default
-  off): prosdk sets its threshold to the brownout voltage at HAL initialization (6.75 V) and on
-  every `HAL_SetBrownoutVoltages` (`RobotController::SetBrownoutVoltages`), so core's flag flips
-  at the voltage where `RobotController::IsBrownedOut()` enters brownout (core's flag has no
-  recovery voltage). Only when the sketch links the power module (`Power.cpp`: any `RobotController`
-  power or battery call, e.g. through `MotorController::SetVoltage` or a PWM motor's
-  `GetVoltage`); otherwise core's threshold stays off.
-  Without R12 nothing is forwarded.
+  off): an accepted `HAL_SetBrownoutVoltages` (`RobotController::SetBrownoutVoltages`, in range)
+  sets its threshold to the brownout voltage, so core's flag flips at the voltage where
+  `RobotController::IsBrownedOut()` enters brownout (core's flag has no recovery voltage). A
+  refused call (`HAL_PARAMETER_OUT_OF_RANGE`) changes nothing. The WPILib default (6.75 V) is not
+  forwarded: WPILib's brownout is a controller-rail concept, core's flag a low-battery warning
+  (core's README suggests a 3S LiPo, where 6.75 V is far below any cutoff), and forwarding it at
+  HAL initialization would turn core's flag on in every sketch and overwrite a threshold the
+  sketch set itself. Without the call core's threshold stays off or at the sketch's own
+  `setLowVoltage()`. Without R12 nothing is forwarded.
 - Battery current: core's `io::battery::currentAmps()` (R12: declared in every configuration, NaN
   without an INA sensor, before its first sample or after a failed read) has no HAL function.
   WPILib 2027 has no robot input current (`HAL_GetVinCurrent` and `RobotController::
