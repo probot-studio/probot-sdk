@@ -42,11 +42,11 @@ void CaseCommands(Ctx& ctx) {
         &arm, arm.Run([&] { ++defaultRuns; }).IgnoringDisable(true).WithName("ArmDefault"));
 
     // the scheduler is a singleton and keeps these actions: no captures of locals
-    static int inits, finishes, interrupts;
-    inits = finishes = interrupts = 0;
+    static int inits, finishes, interrupted;
+    inits = finishes = interrupted = 0;
     scheduler.OnCommandInitialize([](const cmd::Command&) { ++inits; });
     scheduler.OnCommandFinish([](const cmd::Command&) { ++finishes; });
-    scheduler.OnCommandInterrupt([](const cmd::Command&) { ++interrupts; });
+    scheduler.OnCommandInterrupt([](const cmd::Command&) { ++interrupted; });
 
     // sequence with a 100 ms wait, running while disabled
     auto sequence = cmd::Sequence(cmd::RunOnce([&] { events.push_back("seq-start"); }),
@@ -95,10 +95,10 @@ void CaseCommands(Ctx& ctx) {
     QCHECK_MSG(ctx, steps == 5, "race steps {}", steps);
     QCHECK_MSG(ctx, arm.periodic == 25, "subsystem periodic {}", arm.periodic);
     QCHECK_MSG(ctx, defaultRuns >= 20 && defaultRuns <= 24, "default runs {}", defaultRuns);
-    QCHECK_MSG(ctx, interrupts >= 1, "interrupts {}", interrupts);  // default cmd by armCommand
+    QCHECK_MSG(ctx, interrupted >= 1, "interrupts {}", interrupted);  // default cmd by armCommand
     QCHECK_MSG(ctx, finishes >= 3, "finishes {}", finishes);
     ctx.Note("inits={} finishes={} interrupts={} default_runs={} seq_us={}", inits, finishes,
-             interrupts, defaultRuns, seqDone);
+             interrupted, defaultRuns, seqDone);
 
     scheduler.CancelAll();
     scheduler.UnregisterAllSubsystems();
