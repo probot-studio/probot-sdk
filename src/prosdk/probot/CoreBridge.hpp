@@ -21,6 +21,10 @@
 // CoreOps entries stay null and the archive's defaults apply):
 //   - R6 loop rate (<probot/core/loop_timing.hpp>): PROSDK_CORE_HAS_LOOP_RATE
 //   - R7 opmode list and UTILITY mode (<probot/robot/opmodes.hpp>): PROSDK_CORE_HAS_OPMODES
+//   - R8 six gamepads, analog triggers, 8-way POV, names (<probot/io/joystick_frame.hpp>):
+//     PROSDK_CORE_HAS_MULTI_GAMEPAD. Without it the CoreGamepad fields of ABI 3 are filled the way
+//     core 0.4.0 behaved (trigger buttons 0/1, core's 4-way POV, the mapping profile's name,
+//     standard mapping) and only port 0 has data.
 //
 // ODR: every function here only calls core's config-free headers, so all definitions are the same
 // in every translation unit. The pin reservation depends on the sketch's configuration macros and
@@ -37,6 +41,7 @@
 #include <probot/dashboard/dashboard.hpp>
 #include <probot/ds.hpp>
 #include <probot/framework.hpp>
+#include <probot/io/joystick_api.hpp>
 #include <probot/io/joystick_mappings/mapping.hpp>
 #include <probot/robot/state.hpp>
 #include <probot/telemetry/telemetry.hpp>
@@ -59,6 +64,12 @@
 #define PROSDK_CORE_HAS_OPMODES 1
 #else
 #define PROSDK_CORE_HAS_OPMODES 0
+#endif
+
+#if __has_include(<probot/io/joystick_frame.hpp>)
+#define PROSDK_CORE_HAS_MULTI_GAMEPAD 1
+#else
+#define PROSDK_CORE_HAS_MULTI_GAMEPAD 0
 #endif
 
 #include <new>
@@ -93,6 +104,11 @@ static_assert(probot::robot::OpModeRegistry::kMaxOptions == pf::kCoreOpModeMaxOp
                       pf::kCoreOpModeMaxDescription,
               "probot-core opmode list limits changed");
 #endif
+#if PROSDK_CORE_HAS_MULTI_GAMEPAD
+static_assert(probot::io::kMaxGamepads == pf::kCoreMaxGamepads &&
+                  probot::io::kMaxGamepadName == pf::kCoreGamepadMaxName,
+              "probot-core gamepad limits changed");
+#endif
 #if PROSDK_CORE_HAS_LOOP_RATE
 static_assert(probot::core::kMinLoopPeriodMs == pf::kCoreLoopPeriodMinMs &&
                   probot::core::kMaxLoopPeriodMs == pf::kCoreLoopPeriodMaxMs,
@@ -109,6 +125,65 @@ inline uint32_t PacketSeq() { return probot::ds::packetSeq(); }
 
 inline int8_t Index(int i) {
   return (i < 0 || i > 127) ? int8_t{-1} : static_cast<int8_t>(i);
+}
+
+// core's joystick API on one snapshot, so the values of ABI 3 come from the same frame as the
+// raw arrays
+struct SnapshotSource final : probot::io::IGamepadSource {
+  SnapshotSource(int p, const probot::io::GamepadSnapshot& s) : port(p), snap(s) {}
+  probot::io::GamepadSnapshot read() const override { return snap; }
+#if PROSDK_CORE_HAS_MULTI_GAMEPAD
+  bool info(char* name, size_t cap, bool* standard) const override {
+    return probot::io::rawGamepad(port).info(name, cap, standard);
+  }
+#endif
+  int port;
+  probot::io::GamepadSnapshot snap;
+};
+
+// Analog value 0..255 of raw button i, as core's getRawButtonValue() reads it.
+inline uint8_t RawButtonValue(const probot::io::GamepadSnapshot& s, int i) {
+  if (i < 0 || static_cast<uint32_t>(i) >= s.buttonCount) {
+    return 0;
+  }
+#if PROSDK_CORE_HAS_MULTI_GAMEPAD
+  if (static_cast<uint32_t>(i) < s.valueCount) {
+    return s.buttonValues[i];
+  }
+#endif
+  return s.buttons[i] ? 255 : 0;
+}
+
+inline void FillCoreValues(int port, const probot::io::GamepadSnapshot& s,
+                           const probot::io::joystick_mapping::MappingProfile& m,
+                           pf::CoreGamepad* out) {
+  SnapshotSource source{port, s};
+  probot::io::joystick_api::Joystick joystick{&source};
+  out->leftTriggerRaw = RawButtonValue(s, m.LT);
+  out->rightTriggerRaw = RawButtonValue(s, m.RT);
+  out->pov = static_cast<int16_t>(joystick.getPOV());
+#if PROSDK_CORE_HAS_MULTI_GAMEPAD
+  out->leftTrigger = joystick.getLeftTriggerAxis();
+  out->rightTrigger = joystick.getRightTriggerAxis();
+  bool standard = false;
+  if (source.info(out->name, sizeof(out->name), &standard)) {
+    out->standardMapping = standard ? 1 : 0;
+  } else {
+    out->name[0] = '\0';
+    out->standardMapping = 0;
+  }
+#else
+  out->leftTrigger = out->leftTriggerRaw != 0 ? 1.0f : 0.0f;
+  out->rightTrigger = out->rightTriggerRaw != 0 ? 1.0f : 0.0f;
+  out->standardMapping = 1;
+  const char* name = m.name != nullptr ? m.name : "";
+  size_t n = 0;
+  while (name[n] != '\0' && n < pf::kCoreGamepadMaxName) {
+    out->name[n] = name[n];
+    ++n;
+  }
+  out->name[n] = '\0';
+#endif
 }
 
 inline bool RawGamepad(int port, pf::CoreGamepad* out) {
@@ -164,6 +239,7 @@ inline bool RawGamepad(int port, pf::CoreGamepad* out) {
   o.dpadDown = Index(m.DPadDown);
   o.dpadLeft = Index(m.DPadLeft);
   o.dpadRight = Index(m.DPadRight);
+  FillCoreValues(port, s, m, out);
   return true;
 }
 

@@ -207,15 +207,19 @@ Driver Station (design/PORT.md section 8).
   INIT or RUN phase is active and `selectedOpModeId()` while idle, so `OpModeRobot` constructs the
   selected opmode while disabled; an id whose mode differs from the control word's robot mode
   reports no opmode. There is no "first registered option" fallback.
-- Joysticks: core gamepad port n = HAL joystick n. The backend reads ports 0-5, but core's
-  `rawGamepad` (R2) delivers port 0 only, so joysticks 1-5 report no data until core R8 (more
-  gamepads) lands. The raw browser gamepad is remapped
-  through core's active mapping profile to WPILib's Gamepad (SDL) layout: buttons FACE_DOWN,
-  FACE_RIGHT, FACE_LEFT, FACE_UP, BACK, GUIDE, START, LEFT_STICK, RIGHT_STICK, LEFT_BUMPER,
-  RIGHT_BUMPER, DPAD_UP/DOWN/LEFT/RIGHT (0..14); axes LEFT_X, LEFT_Y, RIGHT_X, RIGHT_Y (Y down
-  positive), LEFT_TRIGGER, RIGHT_TRIGGER (0 or 1: core has trigger buttons only); POV 0 from the
-  D-pad. Descriptor: gamepad, type "standard", name = the mapping profile's name. No touchpads,
-  rumble or LEDs.
+- Joysticks (prosdk/platform/hal/CoreJoystick.cpp): core gamepad port n = HAL joystick n for
+  ports 0-5 (`ds::rawGamepad(0..5)`, core R8; with an older core only port 0 has data). A port
+  without a frame, or one core neutralized (stale), is a disconnected joystick. The raw browser
+  gamepad is remapped through the snapshot's mapping profile to WPILib's Gamepad (SDL) layout:
+  buttons FACE_DOWN, FACE_RIGHT, FACE_LEFT, FACE_UP, BACK, GUIDE, START, LEFT_STICK, RIGHT_STICK,
+  LEFT_BUMPER, RIGHT_BUMPER, DPAD_UP/DOWN/LEFT/RIGHT (0..14); axes LEFT_X, LEFT_Y, RIGHT_X,
+  RIGHT_Y (Y down positive), LEFT_TRIGGER, RIGHT_TRIGGER (0..1, analog: core's trigger value with
+  its deadzone; the raw axis value is the undeadzoned analog button value scaled to 0..32767).
+  POV 0 is core's 8-way POV; the D-pad buttons follow it (a diagonal presses both directions,
+  opposite directions cancel). Descriptor: name = core's gamepad name (UTF-8, at most 63 bytes,
+  empty when core has none); a gamepad with the browser's standard mapping is a gamepad of type
+  `HIDType::STANDARD`, any other one a generic HID (not a gamepad, type UNKNOWN; the profile
+  remap still applies). No touchpads, rumble or LEDs (`supportedOutputs` 0).
 - No alliance station, match info or game data. Match time from core (-1 when unknown).
 - `HAL_GetSystemTimeValid` (`RobotController::IsSystemTimeValid`) is true only once the wall clock
   is past 2024-01-01: nothing sets it after boot yet (core-requests.md R10), so DataLogManager

@@ -18,11 +18,14 @@
 //    carries core's activeOpModeId() (latched at INIT) in the INIT and RUN phases and its
 //    selectedOpModeId() while idle, so OpModeRobot constructs the selected opmode while disabled
 //    and starts it on enable, as with the FRC Driver Station.
-//  - joysticks: core gamepad port n is HAL joystick n. Raw browser (W3C) buttons and axes are
-//    remapped through core's active mapping profile into WPILib's Gamepad order (SDL): buttons
-//    FACE_DOWN..DPAD_RIGHT (0..14), axes LEFT_X, LEFT_Y, RIGHT_X, RIGHT_Y, LEFT_TRIGGER,
-//    RIGHT_TRIGGER (Y axes down-positive; triggers 0 or 1 since core only has trigger buttons),
-//    one POV from the D-pad. Rumble and LEDs are not supported (ignored).
+//  - joysticks (probot-core R8): core gamepad port n (0-5) is HAL joystick n, read with
+//    ds::rawGamepad(n) (data only for a port that received a frame). Raw browser (W3C) buttons
+//    and axes are remapped through core's active mapping profile into WPILib's Gamepad order
+//    (SDL): buttons FACE_DOWN..DPAD_RIGHT (0..14), axes LEFT_X, LEFT_Y, RIGHT_X, RIGHT_Y,
+//    LEFT_TRIGGER, RIGHT_TRIGGER (Y axes down-positive; triggers are core's analog values after
+//    its deadzone, raw = the analog button value), POV 0 from core's 8-way D-pad; the name and
+//    the standard-mapping flag go to the descriptor (prosdk/platform/hal/CoreJoystick.hpp).
+//    Rumble and LEDs are not supported (ignored).
 //  - no alliance station, match info or game data (zero/unknown); match time from core.
 //  - DriverStationDisplay (HAL_WriteDisplayAnsi): to the console, ANSI removed, repeats dropped.
 
@@ -42,44 +45,15 @@
 #include "prosdk/hal/cpp/MrcLibDs.hpp"
 #include "prosdk/platform/Console.hpp"
 #include "prosdk/platform/CoreOps.hpp"
+#include "prosdk/platform/hal/CoreJoystick.hpp"
 #include "prosdk/util/EventVector.hpp"
 #include "prosdk/util/string.hpp"
 
 using namespace prosdk::hal;
-using prosdk::platform::CoreGamepad;
 using prosdk::platform::CoreOps;
 using prosdk::platform::GetCoreOps;
 
 namespace {
-
-// WPILib Gamepad (SDL) indices
-enum : int {
-  kFaceDown = 0,
-  kFaceRight = 1,
-  kFaceLeft = 2,
-  kFaceUp = 3,
-  kBack = 4,
-  kGuide = 5,
-  kStart = 6,
-  kLeftStick = 7,
-  kRightStick = 8,
-  kLeftBumper = 9,
-  kRightBumper = 10,
-  kDpadUp = 11,
-  kDpadDown = 12,
-  kDpadLeft = 13,
-  kDpadRight = 14,
-  kNumButtons = 15,
-};
-enum : int {
-  kAxisLeftX = 0,
-  kAxisLeftY = 1,
-  kAxisRightX = 2,
-  kAxisRightY = 3,
-  kAxisLeftTrigger = 4,
-  kAxisRightTrigger = 5,
-  kNumAxes = 6,
-};
 
 struct Snapshot {
   Snapshot() { std::memset(this, 0, sizeof(*this)); }
@@ -93,123 +67,9 @@ struct Snapshot {
   HAL_ControlWord controlWord;
 };
 static_assert(std::is_standard_layout_v<Snapshot>);
+static_assert(HAL_MAX_JOYSTICKS == prosdk::platform::kCoreMaxGamepads);
 
 std::atomic_bool gShutdown{false};
-
-bool RawButton(const CoreGamepad& pad, int index) {
-  return index >= 0 && index < pad.buttonCount && index < 32 && ((pad.buttons >> index) & 1u);
-}
-
-// Raw axis (W3C, -1..1); false when the mapping has no such axis.
-bool RawAxis(const CoreGamepad& pad, int index, float* value) {
-  if (index < 0 || index >= pad.axisCount) {
-    return false;
-  }
-  *value = pad.axes[index];
-  return true;
-}
-
-int16_t ToRaw(float v) {
-  if (v > 1.0f) {
-    v = 1.0f;
-  } else if (v < -1.0f) {
-    v = -1.0f;
-  }
-  return static_cast<int16_t>(v * 32767.0f);
-}
-
-void SetAxis(HAL_JoystickAxes* axes, int index, float v) {
-  axes->axes[index] = v;
-  axes->raw[index] = ToRaw(v);
-  axes->available |= static_cast<uint16_t>(1u << index);
-}
-
-void SetButton(HAL_JoystickButtons* buttons, int index, bool available, bool pressed) {
-  if (!available) {
-    return;
-  }
-  buttons->available |= uint64_t{1} << index;
-  if (pressed) {
-    buttons->buttons |= uint64_t{1} << index;
-  }
-}
-
-// Fills one joystick from a core gamepad snapshot (all outputs were zeroed by the caller).
-void ConvertGamepad(const CoreGamepad& pad, HAL_JoystickAxes* axes, HAL_JoystickPOVs* povs,
-                    HAL_JoystickButtons* buttons, HAL_JoystickDescriptor* desc) {
-  const auto& m = pad.mapping;
-  float v = 0;
-  if (RawAxis(pad, m.leftX, &v)) {
-    SetAxis(axes, kAxisLeftX, v);
-  }
-  if (RawAxis(pad, m.leftY, &v)) {
-    // raw is W3C (up negative) when core inverts it; WPILib/SDL is also up negative
-    SetAxis(axes, kAxisLeftY, m.invertLeftY ? v : -v);
-  }
-  if (RawAxis(pad, m.rightX, &v)) {
-    SetAxis(axes, kAxisRightX, v);
-  }
-  if (RawAxis(pad, m.rightY, &v)) {
-    SetAxis(axes, kAxisRightY, m.invertRightY ? v : -v);
-  }
-  auto has = [&](int index) { return index >= 0 && index < pad.buttonCount; };
-  if (has(m.leftTrigger)) {
-    SetAxis(axes, kAxisLeftTrigger, RawButton(pad, m.leftTrigger) ? 1.0f : 0.0f);
-  }
-  if (has(m.rightTrigger)) {
-    SetAxis(axes, kAxisRightTrigger, RawButton(pad, m.rightTrigger) ? 1.0f : 0.0f);
-  }
-
-  SetButton(buttons, kFaceDown, has(m.a), RawButton(pad, m.a));
-  SetButton(buttons, kFaceRight, has(m.b), RawButton(pad, m.b));
-  SetButton(buttons, kFaceLeft, has(m.x), RawButton(pad, m.x));
-  SetButton(buttons, kFaceUp, has(m.y), RawButton(pad, m.y));
-  SetButton(buttons, kBack, has(m.back), RawButton(pad, m.back));
-  SetButton(buttons, kGuide, has(m.options), RawButton(pad, m.options));
-  SetButton(buttons, kStart, has(m.start), RawButton(pad, m.start));
-  SetButton(buttons, kLeftStick, has(m.leftStick), RawButton(pad, m.leftStick));
-  SetButton(buttons, kRightStick, has(m.rightStick), RawButton(pad, m.rightStick));
-  SetButton(buttons, kLeftBumper, has(m.leftBumper), RawButton(pad, m.leftBumper));
-  SetButton(buttons, kRightBumper, has(m.rightBumper), RawButton(pad, m.rightBumper));
-
-  bool up = false, down = false, left = false, right = false, dpad = false;
-  if (m.dpadFromAxis) {
-    // hat axis: -1 up, then clockwise in steps of 2/7; > 1 means centered
-    float hat = 0;
-    if (RawAxis(pad, m.dpadAxis, &hat)) {
-      dpad = true;
-      if (hat >= -1.05f && hat <= 1.05f) {
-        int step = static_cast<int>((hat + 1.0f) * 3.5f + 0.5f) % 8;  // 0 = up, 2 = right, ...
-        up = step == 7 || step == 0 || step == 1;
-        right = step >= 1 && step <= 3;
-        down = step >= 3 && step <= 5;
-        left = step >= 5 && step <= 7;
-      }
-    }
-  } else if (has(m.dpadUp) || has(m.dpadDown) || has(m.dpadLeft) || has(m.dpadRight)) {
-    dpad = true;
-    up = RawButton(pad, m.dpadUp);
-    down = RawButton(pad, m.dpadDown);
-    left = RawButton(pad, m.dpadLeft);
-    right = RawButton(pad, m.dpadRight);
-  }
-  if (dpad) {
-    SetButton(buttons, kDpadUp, true, up);
-    SetButton(buttons, kDpadDown, true, down);
-    SetButton(buttons, kDpadLeft, true, left);
-    SetButton(buttons, kDpadRight, true, right);
-    uint8_t pov = (up ? HAL_JOYSTICK_POV_UP : 0) | (right ? HAL_JOYSTICK_POV_RIGHT : 0) |
-                  (down ? HAL_JOYSTICK_POV_DOWN : 0) | (left ? HAL_JOYSTICK_POV_LEFT : 0);
-    povs->povs[0] = static_cast<HAL_JoystickPOV>(pov);
-    povs->available = 1;
-  }
-
-  desc->isGamepad = 1;
-  desc->gamepadType = 1;  // GenericHID::HIDType::STANDARD
-  desc->supportedOutputs = 0;
-  std::snprintf(desc->name, sizeof(desc->name), "%s",
-                m.name != nullptr ? m.name : "Probot gamepad");
-}
 
 HAL_RobotMode RobotModeFromCoreMode(uint8_t mode) {
   switch (mode) {
@@ -310,6 +170,7 @@ class ProbotCoreDs final : public MrcLibDs {
 
   // Poll state (core's user task only)
   Snapshot m_scratch;  // not on the stack: about 2.5 KB
+  prosdk::platform::CoreJoystickData m_stick;
   uint32_t m_lastSeq = 0;
   uint64_t m_lastWord = ~uint64_t{0};
 
@@ -365,10 +226,12 @@ void ProbotCoreDs::Poll() {
   next.controlWord = controlWord;
   next.matchTime = ops.matchTimeSeconds();
   for (int i = 0; i < HAL_MAX_JOYSTICKS; ++i) {
-    CoreGamepad pad;
-    std::memset(&pad, 0, sizeof(pad));
-    if (ops.rawGamepad(i, &pad)) {
-      ConvertGamepad(pad, &next.axes[i], &next.povs[i], &next.buttons[i], &next.descriptors[i]);
+    // ports with no frame stay empty (disconnected)
+    if (prosdk::platform::ReadCoreJoystick(ops, i, &m_stick)) {
+      next.axes[i] = m_stick.axes;
+      next.povs[i] = m_stick.povs;
+      next.buttons[i] = m_stick.buttons;
+      next.descriptors[i] = m_stick.descriptor;
     }
   }
   {

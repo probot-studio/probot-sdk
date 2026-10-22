@@ -14,7 +14,9 @@
 // dashboard, no opmode selected, loop period 20 ms. Every entry is always callable; GetCoreOps()
 // never returns a table with null pointers. Entries the sketch's probot-core does not provide
 // (R6 loop rate, R7 opmode list: compiled out by CoreBridge.hpp) are left null by the bridge and
-// get these defaults too.
+// get these defaults too. Without R8 (more gamepads) the bridge reports port 0 only and fills the
+// CoreGamepad fields of ABI 3 the way core 0.4.0 behaved (trigger buttons as 0/1, 4-way POV,
+// the mapping profile's name, standard mapping).
 //
 // ABI rules: only append fields, bump kCoreOpsAbiVersion on any change of meaning or layout. The
 // archive refuses a table whose abiVersion differs or whose size is smaller than its own.
@@ -32,7 +34,7 @@
 namespace prosdk::platform {
 
 /** Layout/meaning version of CoreOps; both sides must agree. */
-inline constexpr uint32_t kCoreOpsAbiVersion = 2;
+inline constexpr uint32_t kCoreOpsAbiVersion = 3;
 
 /** probot-core robot::Phase values (probot/robot/state.hpp). */
 enum CorePhase : uint8_t {
@@ -93,6 +95,12 @@ inline constexpr uint32_t kCoreLoopPeriodDefaultMs = 20;
 inline constexpr int kCoreGamepadMaxAxes = 20;
 inline constexpr int kCoreGamepadMaxButtons = 20;
 
+/** Driver Station gamepad ports (probot-core R8: io::kMaxGamepads; WPILib HAL_MAX_JOYSTICKS). */
+inline constexpr int kCoreMaxGamepads = 6;
+
+/** Longest gamepad name in bytes, UTF-8, without the terminator (core io::kMaxGamepadName). */
+inline constexpr size_t kCoreGamepadMaxName = 63;
+
 /**
  * Where each logical control is in the raw gamepad arrays (copy of core's active
  * joystick_mapping::MappingProfile). -1 means "not available".
@@ -104,7 +112,7 @@ struct CoreGamepadMapping {
   uint8_t invertLeftY, invertRightY;
   int8_t a, b, x, y;
   int8_t leftBumper, rightBumper;
-  int8_t leftTrigger, rightTrigger;  // buttons (core has no analog trigger values yet)
+  int8_t leftTrigger, rightTrigger;  // buttons; analog values in CoreGamepad (ABI 3)
   int8_t back, start, options;
   int8_t leftStick, rightStick;
   uint8_t dpadFromAxis;  // 1: the D-pad is one hat axis (dpadAxis), else four buttons
@@ -112,7 +120,11 @@ struct CoreGamepadMapping {
   int8_t dpadUp, dpadDown, dpadLeft, dpadRight;
 };
 
-/** One raw gamepad snapshot (browser order) plus the mapping that was active when it was read. */
+/**
+ * One raw gamepad snapshot (browser order) plus the mapping that was active when it was read.
+ * axisCount and buttonCount are 0 when core neutralized the port (frame older than core's input
+ * timeout, Driver Station owner released): the port then has no data.
+ */
 struct CoreGamepad {
   uint32_t timestampMs;  // core millis() of the packet
   uint32_t seq;          // core gamepad sequence number, never 0 for a valid snapshot
@@ -121,6 +133,17 @@ struct CoreGamepad {
   float axes[kCoreGamepadMaxAxes];
   uint32_t buttons;      // bit i = raw button i
   CoreGamepadMapping mapping;
+
+  // ---- ABI 3 (probot-core R8) ----
+  // Computed on the sketch side by core's joystick API (io::joystick_api::Joystick) on this
+  // snapshot, so they are exactly what core's own API reports.
+  float leftTrigger;        // getLeftTriggerAxis(): 0..1, core's stick deadzone applied
+  float rightTrigger;       // getRightTriggerAxis()
+  uint8_t leftTriggerRaw;   // the trigger button's analog value 0..255 (no deadzone; 255/0 from
+  uint8_t rightTriggerRaw;  // the pressed state when the Driver Station sent no value)
+  int16_t pov;              // getPOV(): -1 centered, else 0..315 degrees in steps of 45
+  uint8_t standardMapping;  // 1: the browser reports the W3C standard mapping
+  char name[kCoreGamepadMaxName + 1];  // the gamepad's name, UTF-8; "" when core has none
 };
 
 /** One Driver Station write to a dashboard topic (core dashboard::Write). */
@@ -158,7 +181,9 @@ struct CoreOps {
   bool (*isAttached)();       // a Driver Station client is connected
   float (*matchTimeSeconds)();  // remaining autonomous time, -1 when unknown
   uint32_t (*packetSeq)();      // increments with every Driver Station packet
-  bool (*rawGamepad)(int port, CoreGamepad* out);  // false: no data on that port
+  // ports 0..kCoreMaxGamepads-1; false: no Driver Station frame ever arrived on that port
+  // (ABI 3: the CoreGamepad layout above)
+  bool (*rawGamepad)(int port, CoreGamepad* out);
 
   // robot state
   float (*batteryVoltage)();  // volts; 0 until a battery reading exists (no sensor configured)
