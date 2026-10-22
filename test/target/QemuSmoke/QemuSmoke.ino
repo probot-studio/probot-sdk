@@ -2,9 +2,9 @@
 // Run it with tools/qemu/run.sh; see test/target/README.md and design/PORT.md section 11.
 //
 // No probot-core: QEMU has no WiFi, so the sketch does not include <prosdk.h>/<probot.h>.
-// FakeCore.cpp installs a fake CoreOps table (as the host tests do) and CaseRobot.cpp drives
-// core's framework hooks. Everything else is the real precompiled archive on the real Xtensa CPU,
-// FreeRTOS, newlib and ESP-IDF (esp_timer, NVS, LittleFS).
+// FakeCore.hpp (test/target/shared) installs a fake CoreOps table (as the host tests do) and
+// CaseRobot.cpp drives core's framework hooks. Everything else is the real precompiled archive on
+// the real Xtensa CPU, FreeRTOS, newlib and ESP-IDF (esp_timer, NVS, LittleFS).
 //
 // UART0 protocol (parsed by tools/qemu/run.sh):
 //   QEMU-SMOKE BEGIN boot=<n>
@@ -170,12 +170,6 @@ void RunnerTask(void*) {
 }  // namespace
 
 namespace qemu {
-
-void Line(std::string_view text) {
-  std::fwrite(text.data(), 1, text.size(), stdout);
-  std::fputc('\n', stdout);
-  std::fflush(stdout);
-}
 
 void Ctx::Check(bool ok, const char* expr, const char* file, int line, std::string_view extra) {
   ++checks;

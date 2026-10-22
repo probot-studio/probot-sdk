@@ -2,30 +2,24 @@
 //
 // QemuSmoke harness: shared declarations of the on-target smoke test (test/target/README.md).
 // The sketch runs on the real Xtensa CPU, FreeRTOS and newlib of an ESP32-S3 (Espressif QEMU),
-// without probot-core: FakeCore.cpp installs a fake CoreOps table, like the host tests.
+// without probot-core: FakeCore.hpp (test/target/shared) installs a fake CoreOps table, like the
+// host tests.
 
 #pragma once
 
 #include <stdint.h>
 
-#include <cstdio>
 #include <format>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "QemuUart.hpp"  // Line, Linef (test/target/shared)
+
 namespace qemu {
 
 /** The stack every case task gets: prosdk's PROBOT_USER_STACK (prosdk.h). */
 inline constexpr uint32_t kUserStack = 24576;
-
-/** Writes one line to UART0 (stdout) and flushes it. */
-void Line(std::string_view text);
-
-template <class... Args>
-void Linef(std::format_string<Args...> fmt, Args&&... args) {
-  Line(std::format(fmt, std::forward<Args>(args)...));
-}
 
 /** Result collector of one case. */
 struct Ctx {

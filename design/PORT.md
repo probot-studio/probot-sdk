@@ -360,6 +360,13 @@ behaviour, `drivers/`), probot-core (WiFi, Driver Station, gamepads, real hooks,
 battery) or real-time performance (QEMU's clock counts guest instructions, `-icount shift=2`, 4 ns
 each, not the ESP32-S3's real speed); those need a board.
 
+Speed benchmark in the same setup: `tools/qemu/run.sh --bench` (`test/target/QemuBench`),
+documented in [qemu-bench.md](qemu-bench.md). It times the robot loop under load at 20/10/5/2 ms,
+`CommandScheduler::Run()` with 0 to 200 commands, wpimath and Sleipnir, Boardoza driver decode
+paths, and heap and stack use. The counts are deterministic, so `--check` catches regressions
+of more than 10 % against `tools/qemu/bench-baseline.json`. The absolute times are estimates;
+see the caveats there.
+
 Measured 2026-10-22 (`tools/qemu/run.sh --boots 2`, both boots `pass=8 fail=0`): peak stack on the
 24576-byte user task 12.5 to 12.6 KB for the math case (LQR, Kalman, Sleipnir, trajectory), 5.3 KB
 for the hosted robot loop, 3.1 to 3.8 KB for the others; heap free 327 KB at start, 269 KB after

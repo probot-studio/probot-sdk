@@ -18,13 +18,33 @@ are in `.build/qemu/uart-<n>.log`, the compile log in `.build/qemu/compile.log`.
 ## Without probot-core
 
 probot-core needs WiFi, which QEMU does not emulate, so the sketch includes neither `<prosdk.h>`
-nor `<probot.h>`. `FakeCore.cpp` installs a fake `CoreOps` table at static initialization, as the
+nor `<probot.h>`. `shared/FakeCore.hpp` installs a fake `CoreOps` table at static initialization, as the
 sketch-side bridge (`prosdk/probot/CoreBridge.hpp`) does, and `CaseRobot.cpp` calls core's
 framework hooks (`detail::Boot`, `PreCycle`, `PostCycle`, `EmergencyStop`) the way core's user
 task and e-stop task do. Arduino's library discovery keys on a library's top-level header
 (`prosdk.h`, which pulls in `<probot.h>`), so `run.sh` gives the sketch `-I<repo>/src` and links
 `src/esp32s3/libprosdk.a` through `build.extra_libs`, which is what discovery of a precompiled
 library adds. No libraries folder is passed: probot-core cannot leak in.
+
+## Shared code and the speed benchmark (`QemuBench/`)
+
+`shared/` holds what both sketches use: `FakeCore.hpp` (the fake core, header-only, installed
+by a static initializer) and `QemuUart.hpp` (`qemu::Line`/`Linef` to UART0). Arduino compiles
+only the sketch folder, so `run.sh` adds `-I<repo>/test/target/shared`.
+
+`QemuBench/` is the on-target speed benchmark with the same setup. It covers the hosted
+`TimedRobot` under load at 20/10/5/2 ms through core's hooks, `CommandScheduler::Run()` with 0 to
+200 commands, wpimath and Sleipnir, Boardoza driver decode paths, and heap and stack use. It
+prints one `BENCH <name> iters= total_us= per_op_us= instr_per_op=` line per benchmark.
+
+```
+tools/qemu/run.sh --bench [--boots 2] [--check [--threshold 10]] [--save-baseline]
+```
+
+Its numbers are QEMU instruction counts (4 ns each), not ESP32-S3 times, so use them to compare
+builds. `--check` fails on a regression above the threshold against
+`tools/qemu/bench-baseline.json`. Results, caveats and the drivers it leaves out:
+`design/qemu-bench.md`.
 
 ## QEMU-only settings
 
