@@ -5,7 +5,8 @@
 // channel commutates synchronously, as the ESP32 Hall interrupt does: a test sets the Hall levels
 // with DIOSim and reads the outputs with DIOSim. INLx is the enable level; INHx reads high while
 // that phase gets the PWM (the duty itself is not simulated on the pin) and low otherwise. Step
-// times come from HAL_GetMonotonicTime, so sim::PauseTiming/StepTiming control the speed.
+// times come from HAL_GetMonotonicTime, converted to microseconds, so sim::PauseTiming/StepTiming
+// control the speed.
 //
 // It applies the ESP32 backend's argument and table checks, its slot count and one owner per
 // pin among the motors, and refuses pins that are allocated DIOs; it does not see other HAL
@@ -58,6 +59,12 @@ struct Motor {
 std::recursive_mutex gMutex;
 std::array<Motor, kMaxSixStepMotors> gMotors;
 
+// The feedback clock in microseconds, as esp_timer_get_time on the ESP32 backend;
+// HAL_GetMonotonicTime counts nanoseconds.
+int64_t NowUs() {
+  return HAL_GetMonotonicTime() / 1000;
+}
+
 Motor* Find(int32_t handle) {
   int slot = handle - 1;
   return slot >= 0 && slot < kMaxSixStepMotors && gMotors[slot].open ? &gMotors[slot] : nullptr;
@@ -85,7 +92,7 @@ void Apply(Motor& m) {
 
 // gMutex held. A new Hall state: count the step, then commutate.
 void OnHallState(Motor& m, int state) {
-  int64_t now = HAL_GetMonotonicTime();
+  int64_t now = NowUs();
   int step = detail::StepOf(m.table[static_cast<size_t>(state)]);
   if (step < 0) {
     ++m.feedback.badStates;
@@ -191,7 +198,7 @@ int32_t OpenSixStep(const SixStepPins& pins, uint32_t pwmHz, const char* allocat
     m.allocation = allocationLocation ? allocationLocation : "";
     m.feedback.hallState = ReadHalls(pins);
     m.lastStep = detail::StepOf(m.table[static_cast<size_t>(m.feedback.hallState)]);
-    m.feedback.lastStepUs = HAL_GetMonotonicTime();
+    m.feedback.lastStepUs = NowUs();
     for (int i = 0; i < 3; ++i) {
       m.hallCallbacks[i] =
           HALSIM_RegisterDIOValueCallback(pins.hall[i], &HallCallback, &m, false);
@@ -265,7 +272,7 @@ bool GetSixStepFeedback(int32_t handle, SixStepFeedback* out, int32_t* status) {
     return false;
   }
   *out = m->feedback;
-  out->nowUs = HAL_GetMonotonicTime();
+  out->nowUs = NowUs();
   *status = HAL_SUCCESS;
   return true;
 }

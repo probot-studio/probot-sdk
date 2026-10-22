@@ -79,7 +79,7 @@ struct SixStepFeedback {
   int64_t steps = 0;          ///< counted Hall steps, positive in the table's forward direction
   int64_t lastStepUs = 0;     ///< time of the last counted step (clock of nowUs)
   int64_t periodUs = 0;       ///< signed time per step between the last two steps (0: none yet)
-  int64_t nowUs = 0;          ///< the clock (HAL_GetMonotonicTime on the host) at this read
+  int64_t nowUs = 0;          ///< the clock (HAL_GetMonotonicTime / 1000 on the host) at this read
   uint32_t badStates = 0;     ///< Hall reads the table does not drive, or that skipped 3 steps
   std::array<SixStepPhase, 3> phases{};  ///< what A, B and C are driven to now
 };
