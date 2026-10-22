@@ -1,0 +1,1082 @@
+// Copyright (c) Probot Studio. Hand-written (not vendored); see LICENSE.
+//
+// Mirrors upstream NetworkTablesTunableBackend.cpp (WPILib 2027): the same entry kinds (dirty,
+// always-get, complex), the same re-entrancy rules (entries are updated with the backend mutex
+// released; erases and untracks requested during an update are deferred; entries inserted during
+// an update wait for the next one), the same remote-tune sequence and warnings. The transport is
+// probot-core's dashboard store instead of NetworkTables publishers and a listener poller.
+
+#include "prosdk/platform/dashboard/ProbotTunableBackend.hpp"
+
+#include <stdint.h>
+
+#include <algorithm>
+#include <cstring>
+#include <exception>
+#include <format>
+#include <mutex>
+#include <utility>
+
+#include "prosdk/tunables/ComplexTunable.hpp"
+#include "prosdk/tunables/TunableConfig.hpp"
+#include "prosdk/tunables/TunableRegistry.hpp"
+#include "prosdk/tunables/detail/PathUtil.hpp"
+#include "prosdk/tunables/detail/TunableBase.hpp"
+#include "prosdk/tunables/detail/TunableDetail.hpp"
+#include "prosdk/tunables/detail/TunableMember.hpp"
+#include "prosdk/tunables/detail/TunableTypeValue.hpp"
+#include "prosdk/util/json.hpp"
+
+using namespace prosdk::backend;
+using namespace prosdk::tunables;
+namespace dash = prosdk::platform::dashboard;
+using dash::ValueType;
+using dash::WriteStatus;
+
+namespace {
+
+std::string_view GetTypeString(std::string_view defaultType, const TunableConfig* config) {
+  if (config && config->typeString) {
+    return *config->typeString;
+  }
+  return defaultType;
+}
+
+prosdk::util::json GetProperties(const TunableConfig* config) {
+  if (!config) {
+    prosdk::util::json properties = prosdk::util::json::object();
+    properties["mutable"] = true;
+    return properties;
+  }
+
+  prosdk::util::json properties = config->properties;
+  if (config->robust) {
+    properties["robust"] = true;
+  }
+  properties["mutable"] = config->isMutable;
+  return properties;
+}
+
+uint8_t GetFlags(const TunableConfig* config) {
+  uint8_t flags = dash::kFlagTunable;
+  if (!config || config->isMutable) {
+    flags |= dash::kFlagMutable;
+  }
+  if (config && config->robust) {
+    flags |= dash::kFlagRobust;
+  }
+  return flags;
+}
+
+bool IsAlwaysGet(const TunableConfig* config) {
+  return config && config->polling == TunableConfig::Polling::kAlwaysGet;
+}
+
+void NotifyOnTune(uint32_t uid, TunableRegistry::TunableInfo& info) {
+  TunableRegistry::ResetChangedAfterUpdate(uid);
+  if (auto config = info.config) {
+    if (config->onTune) {
+      TunableRegistry::RunAfterUpdate([uid] {
+        auto info = TunableRegistry::GetTunable(uid);
+        if (auto config = info.config) {
+          if (auto&& onTune = config->onTune) {
+            onTune(*info.tunable, config->parent);
+          }
+        }
+      });
+    }
+  }
+}
+
+void NotifyRemoteSet(TunableRegistry::TunableInfo& info) {
+  if (auto config = info.config) {
+    if (config->onRemoteSet) {
+      config->onRemoteSet(*info.tunable, config->parent);
+    }
+  }
+}
+
+bool ShouldUpdateNetwork(const TunableRegistry::TunableInfo& info) {
+  return (info.config && info.config->polling == TunableConfig::Polling::kAlwaysGet) ||
+         info.IsChanged();
+}
+
+template <typename T>
+const T& GetValue(const TunableRegistry::TunableInfo& info) {
+  if (info.type == detail::GetTunableTypeValue<T, false>()) {
+    return static_cast<detail::TunableValueBase<T>*>(info.tunable)->Get();
+  }
+  return static_cast<detail::TunableMemberValueBase<T>*>(info.tunable)->Get(info.config->parent);
+}
+
+template <typename T>
+void SetValue(const TunableRegistry::TunableInfo& info, T value) {
+  if (info.type == detail::GetTunableTypeValue<T, false>()) {
+    static_cast<detail::TunableValueBase<T>*>(info.tunable)->Set(std::move(value));
+  } else {
+    static_cast<detail::TunableMemberValueBase<T>*>(info.tunable)
+        ->Set(info.config->parent, std::move(value));
+  }
+}
+
+// ---- store encoding of the tunable value types ----
+
+template <typename T>
+struct Codec;
+
+template <typename T>
+  requires std::is_arithmetic_v<T>
+struct ScalarCodec {
+  // bool -> u8, integers -> i64, float -> f32, double -> f64
+  using Wire = std::conditional_t<std::is_same_v<T, bool>, uint8_t,
+                                  std::conditional_t<std::is_integral_v<T>, int64_t, T>>;
+  static void Encode(const T& value, std::vector<uint8_t>& out) {
+    dash::Append<Wire>(out, static_cast<Wire>(value));
+  }
+  static bool Decode(std::span<const uint8_t> data, T& value) {
+    if (data.size() != sizeof(Wire)) {
+      return false;
+    }
+    if constexpr (std::is_same_v<T, bool>) {
+      value = data[0] != 0;
+    } else {
+      value = static_cast<T>(dash::Read<Wire>(data, 0));
+    }
+    return true;
+  }
+};
+
+template <>
+struct Codec<bool> : ScalarCodec<bool> {};
+template <>
+struct Codec<int32_t> : ScalarCodec<int32_t> {};
+template <>
+struct Codec<int64_t> : ScalarCodec<int64_t> {};
+template <>
+struct Codec<float> : ScalarCodec<float> {};
+template <>
+struct Codec<double> : ScalarCodec<double> {};
+
+template <>
+struct Codec<std::string> {
+  static void Encode(const std::string& value, std::vector<uint8_t>& out) {
+    out.assign(value.begin(), value.end());
+  }
+  static bool Decode(std::span<const uint8_t> data, std::string& value) {
+    value.assign(reinterpret_cast<const char*>(data.data()), data.size());
+    return true;
+  }
+};
+
+template <typename U>
+struct Codec<std::vector<U>> {
+  using Element = ScalarCodec<U>;
+  using Wire = typename Element::Wire;
+  static void Encode(const std::vector<U>& value, std::vector<uint8_t>& out) {
+    out.reserve(value.size() * sizeof(Wire));
+    for (U v : value) {
+      Element::Encode(v, out);
+    }
+  }
+  static bool Decode(std::span<const uint8_t> data, std::vector<U>& value) {
+    if (data.size() % sizeof(Wire) != 0) {
+      return false;
+    }
+    value.clear();
+    value.reserve(data.size() / sizeof(Wire));
+    for (size_t i = 0; i < data.size(); i += sizeof(Wire)) {
+      U v{};
+      Element::Decode(data.subspan(i, sizeof(Wire)), v);
+      value.push_back(v);
+    }
+    return true;
+  }
+};
+
+template <>
+struct Codec<std::vector<uint8_t>> {  // raw
+  static void Encode(const std::vector<uint8_t>& value, std::vector<uint8_t>& out) {
+    out.assign(value.begin(), value.end());
+  }
+  static bool Decode(std::span<const uint8_t> data, std::vector<uint8_t>& value) {
+    value.assign(data.begin(), data.end());
+    return true;
+  }
+};
+
+template <>
+struct Codec<std::vector<std::string>> {
+  static void Encode(const std::vector<std::string>& value, std::vector<uint8_t>& out) {
+    for (const auto& v : value) {
+      // an element over 64 KiB cannot be stored anyway (PROBOT_DASH_MAX_VALUE)
+      dash::AppendStringElement(out, std::string_view{v}.substr(0, 0xFFFF));
+    }
+  }
+  static bool Decode(std::span<const uint8_t> data, std::vector<std::string>& value) {
+    return dash::DecodeStringArray(data, value);
+  }
+};
+
+}  // namespace
+
+class ProbotTunableBackend::Entry {
+ public:
+  enum class UpdateKind { DIRTY, ALWAYS_GET, COMPLEX };
+
+  Entry(std::string key, std::string path, uint32_t uid, ValueType valueType,
+        std::string typeString, std::string properties, uint8_t flags)
+      : m_key{std::move(key)},
+        m_path{std::move(path)},
+        m_uid{uid},
+        m_valueType{valueType},
+        m_typeString{std::move(typeString)},
+        m_properties{std::move(properties)},
+        m_flags{flags} {}
+
+  virtual ~Entry() { Close(); }
+
+  Entry(const Entry&) = delete;
+  Entry& operator=(const Entry&) = delete;
+
+  uint32_t GetUid() const { return m_uid; }
+  const std::string& GetKey() const { return m_key; }
+  ValueType GetValueType() const { return m_valueType; }
+  bool IsMutable() const { return (m_flags & dash::kFlagMutable) != 0; }
+  virtual void UpdateNetwork(bool force) = 0;
+  virtual ValueEntry* AsValueEntry() { return nullptr; }
+
+  /** Publishes the store topic (caller holds the backend mutex). */
+  dash::PublishResult Open() {
+    auto result = dash::PublishTopic(m_path, m_valueType, m_typeString, m_properties, m_flags);
+    m_id.store(result.id, std::memory_order_release);
+    return result;
+  }
+
+  /** Unpublishes the store topic. */
+  void Close() { dash::UnpublishTopic(m_id.exchange(dash::kInvalidTopic)); }
+
+  uint16_t GetTopicId() const { return m_id.load(std::memory_order_acquire); }
+  bool IsPublished() const { return GetTopicId() != dash::kInvalidTopic; }
+
+  void SetInsertEpoch(uint64_t epoch) { m_insertEpoch = epoch; }
+  uint64_t GetInsertEpoch() const { return m_insertEpoch; }
+  void SetUpdateKind(UpdateKind kind) { m_updateKind = kind; }
+  UpdateKind GetUpdateKind() const { return m_updateKind; }
+  void SetDirtyQueued(bool queued) { m_dirtyQueued = queued; }
+  bool IsDirtyQueued() const { return m_dirtyQueued; }
+  void MarkRemoved() { m_removed = true; }
+  bool IsRemoved() const { return m_removed; }
+
+ protected:
+  bool SetStoreValue(std::span<const uint8_t> data) {
+    return dash::SetTopicValue(GetTopicId(), data, m_path);
+  }
+
+  void ReportWarning(std::string_view msg) {
+    TunableRegistry::ReportWarning(std::format("Dashboard tunable '{}': {}", m_path, msg));
+  }
+
+  void ReportWarning(std::string_view msg, const std::exception& e) {
+    ReportWarning(std::format("{}: {}", msg, e.what()));
+  }
+
+ private:
+  std::string m_key;   // path relative to the backend prefix (m_entries key)
+  std::string m_path;  // store topic path
+  uint32_t m_uid;
+  ValueType m_valueType;
+  std::string m_typeString;
+  std::string m_properties;
+  uint8_t m_flags;
+  std::atomic<uint16_t> m_id{dash::kInvalidTopic};
+  uint64_t m_insertEpoch = 0;
+  UpdateKind m_updateKind = UpdateKind::DIRTY;
+  bool m_dirtyQueued = false;
+  bool m_removed = false;
+};
+
+class ProbotTunableBackend::ValueEntry : public Entry {
+ public:
+  using Entry::Entry;
+
+  ValueEntry* AsValueEntry() override { return this; }
+
+  /** Applies a Driver Station write; false if the payload does not decode. */
+  bool UpdateTunable(std::span<const uint8_t> data) {
+    auto info = TunableRegistry::GetTunable(GetUid());
+    if (!info) {
+      return false;
+    }
+    if (!DoUpdateTunable(info, data)) {
+      return false;
+    }
+    TunableRegistry::RecordTuneApplied(GetUid());
+    NotifyRemoteSet(info);
+    m_forceUpdate = true;
+    return true;
+  }
+
+  void UpdateNetwork(bool force) override {
+    if (!IsPublished()) {
+      return;  // published (and forced) once the store is ready
+    }
+    auto info = TunableRegistry::GetTunable(GetUid());
+    if (!info) {
+      return;
+    }
+    bool forcePublish = force || m_forceUpdate;
+    if (!forcePublish && !ShouldUpdateNetwork(info)) {
+      return;
+    }
+    m_data.clear();
+    if (Encode(info, m_data) && (forcePublish || m_data != m_lastData)) {
+      SetStoreValue(m_data);
+      m_lastData = m_data;
+    }
+    TunableRegistry::ResetChangedAfterUpdate(GetUid());
+    m_forceUpdate = false;
+  }
+
+ protected:
+  virtual bool Encode(const TunableRegistry::TunableInfo& info, std::vector<uint8_t>& out) = 0;
+  virtual bool DoUpdateTunable(const TunableRegistry::TunableInfo& info,
+                               std::span<const uint8_t> data) = 0;
+
+ private:
+  std::vector<uint8_t> m_data;
+  std::vector<uint8_t> m_lastData;
+  bool m_forceUpdate = false;
+};
+
+namespace {
+
+template <typename T>
+class ValueTunableEntry final : public ProbotTunableBackend::ValueEntry {
+ public:
+  using ValueEntry::ValueEntry;
+
+ private:
+  bool Encode(const TunableRegistry::TunableInfo& info, std::vector<uint8_t>& out) override {
+    Codec<T>::Encode(GetValue<T>(info), out);
+    return true;
+  }
+
+  bool DoUpdateTunable(const TunableRegistry::TunableInfo& info,
+                       std::span<const uint8_t> data) override {
+    T value{};
+    if (!Codec<T>::Decode(data, value)) {
+      return false;
+    }
+    SetValue<T>(info, std::move(value));
+    return true;
+  }
+};
+
+class StructTunableEntry final : public ProbotTunableBackend::ValueEntry {
+ public:
+  using ValueEntry::ValueEntry;
+
+ private:
+  bool Encode(const TunableRegistry::TunableInfo& info, std::vector<uint8_t>& out) override {
+    if (info.type == detail::TunableTypeValue::STRUCT) {
+      auto tunable = static_cast<detail::TunableStructBase*>(info.tunable);
+      PublishSchemas(*tunable);
+      out.resize(tunable->GetStructSize());
+      tunable->PackStruct(out);
+    } else {
+      auto tunable = static_cast<detail::TunableMemberStructBase*>(info.tunable);
+      PublishSchemas(*tunable);
+      out.resize(tunable->GetStructSize(info.config->parent));
+      tunable->PackStruct(info.config->parent, out);
+    }
+    return true;
+  }
+
+  bool DoUpdateTunable(const TunableRegistry::TunableInfo& info,
+                       std::span<const uint8_t> data) override {
+    try {
+      if (info.type == detail::TunableTypeValue::STRUCT) {
+        return static_cast<detail::TunableStructBase*>(info.tunable)->UnpackStruct(data);
+      } else {
+        return static_cast<detail::TunableMemberStructBase*>(info.tunable)
+            ->UnpackStruct(info.config->parent, data);
+      }
+    } catch (const std::exception& e) {
+      ReportWarning("rejected struct tune payload", e);
+      return false;
+    } catch (...) {
+      ReportWarning("rejected struct tune payload");
+      return false;
+    }
+  }
+
+  template <typename B>
+  void PublishSchemas(B& tunable) {
+    if (m_schemaPublished) {
+      return;
+    }
+    tunable.ForEachStructSchema([](std::string_view typeName, std::string_view schema) {
+      dash::AddSchema(typeName, "structschema",
+                      {reinterpret_cast<const uint8_t*>(schema.data()), schema.size()});
+    });
+    m_schemaPublished = true;
+  }
+
+  bool m_schemaPublished = false;
+};
+
+class ProtobufTunableEntry final : public ProbotTunableBackend::ValueEntry {
+ public:
+  using ValueEntry::ValueEntry;
+
+ private:
+  bool Encode(const TunableRegistry::TunableInfo& info, std::vector<uint8_t>& out) override {
+    if (info.type == detail::TunableTypeValue::PROTOBUF) {
+      auto tunable = static_cast<detail::TunableProtobufBase*>(info.tunable);
+      PublishSchemas(*tunable);
+      return tunable->PackProtobuf(out);
+    }
+    auto tunable = static_cast<detail::TunableMemberProtobufBase*>(info.tunable);
+    PublishSchemas(*tunable);
+    return tunable->PackProtobuf(info.config->parent, out);
+  }
+
+  bool DoUpdateTunable(const TunableRegistry::TunableInfo& info,
+                       std::span<const uint8_t> data) override {
+    bool updated = false;
+    try {
+      if (info.type == detail::TunableTypeValue::PROTOBUF) {
+        updated = static_cast<detail::TunableProtobufBase*>(info.tunable)->UnpackProtobuf(data);
+      } else {
+        updated = static_cast<detail::TunableMemberProtobufBase*>(info.tunable)
+                      ->UnpackProtobuf(info.config->parent, data);
+      }
+    } catch (const std::exception& e) {
+      ReportWarning("rejected protobuf tune payload", e);
+      return false;
+    } catch (...) {
+      ReportWarning("rejected protobuf tune payload");
+      return false;
+    }
+    if (!updated) {
+      ReportWarning("rejected protobuf tune payload");
+    }
+    return updated;
+  }
+
+  template <typename B>
+  void PublishSchemas(B& tunable) {
+    if (m_schemaPublished) {
+      return;
+    }
+    tunable.ForEachProtobufDescriptor(
+        [](std::string_view filename) { return dash::HasSchema(filename); },
+        [](std::string_view filename, std::string_view descriptor) {
+          dash::AddSchema(filename, "proto:FileDescriptorProto",
+                          {reinterpret_cast<const uint8_t*>(descriptor.data()),
+                           descriptor.size()});
+        });
+    m_schemaPublished = true;
+  }
+
+  bool m_schemaPublished = false;
+};
+
+class ComplexTunableEntry final : public ProbotTunableBackend::Entry {
+ public:
+  ComplexTunableEntry(std::string key, std::string path, uint32_t uid, std::string tunableType)
+      : Entry{std::move(key),
+              std::move(path),
+              uid,
+              ValueType::kString,
+              "string",
+              R"({"mutable":false})",
+              dash::kFlagTunable},
+        m_tunableType{std::move(tunableType)} {}
+
+  void UpdateNetwork(bool force) override {
+    if (force && IsPublished()) {
+      SetStoreValue({reinterpret_cast<const uint8_t*>(m_tunableType.data()),
+                     m_tunableType.size()});
+    }
+    TunableRegistry::ResetChangedAfterUpdate(GetUid());
+  }
+
+ private:
+  std::string m_tunableType;
+};
+
+template <typename T>
+std::shared_ptr<ProbotTunableBackend::Entry> MakeValueEntry(std::string_view key,
+                                                            std::string path, uint32_t uid,
+                                                            const TunableConfig* config,
+                                                            ValueType valueType,
+                                                            std::string_view typeString) {
+  return std::make_shared<T>(std::string{key}, std::move(path), uid, valueType,
+                             std::string{GetTypeString(typeString, config)},
+                             GetProperties(config).to_string(), GetFlags(config));
+}
+
+}  // namespace
+
+ProbotTunableBackend::ProbotTunableBackend(std::string_view prefix) : m_prefix{prefix} {
+  dash::AddParticipant(this);
+}
+
+void ProbotTunableBackend::TrackEntry(const std::shared_ptr<Entry>& entry,
+                                      const TunableConfig* config,
+                                      detail::TunableTypeValue type) {
+  using enum detail::TunableTypeValue;
+  if (type == COMPLEX || type == MEMBER_COMPLEX) {
+    entry->SetUpdateKind(Entry::UpdateKind::COMPLEX);
+    m_complexEntries.emplace_back(entry);
+  } else if (IsAlwaysGet(config)) {
+    entry->SetUpdateKind(Entry::UpdateKind::ALWAYS_GET);
+    m_alwaysGetEntries.emplace_back(entry);
+  } else {
+    entry->SetUpdateKind(Entry::UpdateKind::DIRTY);
+  }
+}
+
+void ProbotTunableBackend::UntrackEntry(const std::shared_ptr<Entry>& entry) {
+  if (m_updateDepth > 0) {
+    m_deferredUntracks.emplace_back(entry);
+    return;
+  }
+  UntrackEntryNow(entry);
+}
+
+void ProbotTunableBackend::UntrackEntryNow(const std::shared_ptr<Entry>& entry) {
+  entry->SetDirtyQueued(false);
+  std::erase(m_dirtyEntries, entry);
+  std::erase(m_alwaysGetEntries, entry);
+  std::erase(m_complexEntries, entry);
+}
+
+void ProbotTunableBackend::EnqueueDirtyEntry(const std::shared_ptr<Entry>& entry) {
+  if (entry->IsRemoved() || entry->GetUpdateKind() != Entry::UpdateKind::DIRTY ||
+      entry->IsDirtyQueued()) {
+    return;
+  }
+  entry->SetDirtyQueued(true);
+  m_dirtyEntries.emplace_back(entry);
+}
+
+void ProbotTunableBackend::RetireEntry(const std::shared_ptr<Entry>& entry) {
+  if (entry->IsRemoved()) {
+    return;
+  }
+  UntrackEntry(entry);
+  entry->MarkRemoved();
+  if (auto it = m_topics.find(entry->GetTopicId());
+      it != m_topics.end() && it->second.get() == entry->AsValueEntry()) {
+    m_topics.erase(it);
+  }
+  std::erase(m_waiting, entry);
+  entry->Close();
+}
+
+void ProbotTunableBackend::RemovePublishedEntry(std::string path,
+                                                const std::shared_ptr<Entry>& entry) {
+  auto uid = entry->GetUid();
+  RetireEntry(entry);
+  if (auto uidIt = m_uids.find(uid); uidIt != m_uids.end()) {
+    std::erase(uidIt->second, path);
+    if (uidIt->second.empty()) {
+      m_uids.erase(uidIt);
+    }
+  }
+  EraseEntry(std::move(path), entry);
+}
+
+void ProbotTunableBackend::EraseEntry(std::string path, const std::shared_ptr<Entry>& entry) {
+  if (m_updateDepth > 0) {
+    m_deferredErases.emplace_back(std::move(path), entry);
+    return;
+  }
+  auto it = m_entries.find(path);
+  if (it != m_entries.end() && it->second == entry) {
+    m_entries.erase(it);
+  }
+}
+
+void ProbotTunableBackend::ApplyDeferredErases() {
+  if (m_clearTrackedEntries) {
+    ClearTrackedEntries();
+    m_deferredErases.clear();
+    m_deferredUntracks.clear();
+    m_clearTrackedEntries = false;
+    return;
+  }
+
+  for (auto&& pending : m_deferredErases) {
+    auto it = m_entries.find(pending.path);
+    if (it != m_entries.end() && it->second == pending.entry) {
+      m_entries.erase(it);
+    }
+  }
+  m_deferredErases.clear();
+
+  for (auto&& entry : m_deferredUntracks) {
+    UntrackEntryNow(entry);
+  }
+  m_deferredUntracks.clear();
+}
+
+void ProbotTunableBackend::ClearTrackedEntries() {
+  for (auto&& entry : m_dirtyEntries) {
+    entry->SetDirtyQueued(false);
+  }
+  m_dirtyEntries.clear();
+  m_alwaysGetEntries.clear();
+  m_complexEntries.clear();
+}
+
+ProbotTunableBackend::~ProbotTunableBackend() {
+  Retire();
+}
+
+void ProbotTunableBackend::Retire() {
+  // no more Driver Station writes or flushes reach this backend (takes the routing lock, so it
+  // is never called with m_mutex held)
+  dash::RemoveParticipant(this);
+  std::scoped_lock lock{m_mutex};
+  if (m_retired) {
+    return;
+  }
+  m_retired = true;
+  for (auto&& [path, entry] : m_entries) {
+    RetireEntry(entry);
+  }
+  m_entries.clear();
+  m_uids.clear();
+  m_topics.clear();
+  m_pendingWrites.clear();
+  m_waiting.clear();
+  m_hasWaiting.store(false);
+  m_deferredErases.clear();
+  if (m_updateDepth > 0) {
+    m_deferredUntracks.clear();
+    m_clearTrackedEntries = true;
+  } else {
+    ClearTrackedEntries();
+  }
+}
+
+bool ProbotTunableBackend::Publish(std::string_view path, uint32_t uid,
+                                   detail::TunableBase& tunable, const TunableConfig* config,
+                                   detail::TunableTypeValue type) {
+  std::shared_ptr<Entry> entry;
+  {
+    std::scoped_lock lock{m_mutex};
+    if (m_retired) {
+      return false;
+    }
+    if (auto it = m_entries.find(path); it != m_entries.end() && !it->second->IsRemoved()) {
+      TunableRegistry::ReportWarning(
+          std::format("Dashboard tunable '{}{}' already exists", m_prefix, path));
+      return false;
+    }
+
+    std::string storePath = std::format("{}{}", m_prefix, path);
+    using enum detail::TunableTypeValue;
+    switch (type) {
+      case BOOLEAN:
+      case MEMBER_BOOLEAN:
+        entry = MakeValueEntry<ValueTunableEntry<bool>>(path, std::move(storePath), uid, config,
+                                                        ValueType::kBoolean, "boolean");
+        break;
+      case INT32:
+      case MEMBER_INT32:
+        entry = MakeValueEntry<ValueTunableEntry<int32_t>>(path, std::move(storePath), uid,
+                                                           config, ValueType::kInt, "int");
+        break;
+      case INT64:
+      case MEMBER_INT64:
+        entry = MakeValueEntry<ValueTunableEntry<int64_t>>(path, std::move(storePath), uid,
+                                                           config, ValueType::kInt, "int");
+        break;
+      case FLOAT:
+      case MEMBER_FLOAT:
+        entry = MakeValueEntry<ValueTunableEntry<float>>(path, std::move(storePath), uid, config,
+                                                         ValueType::kFloat, "float");
+        break;
+      case DOUBLE:
+      case MEMBER_DOUBLE:
+        entry = MakeValueEntry<ValueTunableEntry<double>>(path, std::move(storePath), uid,
+                                                          config, ValueType::kDouble, "double");
+        break;
+      case STRING:
+      case MEMBER_STRING:
+        entry = MakeValueEntry<ValueTunableEntry<std::string>>(
+            path, std::move(storePath), uid, config, ValueType::kString, "string");
+        break;
+      case RAW:
+      case MEMBER_RAW:
+        entry = MakeValueEntry<ValueTunableEntry<std::vector<uint8_t>>>(
+            path, std::move(storePath), uid, config, ValueType::kRaw, "raw");
+        break;
+      case BOOLEAN_ARRAY:
+      case MEMBER_BOOLEAN_ARRAY:
+        entry = MakeValueEntry<ValueTunableEntry<std::vector<bool>>>(
+            path, std::move(storePath), uid, config, ValueType::kBooleanArray, "boolean[]");
+        break;
+      case INT32_ARRAY:
+      case MEMBER_INT32_ARRAY:
+        entry = MakeValueEntry<ValueTunableEntry<std::vector<int32_t>>>(
+            path, std::move(storePath), uid, config, ValueType::kIntArray, "int[]");
+        break;
+      case INT64_ARRAY:
+      case MEMBER_INT64_ARRAY:
+        entry = MakeValueEntry<ValueTunableEntry<std::vector<int64_t>>>(
+            path, std::move(storePath), uid, config, ValueType::kIntArray, "int[]");
+        break;
+      case FLOAT_ARRAY:
+      case MEMBER_FLOAT_ARRAY:
+        entry = MakeValueEntry<ValueTunableEntry<std::vector<float>>>(
+            path, std::move(storePath), uid, config, ValueType::kFloatArray, "float[]");
+        break;
+      case DOUBLE_ARRAY:
+      case MEMBER_DOUBLE_ARRAY:
+        entry = MakeValueEntry<ValueTunableEntry<std::vector<double>>>(
+            path, std::move(storePath), uid, config, ValueType::kDoubleArray, "double[]");
+        break;
+      case STRING_ARRAY:
+      case MEMBER_STRING_ARRAY:
+        entry = MakeValueEntry<ValueTunableEntry<std::vector<std::string>>>(
+            path, std::move(storePath), uid, config, ValueType::kStringArray, "string[]");
+        break;
+      case STRUCT:
+        entry = MakeValueEntry<StructTunableEntry>(
+            path, std::move(storePath), uid, config, ValueType::kRaw,
+            std::format("struct:{}",
+                        static_cast<detail::TunableStructBase&>(tunable).GetStructTypeName()));
+        break;
+      case MEMBER_STRUCT:
+        entry = MakeValueEntry<StructTunableEntry>(
+            path, std::move(storePath), uid, config, ValueType::kRaw,
+            std::format(
+                "struct:{}",
+                static_cast<detail::TunableMemberStructBase&>(tunable).GetStructTypeName()));
+        break;
+      case PROTOBUF:
+        entry = MakeValueEntry<ProtobufTunableEntry>(
+            path, std::move(storePath), uid, config, ValueType::kRaw,
+            static_cast<detail::TunableProtobufBase&>(tunable).GetProtobufTypeString());
+        break;
+      case MEMBER_PROTOBUF:
+        entry = MakeValueEntry<ProtobufTunableEntry>(
+            path, std::move(storePath), uid, config, ValueType::kRaw,
+            static_cast<detail::TunableMemberProtobufBase&>(tunable).GetProtobufTypeString());
+        break;
+      case COMPLEX:
+      case MEMBER_COMPLEX:
+        entry = std::make_shared<ComplexTunableEntry>(
+            std::string{path}, std::format("{}/.type", storePath), uid,
+            std::string{static_cast<ComplexTunable&>(tunable).GetTunableType()});
+        break;
+      default:
+        TunableRegistry::ReportWarning(std::format("Unsupported tunable type for path {}", path));
+        return false;
+    }
+
+    auto result = entry->Open();
+    if (result.id == dash::kInvalidTopic && !result.notReady) {
+      return false;  // the store refused the topic (reported once by PublishTopic)
+    }
+
+    entry->SetInsertEpoch(++m_nextInsertEpoch);
+    m_entries[path] = entry;
+    if (auto valueEntry = entry->AsValueEntry(); valueEntry && entry->IsPublished()) {
+      m_topics[entry->GetTopicId()] = std::static_pointer_cast<ValueEntry>(entry);
+    }
+    if (result.notReady) {
+      m_waiting.emplace_back(entry);
+      m_hasWaiting.store(true, std::memory_order_release);
+    }
+    m_uids[uid].emplace_back(path);
+    TrackEntry(entry, config, type);
+  }
+
+  try {
+    entry->UpdateNetwork(true);
+  } catch (...) {
+    {
+      std::scoped_lock lock{m_mutex};
+      if (!m_retired) {
+        RemovePublishedEntry(std::string{path}, entry);
+      }
+    }
+    try {
+      throw;
+    } catch (const std::exception& e) {
+      TunableRegistry::ReportWarning(
+          std::format("Dashboard tunable '{}{}' failed during initial publish: {}", m_prefix,
+                      path, e.what()));
+    } catch (...) {
+      TunableRegistry::ReportWarning(std::format(
+          "Dashboard tunable '{}{}' failed during initial publish", m_prefix, path));
+    }
+    return false;
+  }
+  return true;
+}
+
+void ProbotTunableBackend::PublishWaiting() {
+  if (!m_hasWaiting.load(std::memory_order_acquire) || !dash::StoreReady()) {
+    return;
+  }
+  std::vector<std::shared_ptr<Entry>> opened;
+  {
+    std::scoped_lock lock{m_mutex};
+    if (m_retired) {
+      return;
+    }
+    m_hasWaiting.store(false, std::memory_order_release);
+    std::vector<std::shared_ptr<Entry>> waiting;
+    waiting.swap(m_waiting);
+    for (auto&& entry : waiting) {
+      if (entry->IsRemoved()) {
+        continue;
+      }
+      auto result = entry->Open();
+      if (result.id != dash::kInvalidTopic) {
+        if (entry->AsValueEntry()) {
+          m_topics[result.id] = std::static_pointer_cast<ValueEntry>(entry);
+        }
+        opened.emplace_back(entry);
+      } else if (result.notReady) {
+        m_waiting.emplace_back(entry);
+        m_hasWaiting.store(true, std::memory_order_release);
+      } else {
+        // refused (reported once): the tunable stays registered but is not shown
+        RemovePublishedEntry(entry->GetKey(), entry);
+      }
+    }
+  }
+  for (auto&& entry : opened) {
+    try {
+      entry->UpdateNetwork(true);
+    } catch (const std::exception& e) {
+      TunableRegistry::ReportWarning(std::format(
+          "Dashboard tunable '{}{}' failed during initial publish: {}", m_prefix,
+          entry->GetKey(), e.what()));
+    } catch (...) {
+      TunableRegistry::ReportWarning(std::format(
+          "Dashboard tunable '{}{}' failed during initial publish", m_prefix, entry->GetKey()));
+    }
+  }
+}
+
+void ProbotTunableBackend::MarkDirty(uint32_t uid) {
+  std::scoped_lock lock{m_mutex};
+  if (m_retired) {
+    return;
+  }
+  auto uidIt = m_uids.find(uid);
+  if (uidIt == m_uids.end()) {
+    return;
+  }
+  for (auto&& path : uidIt->second) {
+    if (auto entryIt = m_entries.find(path);
+        entryIt != m_entries.end() && !entryIt->second->IsRemoved()) {
+      EnqueueDirtyEntry(entryIt->second);
+    }
+  }
+}
+
+void ProbotTunableBackend::Remove(std::string_view path) {
+  std::scoped_lock lock{m_mutex};
+  if (m_retired) {
+    return;
+  }
+  auto it = m_entries.find(path);
+  if (it != m_entries.end() && !it->second->IsRemoved()) {
+    RemovePublishedEntry(std::string{it->first}, it->second);
+  }
+}
+
+std::vector<TunableBackend::PublishedTunable> ProbotTunableBackend::RemovePrefix(
+    std::string_view prefix) {
+  std::string prefixBuf;
+  prefix = prosdk::tunables::detail::NormalizePrefix(prefix, prefixBuf);
+  std::scoped_lock lock{m_mutex};
+  std::vector<PublishedTunable> removed;
+  if (m_retired) {
+    return removed;
+  }
+  for (auto it = m_entries.begin(); it != m_entries.end();) {
+    if (it->second->IsRemoved() ||
+        !prosdk::tunables::detail::IsPathOrDescendant(it->first, prefix)) {
+      ++it;
+      continue;
+    }
+    std::string path{it->first};
+    auto entry = it->second;
+    ++it;
+    removed.push_back({path, entry->GetUid()});
+    RemovePublishedEntry(std::move(path), entry);
+  }
+  return removed;
+}
+
+void ProbotTunableBackend::UnregisterTunable(uint32_t uid) {
+  std::scoped_lock lock{m_mutex};
+  if (m_retired) {
+    return;
+  }
+  auto it = m_uids.find(uid);
+  if (it != m_uids.end()) {
+    for (auto&& path : it->second) {
+      if (auto entryIt = m_entries.find(path);
+          entryIt != m_entries.end() && !entryIt->second->IsRemoved()) {
+        auto entry = entryIt->second;
+        RetireEntry(entry);
+        EraseEntry(path, entry);
+      }
+    }
+    m_uids.erase(it);
+  }
+}
+
+std::optional<WriteStatus> ProbotTunableBackend::OfferWrite(uint16_t id, ValueType valueType,
+                                                            std::span<const uint8_t> data) {
+  std::scoped_lock lock{m_mutex};
+  if (m_retired) {
+    return std::nullopt;
+  }
+  auto it = m_topics.find(id);
+  if (it == m_topics.end()) {
+    return std::nullopt;
+  }
+  auto& entry = it->second;
+  if (!entry->IsMutable()) {
+    return WriteStatus::kImmutable;
+  }
+  if (entry->GetValueType() != valueType) {
+    return WriteStatus::kTypeMismatch;
+  }
+  // last write per topic wins until the next Update()
+  for (auto&& pending : m_pendingWrites) {
+    if (pending.id == id) {
+      pending.entry = entry;
+      pending.data.assign(data.begin(), data.end());
+      return WriteStatus::kOk;
+    }
+  }
+  m_pendingWrites.push_back({entry, id, {data.begin(), data.end()}});
+  return WriteStatus::kOk;
+}
+
+void ProbotTunableBackend::FlushPending() {
+  if (!m_hasWaiting.load(std::memory_order_acquire)) {
+    return;
+  }
+  // tunable values are only read under the registry's update mutex; skip this cycle if busy
+  std::unique_lock updateLock{TunableRegistry::GetUpdateMutex(), std::try_to_lock};
+  if (updateLock.owns_lock()) {
+    PublishWaiting();
+  }
+}
+
+void ProbotTunableBackend::Update() {
+  dash::DrainWrites();
+  PublishWaiting();
+
+  std::vector<PendingWrite> writes;
+  {
+    std::scoped_lock lock{m_mutex};
+    if (m_retired) {
+      return;
+    }
+    writes.swap(m_pendingWrites);
+  }
+
+  std::vector<uint32_t> onTuneUids;
+  for (auto&& write : writes) {
+    auto entry = write.entry.lock();
+    if (!entry || entry->IsRemoved()) {
+      dash::RejectWrite(write.id, WriteStatus::kUnknownId);
+      continue;
+    }
+    if (entry->UpdateTunable(write.data)) {
+      onTuneUids.emplace_back(entry->GetUid());
+    } else {
+      dash::RejectWrite(write.id, WriteStatus::kDecodeError);
+    }
+  }
+
+  std::unique_lock lock{m_mutex};
+  ++m_updateDepth;
+  auto finishUpdate = [&] {
+    if (!lock.owns_lock()) {
+      lock.lock();
+    }
+    --m_updateDepth;
+    if (m_updateDepth == 0) {
+      ApplyDeferredErases();
+    }
+  };
+  try {
+    uint64_t updateEpoch = m_nextInsertEpoch;
+    auto updateEntry = [&](const std::shared_ptr<Entry>& entry,
+                           bool requeueIfInsertedDuringUpdate) {
+      if (entry->IsRemoved() || entry->GetInsertEpoch() > updateEpoch) {
+        if (!entry->IsRemoved() && requeueIfInsertedDuringUpdate) {
+          EnqueueDirtyEntry(entry);
+        }
+        return;
+      }
+
+      lock.unlock();
+      entry->UpdateNetwork(false);
+      lock.lock();
+    };
+
+    auto updateEntries = [&](auto& entries, bool requeueIfInsertedDuringUpdate) {
+      size_t size = entries.size();
+      for (size_t i = 0; i < size; ++i) {
+        auto entry = entries[i];
+        updateEntry(entry, requeueIfInsertedDuringUpdate);
+      }
+    };
+
+    updateEntries(m_complexEntries, false);
+    updateEntries(m_alwaysGetEntries, false);
+
+    std::vector<std::shared_ptr<Entry>> dirtyEntries;
+    dirtyEntries.swap(m_dirtyEntries);
+    for (auto&& entry : dirtyEntries) {
+      entry->SetDirtyQueued(false);
+    }
+    for (auto&& entry : dirtyEntries) {
+      updateEntry(entry, true);
+    }
+  } catch (...) {
+    if (!lock.owns_lock()) {
+      lock.lock();
+    }
+    finishUpdate();
+    lock.unlock();
+    try {
+      throw;
+    } catch (const std::exception& e) {
+      TunableRegistry::ReportWarning(
+          std::format("Dashboard tunable backend update failed: {}", e.what()));
+    } catch (...) {
+      TunableRegistry::ReportWarning("Dashboard tunable backend update failed");
+    }
+    return;
+  }
+  finishUpdate();
+  lock.unlock();
+
+  // onTune callbacks can publish or remove tunables, which re-enters this backend. Run them after
+  // releasing m_mutex so those mutations are safe.
+  for (auto uid : onTuneUids) {
+    auto info = TunableRegistry::GetTunable(uid);
+    if (info) {
+      NotifyOnTune(uid, info);
+    }
+  }
+}

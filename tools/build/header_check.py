@@ -17,7 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 GENERATED = ROOT / "tools" / "upstream" / "generated.txt"
 HEADER_EXTS = {".h", ".hpp", ""}  # "" = extensionless C++ headers (util/scope)
-HAND_WRITTEN_GLOBS = ["src/prosdk.h", "src/prosdk/cxx/*.hpp", "src/prosdk/platform/*.hpp"]
+HAND_WRITTEN_GLOBS = ["src/prosdk.h", "src/prosdk/cxx/*.hpp", "src/prosdk/platform/*.hpp",
+                      "src/prosdk/platform/dashboard/*.hpp"]
 
 # Headers that are not meant to be compiled on their own (path -> reason).
 NOT_STANDALONE: dict[str, str] = {

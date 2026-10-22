@@ -1,0 +1,291 @@
+// Copyright (c) Probot Studio. Hand-written (not vendored); see LICENSE.
+
+#include "prosdk/platform/dashboard/DashboardStore.hpp"
+
+#include <algorithm>
+#include <atomic>
+#include <format>
+#include <mutex>
+#include <string>
+#include <vector>
+
+#include "prosdk/platform/Console.hpp"
+#include "prosdk/platform/CoreOps.hpp"
+#include "prosdk/util/StringMap.hpp"
+#include "prosdk/util/mutex.hpp"
+
+namespace prosdk::platform::dashboard {
+
+namespace {
+
+constexpr size_t kMaxName = 255;  // core: name and type strings are at most 255 bytes
+
+std::atomic<bool> gReported[static_cast<size_t>(Limit::kCount)];
+
+struct SchemaState {
+  struct Pending {
+    std::string name;
+    std::string type;
+    std::vector<uint8_t> data;
+  };
+  prosdk::util::mutex mutex;
+  prosdk::util::StringMap<bool> known;  // name -> stored in core (false: pending or refused)
+  std::vector<Pending> pending;
+  std::atomic<bool> hasPending{false};
+};
+
+SchemaState& Schemas() {
+  static SchemaState state;
+  return state;
+}
+
+struct Router {
+  prosdk::util::mutex mutex;
+  std::vector<Participant*> participants;
+};
+
+Router& GetRouter() {
+  static Router router;
+  return router;
+}
+
+const char* LimitText(Limit limit) {
+  switch (limit) {
+    case Limit::kTopics:
+      return "dashboard topic table is full (PROBOT_DASH_MAX_TOPICS); this and later new topics "
+             "are not shown";
+    case Limit::kName:
+      return "dashboard topic name or type string is longer than 255 bytes; topic not shown";
+    case Limit::kStore:
+      return "dashboard store refused the topic (PROBOT_DASH_POOL_BYTES exhausted, properties "
+             "longer than PROBOT_DASH_MAX_VALUE, or the path is already published with another "
+             "type); later refusals are not reported";
+    case Limit::kValue:
+      return "dashboard value not stored (larger than PROBOT_DASH_MAX_VALUE or "
+             "PROBOT_DASH_POOL_BYTES exhausted); later values are tried again, further failures "
+             "are not reported";
+    case Limit::kSchemas:
+      return "dashboard schema not stored (PROBOT_DASH_MAX_SCHEMAS reached, schema larger than "
+             "PROBOT_DASH_MAX_VALUE or pool exhausted); values of this type cannot be decoded on "
+             "the Driver Station";
+    case Limit::kProperties:
+      return "dashboard topic properties not updated (longer than PROBOT_DASH_MAX_VALUE or pool "
+             "exhausted)";
+    default:
+      return "dashboard limit reached";
+  }
+}
+
+void DrainOne(const CoreDashboardWrite& write, void* ctx) {
+  auto& participants = *static_cast<std::vector<Participant*>*>(ctx);
+  std::span<const uint8_t> data{write.data, write.len};
+  auto vt = static_cast<ValueType>(write.valueType);
+  for (Participant* p : participants) {
+    std::optional<WriteStatus> status;
+    try {
+      status = p->OfferWrite(write.id, vt, data);
+    } catch (...) {
+      status = WriteStatus::kQueueFull;  // out of memory while queueing
+    }
+    if (status) {
+      if (*status != WriteStatus::kOk) {
+        RejectWrite(write.id, *status);
+      }
+      return;
+    }
+  }
+  RejectWrite(write.id, WriteStatus::kUnknownId);
+}
+
+}  // namespace
+
+bool StoreReady() noexcept {
+  CoreDashboardStats stats{};
+  GetCoreOps().dashStats(&stats);
+  return stats.maxTopics != 0;
+}
+
+void ReportLimitOnce(Limit limit, std::string_view path) noexcept {
+  auto index = static_cast<size_t>(limit);
+  if (index >= static_cast<size_t>(Limit::kCount) ||
+      gReported[index].exchange(true, std::memory_order_acq_rel)) {
+    return;
+  }
+  try {
+    ConsoleWrite(std::format("[prosdk] {}: '{}'\n", LimitText(limit), path));
+  } catch (...) {
+    ConsoleWrite("[prosdk] dashboard limit reached\n");
+  }
+}
+
+PublishResult PublishTopic(const std::string& path, ValueType valueType,
+                           const std::string& typeString, const std::string& properties,
+                           uint8_t flags) noexcept {
+  PublishResult result;
+  result.id = GetCoreOps().dashPublish(path.c_str(), static_cast<uint8_t>(valueType),
+                                       typeString.c_str(), properties.c_str(), flags);
+  if (result.id != kInvalidTopic) {
+    return result;
+  }
+  CoreDashboardStats stats{};
+  GetCoreOps().dashStats(&stats);
+  if (stats.maxTopics == 0) {
+    result.notReady = true;
+  } else if (path.size() > kMaxName || typeString.size() > kMaxName) {
+    ReportLimitOnce(Limit::kName, path);
+  } else if (stats.topics >= stats.maxTopics) {
+    ReportLimitOnce(Limit::kTopics, path);
+  } else {
+    ReportLimitOnce(Limit::kStore, path);
+  }
+  return result;
+}
+
+void UnpublishTopic(uint16_t id) noexcept {
+  if (id != kInvalidTopic) {
+    GetCoreOps().dashUnpublish(id);
+  }
+}
+
+bool SetTopicValue(uint16_t id, std::span<const uint8_t> data, std::string_view path) noexcept {
+  if (id == kInvalidTopic) {
+    return false;
+  }
+  if (!GetCoreOps().dashSet(id, data.data(), data.size())) {
+    ReportLimitOnce(Limit::kValue, path);
+    return false;
+  }
+  return true;
+}
+
+bool SetTopicProperties(uint16_t id, const std::string& properties,
+                        std::string_view path) noexcept {
+  if (id == kInvalidTopic) {
+    return false;
+  }
+  if (!GetCoreOps().dashSetProperties(id, properties.c_str())) {
+    ReportLimitOnce(Limit::kProperties, path);
+    return false;
+  }
+  return true;
+}
+
+bool SetTopicFlags(uint16_t id, uint8_t flags) noexcept {
+  return id != kInvalidTopic && GetCoreOps().dashSetFlags(id, flags);
+}
+
+void RejectWrite(uint16_t id, WriteStatus status) noexcept {
+  GetCoreOps().dashRejectWrite(id, static_cast<uint8_t>(status));
+}
+
+bool HasSchema(std::string_view name) noexcept {
+  auto& s = Schemas();
+  std::scoped_lock lock{s.mutex};
+  return s.known.find(name) != s.known.end();
+}
+
+void AddSchema(std::string_view name, std::string_view type,
+               std::span<const uint8_t> data) noexcept {
+  auto& s = Schemas();
+  try {
+    std::string nameStr{name};
+    std::string typeStr{type};
+    {
+      std::scoped_lock lock{s.mutex};
+      if (s.known.find(name) != s.known.end()) {
+        return;
+      }
+      s.known.emplace(nameStr, false);
+    }
+    if (GetCoreOps().dashAddSchema(nameStr.c_str(), typeStr.c_str(), data.data(),
+                                   data.size())) {
+      std::scoped_lock lock{s.mutex};
+      s.known[nameStr] = true;
+      return;
+    }
+    if (!StoreReady()) {
+      std::scoped_lock lock{s.mutex};
+      s.pending.push_back({std::move(nameStr), std::move(typeStr), {data.begin(), data.end()}});
+      s.hasPending.store(true, std::memory_order_release);
+      return;
+    }
+    ReportLimitOnce(Limit::kSchemas, name);
+  } catch (...) {
+    ReportLimitOnce(Limit::kSchemas, name);
+  }
+}
+
+void AddParticipant(Participant* participant) noexcept {
+  if (participant == nullptr) {
+    return;
+  }
+  auto& r = GetRouter();
+  std::scoped_lock lock{r.mutex};
+  try {
+    if (std::find(r.participants.begin(), r.participants.end(), participant) ==
+        r.participants.end()) {
+      r.participants.push_back(participant);
+    }
+  } catch (...) {
+    ConsoleWrite("[prosdk] dashboard: out of memory registering a backend\n");
+  }
+}
+
+void RemoveParticipant(Participant* participant) noexcept {
+  auto& r = GetRouter();
+  std::scoped_lock lock{r.mutex};
+  std::erase(r.participants, participant);
+}
+
+size_t DrainWrites() noexcept {
+  auto& r = GetRouter();
+  std::scoped_lock lock{r.mutex};
+  return GetCoreOps().dashDrainWrites(&DrainOne, &r.participants);
+}
+
+void FlushPending() noexcept {
+  auto& s = Schemas();
+  if (s.hasPending.load(std::memory_order_acquire) && StoreReady()) {
+    std::vector<SchemaState::Pending> pending;
+    {
+      std::scoped_lock lock{s.mutex};
+      pending.swap(s.pending);
+      s.hasPending.store(false, std::memory_order_release);
+    }
+    for (auto& p : pending) {
+      bool stored =
+          GetCoreOps().dashAddSchema(p.name.c_str(), p.type.c_str(), p.data.data(), p.data.size());
+      if (stored) {
+        std::scoped_lock lock{s.mutex};
+        s.known[p.name] = true;
+      } else {
+        ReportLimitOnce(Limit::kSchemas, p.name);
+      }
+    }
+  }
+  auto& r = GetRouter();
+  std::scoped_lock lock{r.mutex};
+  if (r.participants.empty() || !StoreReady()) {
+    return;
+  }
+  for (Participant* p : r.participants) {
+    try {
+      p->FlushPending();
+    } catch (...) {
+      ConsoleWrite("[prosdk] dashboard: publishing pending topics failed\n");
+    }
+  }
+}
+
+void ResetForTest() noexcept {
+  for (auto& r : gReported) {
+    r.store(false, std::memory_order_release);
+  }
+  auto& s = Schemas();
+  std::scoped_lock lock{s.mutex};
+  s.known.clear();
+  s.pending.clear();
+  s.hasPending.store(false, std::memory_order_release);
+}
+
+}  // namespace prosdk::platform::dashboard

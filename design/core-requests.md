@@ -125,6 +125,19 @@ DS lists and downloads files that prosdk writes to LittleFS/SD (WPILib DataLog `
 - `commsDisableCount()`: number of times outputs were disabled because the DS link was lost (since boot;
   WPILib `HAL_GetCommsDisableCount`).
 
+### R13. Dashboard schemas larger than a value
+
+`addSchema()` refuses data longer than `PROBOT_DASH_MAX_VALUE` (default 1024). The protobuf file descriptors
+prosdk sends are bigger: `wpimath/protobuf/geometry2d.proto` alone is about 1.3 KB, so with the defaults no
+protobuf-typed topic (`proto:` type strings, e.g. a `TunableProtobuf` or telemetry logged as protobuf) can be
+decoded on the DS page. Struct schemas are small and unaffected. Wanted: a separate schema byte limit
+(e.g. `PROBOT_DASH_MAX_SCHEMA`, default 4096, still counted in `PROBOT_DASH_POOL_BYTES`), or schemas exempt
+from the value limit. Workaround today: the sketch defines `PROBOT_DASH_MAX_VALUE` 2048 or more before
+`#include <prosdk.h>`. prosdk reports a refused schema once on the console and keeps publishing the values.
+
+Related, still open in R12: persistence of DS-written robust tunables. Core keeps no value across a reboot,
+so prosdk publishes a robust tunable with its code default (upstream NT restores the last tuned value).
+
 ## Status
 
 ### P0 delivered (2026-10-22): probot-core branch `feat/framework-api`, draft PR #26 to `dev`

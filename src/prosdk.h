@@ -31,6 +31,7 @@
 #include "prosdk/probot/CoreBridge.hpp"
 #endif
 
+#include "prosdk/platform/dashboard/Dashboard.hpp"
 #include "prosdk/telemetry/Telemetry.hpp"
 #include "prosdk/tunables/Tunables.hpp"
 #include "prosdk/util/Alert.hpp"
