@@ -25,6 +25,7 @@ set(CMAKE_ASM_COMPILER "${_bin}gcc")
 set(CMAKE_AR "${_bin}gcc-ar" CACHE FILEPATH "" FORCE)
 set(CMAKE_RANLIB "${_bin}gcc-ranlib" CACHE FILEPATH "" FORCE)
 set(PROSDK_SIZE "${_bin}size")
+set(PROSDK_OBJCOPY "${_bin}objcopy")
 
 set(CMAKE_CXX_FLAGS_INIT "@${PROSDK_ARDUINO_CXX_RSP}")
 set(CMAKE_C_FLAGS_INIT "@${PROSDK_ARDUINO_C_RSP}")

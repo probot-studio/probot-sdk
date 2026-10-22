@@ -4,6 +4,8 @@
 #   tools/build/build.sh esp32s3 [targets...]          -> src/esp32s3/libprosdk.a (default target)
 #   tools/build/build.sh esp32s3 header_check size
 #   tools/build/build.sh host [targets...] [--test]    -> host libraries and tests; --test runs them
+#   tools/build/build.sh examples [sketch...]          -> compile examples/* (all, or the named
+#                                                         ones) against src/esp32s3/libprosdk.a
 #
 # Configures once into .build/<cfg> and builds incrementally. Every configure/build step runs
 # under the shared build lock at the lowest CPU and I/O priority with at most 2 jobs:
@@ -16,8 +18,8 @@ JOBS=2
 
 cfg="${1:-}"
 case "$cfg" in
-  esp32s3|host) shift ;;
-  *) echo "usage: $0 {esp32s3|host} [targets...] [--test]" >&2; exit 2 ;;
+  esp32s3|host|examples) shift ;;
+  *) echo "usage: $0 {esp32s3|host} [targets...] [--test] | $0 examples [sketch...]" >&2; exit 2 ;;
 esac
 
 run_tests=0
@@ -32,6 +34,38 @@ done
 mkdir -p "$ROOT/.build"
 LOCK="$ROOT/.build/build.lock"
 low() { flock "$LOCK" nice -n 19 ionice -c3 "$@"; }
+
+# examples: every examples/<name>/<name>.ino with arduino-cli (huge_app partition scheme, the
+# board CI and the HAL link test use), against the precompiled archive (build it first with
+# tools/build/build.sh esp32s3) and probot-core from $PROBOT_CORE (default .upstream/probot-core).
+# Libraries come from .build/examples/libraries (symlinks prosdk and probot); each sketch keeps its
+# build folder .build/examples/<name>, so a rebuild only recompiles what changed.
+if [ "$cfg" = examples ]; then
+  [ -f "$ROOT/src/esp32s3/libprosdk.a" ] || {
+    echo "src/esp32s3/libprosdk.a is missing: run tools/build/build.sh esp32s3 first" >&2; exit 2; }
+  core="${PROBOT_CORE:-$ROOT/.upstream/probot-core}"
+  [ -f "$core/library.properties" ] || { echo "no probot-core library at $core" >&2; exit 2; }
+  core="$(cd "$core" && pwd)"
+  out="$ROOT/.build/examples"
+  mkdir -p "$out/libraries"
+  ln -sfn "$ROOT" "$out/libraries/prosdk"
+  ln -sfn "$core" "$out/libraries/probot"
+  sketches=("$@")
+  if [ ${#sketches[@]} -eq 0 ]; then
+    for d in "$ROOT"/examples/*/; do
+      d="${d%/}"
+      [ -f "$d/$(basename "$d").ino" ] && sketches+=("$(basename "$d")")
+    done
+  fi
+  status=0
+  for name in "${sketches[@]}"; do
+    echo "== $name"
+    low arduino-cli compile --fqbn "esp32:esp32:esp32s3:PartitionScheme=huge_app" \
+      --libraries "$out/libraries" --build-path "$out/$name" --jobs "$JOBS" \
+      --warnings default "$ROOT/examples/$name" || { echo "FAILED: $name"; status=1; }
+  done
+  exit $status
+fi
 
 BUILD="$ROOT/.build/$cfg"
 gen=()

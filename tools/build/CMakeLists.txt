@@ -1,5 +1,6 @@
 # prosdk build (design/PORT.md section 9). Configure through tools/build/build.sh:
 #   esp32s3: -DCMAKE_TOOLCHAIN_FILE=tools/build/esp32s3.cmake -> src/esp32s3/libprosdk.a
+#            (debug-stripped copy of .build/esp32s3/libprosdk.a)
 #   host:    system g++ (gnu++20, no RTTI, exceptions)      -> host tests
 # One OBJECT library per module (tools/build/modules/<module>.cmake); the archive is assembled
 # from them. Vendored source lists come from tools/upstream/generated.txt.
@@ -114,15 +115,31 @@ set(_objects)
 foreach(m IN LISTS _modules)
   list(APPEND _objects "$<TARGET_OBJECTS:prosdk_${m}>")
 endforeach()
-add_library(prosdk STATIC ${_objects})
-target_link_libraries(prosdk PUBLIC prosdk_options)
-set_target_properties(prosdk PROPERTIES OUTPUT_NAME prosdk)
 if(CMAKE_CROSSCOMPILING)
-  # Arduino precompiled library layout: src/{build.mcu}/lib<name>.a
-  set_target_properties(prosdk PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROSDK_ROOT}/src/esp32s3")
+  # The recipe compiles with -ggdb (Arduino's flags, kept so the sketch and the archive agree), so
+  # the full archive is about 1 GB of DWARF. It stays in the build directory
+  # (.build/esp32s3/libprosdk.a, for addr2line on a backtrace); the Arduino precompiled library
+  # layout src/{build.mcu}/lib<name>.a gets a copy without debug sections (objcopy
+  # --strip-debug: code, data and the symbol table unchanged), rewritten only when the full
+  # archive changed.
+  add_library(prosdk_unstripped STATIC ${_objects})
+  set_target_properties(prosdk_unstripped PROPERTIES OUTPUT_NAME prosdk
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+  set(_prosdk_archive "${PROSDK_ROOT}/src/esp32s3/libprosdk.a")
+  add_custom_command(OUTPUT "${_prosdk_archive}"
+    COMMAND "${PROSDK_OBJCOPY}" --strip-debug "$<TARGET_FILE:prosdk_unstripped>"
+            "${_prosdk_archive}.tmp"
+    COMMAND "${CMAKE_COMMAND}" -E rename "${_prosdk_archive}.tmp" "${_prosdk_archive}"
+    DEPENDS prosdk_unstripped
+    COMMENT "Stripping debug sections into src/esp32s3/libprosdk.a" VERBATIM)
+  add_custom_target(prosdk ALL DEPENDS "${_prosdk_archive}")
   add_custom_target(size
-    COMMAND "${PROSDK_SIZE}" -t "$<TARGET_FILE:prosdk>"
+    COMMAND "${PROSDK_SIZE}" -t "${_prosdk_archive}"
     DEPENDS prosdk VERBATIM USES_TERMINAL)
+else()
+  add_library(prosdk STATIC ${_objects})
+  target_link_libraries(prosdk PUBLIC prosdk_options)
+  set_target_properties(prosdk PROPERTIES OUTPUT_NAME prosdk)
 endif()
 
 # header-check: every public header compiled on its own after #include <Arduino.h> (target) or

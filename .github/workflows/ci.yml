@@ -4,6 +4,8 @@
 #   esp32s3: the same drift check with the Arduino toolchain installed (also verifies
 #            tools/upstream/arduino-macros.txt), the precompiled archive and the header check
 #            (every public header after #include <Arduino.h>, exact Arduino flags)
+#   examples: the archive, every examples/* sketch and the HAL link test
+#            (tools/build/hal_link_test.py) compiled against probot-core at PROBOT_CORE_REF
 name: CI
 
 on:
@@ -14,6 +16,8 @@ on:
 env:
   ARDUINO_CLI_VERSION: "1.5.1"
   ARDUINO_ESP32_VERSION: "3.3.10"
+  # probot-core branch or tag the sketches link against (the only place it is named)
+  PROBOT_CORE_REF: "feat/loop-rate"
 
 jobs:
   host:
@@ -61,3 +65,48 @@ jobs:
 
       - name: Archive and Arduino header check
         run: tools/build/build.sh esp32s3 prosdk header_check size
+
+  examples:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out probot-core
+        uses: actions/checkout@v4
+        with:
+          repository: probot-studio/probot-core
+          ref: ${{ env.PROBOT_CORE_REF }}
+          path: .upstream/probot-core
+          # a private core repository needs a read token in this secret
+          token: ${{ secrets.PROBOT_CORE_TOKEN || github.token }}
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install arduino-cli and Arduino-ESP32
+        run: |
+          set -euo pipefail
+          dl=$(mktemp -d)
+          archive=arduino-cli_${ARDUINO_CLI_VERSION}_Linux_64bit.tar.gz
+          curl -fsSL "https://downloads.arduino.cc/arduino-cli/${archive}" -o "$dl/$archive"
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$dl/$archive" -C "$HOME/.local/bin" arduino-cli
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          arduino-cli config init --overwrite
+          arduino-cli config set board_manager.additional_urls \
+            https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install "esp32:esp32@${ARDUINO_ESP32_VERSION}"
+
+      - name: Archive
+        run: tools/build/build.sh esp32s3 prosdk
+
+      - name: Examples (huge_app)
+        run: PROBOT_CORE="$GITHUB_WORKSPACE/.upstream/probot-core" tools/build/build.sh examples
+
+      - name: HAL link test
+        run: >-
+          python3 tools/build/hal_link_test.py --out .build/hal-link --compile
+          --core "$GITHUB_WORKSPACE/.upstream/probot-core"
