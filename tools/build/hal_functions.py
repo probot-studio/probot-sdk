@@ -78,8 +78,8 @@ def functions(text: str) -> dict[str, tuple[str, str]]:
         if not rest or rest[0] not in ";{":
             continue
         # declaration text: back to the start of the statement
-        start = max(before.rfind(";"), before.rfind("}"), before.rfind("{"),
-                    before.rfind('"C"')) + 1
+        cuts = [before.rfind(c) + len(c) for c in (";", "}", "{", '"C"') if c in before]
+        start = max(cuts, default=0)
         decl = " ".join((text[start:i + 1]).split())
         decl = re.sub(r"^(?:extern \"C\"\s*)", "", decl)
         kind = "def" if rest[0] == "{" else "decl"

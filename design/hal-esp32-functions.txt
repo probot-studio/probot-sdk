@@ -713,7 +713,7 @@ void HALSIM_SetREVPHPressureSwitch(int32_t index, HAL_Bool pressureSwitch)
 void HALSIM_SetREVPHSolenoidOutput(int32_t index, int32_t channel, HAL_Bool solenoidOutput)
 
 ## prosdk/hal/simulation/Reset.h (1)
-C" void HALSIM_ResetAllSimData(void)
+void HALSIM_ResetAllSimData(void)
 
 ## prosdk/hal/simulation/RoboRioData.h (46)
 void HALSIM_CancelRoboRioBrownoutRecoveryVoltageCallback(int32_t uid)
