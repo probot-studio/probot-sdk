@@ -193,15 +193,16 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `dashboard::clearPersisted()` (R12 part 2); the
   refused-schema report to core's per-schema limit (R13, `PROBOT_DASH_MAX_SCHEMA_BYTES`). Battery
   current (`io::battery::currentAmps()`, NaN without a sensor) has no WPILib 2027 API and is not
-  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (7 since R15
-  grid restarts), and the bridge leaves a field null when the core lacks the feature (detected with
+  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (8 since R11
+  file sharing), and the bridge leaves a field null when the core lacks the feature (detected with
   `__has_include`, R13 on `dashboard::Limits`, R12 persistence with core's `PROBOT_HAS_DASH_PERSIST`
   macro plus a requires-check on `dashboard::clearPersisted()`, R15 with requires-checks on
-  `loopGridRestarts()` and `dashboard::limits()`), so the archive
+  `loopGridRestarts()` and `dashboard::limits()`, R11 with core's `PROBOT_HAS_FILES_SHARE` macro plus
+  requires-checks on `files::share(name, vfsDir)` and `files::unshare(name)`), so the archive
   falls back (text-only console, the 2024-01-01 clock
   heuristic, `HAL_HANDLE_ERROR` for the RSL state and comms-disable count, no DS stop on a halt, the
   `PROBOT_DASH_MAX_VALUE` advice for a refused schema, no `PERSISTENT` flag and one warning per
-  persistent tunable path, re-alignment on counted overruns only).
+  persistent tunable path, re-alignment on counted overruns only, no shared log folder).
 - Outputs (PWM, motor controllers) are zeroed whenever core reports "outputs disabled" and immediately
   on e-stop (core calls a registered e-stop callback on its own task).
 - Features prosdk needs from probot-core are listed in `design/core-requests.md` and are sent to the
@@ -335,9 +336,10 @@ builds them only for its GUI). `examples/AprilTagFieldPose`: 1,997,696 B flash (
 Re-implemented for this platform: `NetworkButton` and `NetworkBooleanEvent` over tunables
 (`wpilibc/0011`); Preferences on the DS as robust tunables `/Preferences/<key>` written back to NVS
 (`src/prosdk/platform/dashboard/DashboardPreferences.*`); `DataLogManager` console capture through a
-console tee and old-log deletion from esp_littlefs space (`wpilibc/0012`); DataLog sink to flash/SD (the DS
-sink, downloading `.wpilog` files from the Driver Station, is pending core R11 (in progress on core's `feat/ds-files`): until then a log is read by
-dumping the LittleFS partition);
+console tee and old-log deletion from esp_littlefs space (`wpilibc/0012`); DataLog sink to flash/SD, with
+the log folder offered on the Driver Station (Logs page, "Dosyalar" card, share "logs") through core R11
+file sharing (`wpilibc/0015`, CoreOps ABI 8: `.wpilog` files are downloaded while the robot is idle; with
+an older core a log is read by dumping the LittleFS partition or the SD card);
 telemetry and tunables backends over probot-core; Servo; prosdk drivers carried over from the old SDK
 (BTS7960, VNH5019, MPU6050 gyro, ProHub PCA9685 + UART encoder).
 

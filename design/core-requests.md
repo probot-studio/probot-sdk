@@ -120,8 +120,8 @@ DS lists and downloads files that prosdk writes to LittleFS/SD (WPILib DataLog `
 
 Status: delivered as draft PR #38 (`feat/ds-files` 352b555, agreed design under "R12 part 2 and R11
 design" below; the rebase added `share(name, vfsDir)` for ESP-IDF VFS mounts, `unshare(name)`, replacing a
-share by name, and the `PROBOT_HAS_FILES_SHARE` macro); in the pinned core since 2026-10-22, not wired
-yet.
+share by name, and the `PROBOT_HAS_FILES_SHARE` macro); in the pinned core since 2026-10-22, wired
+(CoreOps ABI 8), see "P1 R11 wired" below.
 
 ### R12. Small items
 
@@ -191,6 +191,22 @@ under its lock.
 
 Status: delivered as draft PR #41 (all three items) and wired (CoreOps ABI 7), see "P1 R15 delivered"
 below.
+
+### R16. Driver Station signal for a value refused for size (low priority)
+
+`dashboard::set()` refuses a value longer than `PROBOT_DASH_MAX_VALUE` (or one the pool cannot hold): the
+robot gets `false` and prosdk reports it once on the console, but nothing reaches the Driver Station,
+which keeps showing the previous value as if it were current. The case prosdk users meet first is a
+`Field2d` trajectory: `struct:Pose2d[]` is 24 bytes per pose, so with the default 1024 an object of more
+than 42 poses silently stops updating on the DS. Wanted: a wire error or flag frame for "the robot's
+last value of this topic was refused" (cleared by the next stored value), so the DS can mark the topic
+as stale (for example the same row status a refused DS write gets). Core proposed it as a separate item
+from R15 (2026-10-23); no prosdk change is needed beyond keeping its console report.
+
+Until then (documented in design/API-DIFFERENCES.md section 3): `PROBOT_DASH_MAX_VALUE` is global (one
+limit for every topic, 16-16384); `#define PROBOT_DASH_MAX_VALUE 16384` before `#include <prosdk.h>`
+allows 682 poses, and core takes RAM for the actual value size from `PROBOT_DASH_POOL_BYTES`, not for the
+limit. Persistent topics are stored only up to 2048 bytes whatever the limit.
 
 ## Status
 
@@ -323,6 +339,24 @@ Scheduler (telemetry AND tunable; commandsv2 `CommandScheduler::LogTo`/`PublishT
   drop the command on the next loop. Writes to `Names`/`Ids` are refused with `Immutable=2`.
 - Example (golden): `Names`=["Drive", "Intake"], `Ids`=[<id Drive>, <id Intake>], `Cancel`=[]; after the DS
   writes `[<id Intake>, 12345]`: Intake cancelled, Drive still scheduled, `Cancel`=[], `Names`=["Drive"].
+
+Cross-check against core's DS widgets (#40 e725330, as in the pinned 15defc1 `ui/index.html`, 2026-10-23):
+no mismatch. Read side by side: Field2d takes every child of type `struct:Pose2d[]` with value type raw
+(6) as an object ("Robot" first), 24 bytes per pose `{f64 x, f64 y, f64 rad}` LE (a length that is not a
+multiple of 24 shows "Geçersiz uzunluk", an empty array draws nothing), editable when the topic has
+TUNABLE|MUTABLE, and writes the whole array; Mechanism2d needs `dims` double[] (10), reads
+`backgroundColor`, roots = children without `.type` holding `position` double[] [x, y], ligaments =
+children with `.type` "line" whose `angle` (degrees) adds to the parent's direction (a root points along
++x), `length`, `color` `#RRGGBB` in either case, `weight` px, any depth; Scheduler needs `Names` string[]
+(11) and `Ids` int[] (8), offers cancel buttons only when `Cancel` is int[] with TUNABLE|MUTABLE, writes
+every pending id as exact int64 (text through BigInt past 2^53) and never reads Cancel's value (the
+robot's echo `[]` is fine). Run: `tools/build/ds_widget_check.js` extracts core's own functions (`dkDec`,
+`dkEnc`, `dkPoses`, `dkPoseBytes`, `dkMech`, ...) from `ui/index.html` and runs them under node on the
+goldens above: the poses decode to the same values (90 deg for the robot), the drag write of (3, 1, 0.5)
+and the cancel write of `[id, 12345]` are byte-identical to what the C++ test pushes, a 64-bit host id
+round-trips exactly, and the Mechanism2d summary reads `base/post: 90°, 1.5; shoulder/arm: 45°, 1.25;
+shoulder/arm/wrist: 15°, 0.5` with the strokes where the golden puts them on a 300 x 200 canvas. The
+goldens in the script are copied from the C++ test; re-run it when core's DS page changes.
 
 ### P1 R7 delivered (2026-10-22): draft PR #29 (branch `feat/opmode-list`, stacked on #28)
 
@@ -494,7 +528,8 @@ comms-disable count). CI builds the sketches against `feat/small-items` (PROBOT_
 
 Superseded status (kept for history): written while both were core work in progress, with sdk-target and
 CI on `feat/small-items`. Both are now draft PRs in the pinned core (#38, #39; "Core stack rebased
-again" below); persistence is wired, files are not.
+again" below) and both are wired (persistence ABI 6, files ABI 8, "P1 R11 wired" below). The DataLogManager
+folder is `/littlefs/logs` (a VFS path, shared with `share(name, vfsDir)`), not LittleFS `/logs`.
 
 - R12 tunable persistence (`feat/dash-persist`): a topic published with `PERSISTENT` gets its stored value
   back after a reboot. Core saves values of such topics to NVS (own namespace) with a debounced write, and
@@ -697,3 +732,53 @@ restart and limits probes in the ELF) and the four size examples; the HAL link t
 stubs (persistence detected on e40fa3d and 634cd40, not on abef559; R15 only on e40fa3d); QEMU smoke and
 bench. Against 15defc1: the syntax check (all three detected) and the HAL link test (all three probes in
 the ELF). Sizes: design/size.md section 11.
+
+### P1 R11 wired (CoreOps ABI 8), 2026-10-23
+
+Core's R11 (#38 `feat/ds-files` eab956a, in the pinned 15defc1; API in core `API.md` "Dosya paylaşımı"):
+`probot::files::share(name, fs, dir)` (Arduino `fs::FS`) and `share(name, vfsDir)` (POSIX
+`opendir`/`readdir`/`stat`/`fopen` on an ESP-IDF VFS path), `unshare(name)`, `PROBOT_HAS_FILES_SHARE`.
+Only the files directly in a shared folder are offered, at most 4 shares, names 1-15 of `A-Z a-z 0-9 _ -`,
+absolute paths of at most 95 bytes without `.`/`..` segments. Sharing a name again replaces it (true even
+with 4 shares). A running transfer of a replaced or removed share stops at its next file call, and
+`share()`/`unshare()` wait (at most 1 s) for the file task to release it, so unmounting right after
+`unshare()` is safe. The DS "Dosyalar" card (Logs page) lists and downloads only while the robot is idle
+and not after an e-stop; no delete in v1; `/files` answers 404 to every client while nothing is shared.
+
+Wired:
+- CoreOps ABI 8: `filesShare(name, vfsDir)`, `filesUnshare(name)`. The bridge fills them when core defines
+  `PROBOT_HAS_FILES_SHARE` and requires-checks find the VFS-path overload `share(const char*, const
+  char*)` and `unshare(const char*)` (looked up through a using-directive in `files_probe`, as for
+  `clearPersisted()`); `<probot/files/files.hpp>` is included when present. Older cores leave both null.
+- Archive accessors (`CoreOps.hpp`): `FileSharingSupported()`, `ShareFiles(name, vfsDir)`,
+  `UnshareFiles(name)`; false and silent without core or without R11. No public helper beyond these:
+  a sketch that wants to share another folder calls core's `probot::files::share()` itself.
+- DataLogManager (`wpilibc/0015`): the manager's thread shares its log directory as `"logs"` with the
+  VFS-path overload once the directory exists (right after its old-log cleanup, then once a second while
+  it is missing; the default directory is created by `Start()`, an explicit one may appear later). It is
+  shared once per thread: a refusal (relative path, `.`/`..`, over 95 bytes, 4 other shares) prints one
+  warning and is not retried. `Stop()` joins the thread, whose destructor unshares (only a share it
+  made), so `Stop()` returns after the share is gone; a later `Start()` with another directory (e.g.
+  `SetLogDirectory("/sd/logs")` after mounting a card) shares that one under the same name. prosdk never
+  unmounts a file system (`MountSdCard` lasts until the program ends), so there is no other unshare
+  point.
+- Threading: `share()` runs on the manager's own thread (`datalogmgr`), never on core's user task, so its
+  wait for a replaced share (a sketch's own `"logs"` being downloaded) only delays that thread's loop;
+  the DataLog writer is a separate thread and keeps writing. `unshare()` runs on the caller of `Stop()`
+  and can block it up to 1 s, only while the DS downloads from the folder, which core allows only while
+  the robot is idle. A log file grows while it is offered; core sends a file with its size at open.
+- Examples: SysIdRoutine and BoardozaSdLog mention the "Dosyalar" card.
+- Tests: test/prosdk/files/DataLogShareTest.cpp, built twice. `prosdk_files_tests` (fake core recording
+  calls): an existing folder is shared as `"logs"` by the thread and unshared before `Stop()` returns; after
+  a restart a folder created after `Start()` is shared once it exists, once; a relative folder is
+  refused with exactly one warning, not retried and not unshared. `prosdk_files_legacy_tests` (both fields
+  null): `FileSharingSupported()`/`ShareFiles()`/`UnshareFiles()` false, the log is written, no warning.
+  CoreOpsTest: no-core and null-field defaults. QEMU FakeCore leaves ABI 8 null (its DataLog case runs the
+  fallback on the target).
+- Checked against 15defc1: host tests (`build.sh host all header_check --test`), the incremental archive,
+  the HAL link test (`files_probe::Share<char const*, char const*>` and `Unshare<char const*>` in the ELF
+  next to the grid-restart and persistence probes; 1,708,993 B flash / 75,996 B RAM) and against
+  `feat/dashboard-store` 9217ae4 (links, no probe), QEMU smoke 8/8 on both boots (FakeCore, fields null),
+  examples TemplateTimed 1,796,884 / 72,308, BoardozaSdLog 1,930,877 / 75,752, HalSmoke 1,612,901 /
+  74,380 (flash / static RAM).
+
