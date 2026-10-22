@@ -39,7 +39,8 @@
 //     at compile time). Without it the archive reports a refused schema against
 //     PROBOT_DASH_MAX_VALUE.
 //   - R12 dashboard persistence (probot::dashboard::clearPersisted(), no new public header:
-//     detected with a requires-check on the call, kCoreHasDashPersist). The PERSISTENT flag value
+//     detected with a requires-check on the call, kCoreHasDashPersist; core's intended check, it
+//     adds no feature macro). The PERSISTENT flag value
 //     existed before (core stored it and did nothing), so it is not what is detected. Without it
 //     dashClearPersisted stays null and the archive publishes no tunable PERSISTENT.
 //

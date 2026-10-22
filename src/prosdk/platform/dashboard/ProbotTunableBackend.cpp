@@ -258,7 +258,11 @@ class ProbotTunableBackend::Entry {
   bool WantsPersistence() const { return m_persistent; }
   /** Published with core's PERSISTENT flag (core may have queued its stored value). */
   bool IsCorePersistent() const { return m_corePersistent; }
-  virtual void UpdateNetwork(bool force) = 0;
+  /**
+   * Publishes the tunable's value to the store topic if it changed (or force); returns the value
+   * the store took (valid until the next call), or nullptr when nothing was set.
+   */
+  virtual const std::vector<uint8_t>* UpdateNetwork(bool force) = 0;
   virtual ValueEntry* AsValueEntry() { return nullptr; }
 
   /** Publishes the store topic (caller holds the backend mutex). */
@@ -338,25 +342,37 @@ class ProbotTunableBackend::ValueEntry : public Entry {
     return true;
   }
 
-  void UpdateNetwork(bool force) override {
+  /** The tunable's value encodes to data (an equal value needs no apply). */
+  bool HoldsValue(std::span<const uint8_t> data) {
+    auto info = TunableRegistry::GetTunable(GetUid());
+    if (!info) {
+      return false;
+    }
+    m_data.clear();
+    return Encode(info, m_data) && std::ranges::equal(m_data, data);
+  }
+
+  const std::vector<uint8_t>* UpdateNetwork(bool force) override {
     if (!IsPublished()) {
-      return;  // published (and forced) once the store is ready
+      return nullptr;  // published (and forced) once the store is ready
     }
     auto info = TunableRegistry::GetTunable(GetUid());
     if (!info) {
-      return;
+      return nullptr;
     }
     bool forcePublish = force || m_forceUpdate;
     if (!forcePublish && !ShouldUpdateNetwork(info)) {
-      return;
+      return nullptr;
     }
+    bool stored = false;
     m_data.clear();
     if (Encode(info, m_data) && (forcePublish || m_data != m_lastData)) {
-      SetStoreValue(m_data);
+      stored = SetStoreValue(m_data);
       m_lastData = m_data;
     }
     TunableRegistry::ResetChangedAfterUpdate(GetUid());
     m_forceUpdate = false;
+    return stored ? &m_lastData : nullptr;
   }
 
  protected:
@@ -517,12 +533,13 @@ class ComplexTunableEntry final : public ProbotTunableBackend::Entry {
               false},
         m_tunableType{std::move(tunableType)} {}
 
-  void UpdateNetwork(bool force) override {
+  const std::vector<uint8_t>* UpdateNetwork(bool force) override {
     if (force && IsPublished()) {
       SetStoreValue({reinterpret_cast<const uint8_t*>(m_tunableType.data()),
                      m_tunableType.size()});
     }
     TunableRegistry::ResetChangedAfterUpdate(GetUid());
+    return nullptr;  // never persistent
   }
 
  private:
@@ -835,7 +852,9 @@ bool ProbotTunableBackend::Publish(std::string_view path, uint32_t uid,
       dash::DrainWrites();
       tunedInitialValue = ApplyRestoredValue(entry);
     }
-    entry->UpdateNetwork(true);
+    if (auto stored = entry->UpdateNetwork(true)) {
+      RememberValue(*entry, *stored);
+    }
   } catch (...) {
     {
       std::scoped_lock lock{m_mutex};
@@ -887,10 +906,11 @@ bool ProbotTunableBackend::ApplyRestoredValue(const std::shared_ptr<Entry>& entr
     auto [memo, first] = m_persisted.try_emplace(entry->GetKey());
     if (!first && memo->second.valueType == entry->GetValueType() &&
         memo->second.typeString == entry->GetTypeString()) {
-      // published again in this run: core's record may be older than the value tuned since
-      // (core stores only while the robot is idle), so the last value applied in this run wins
-      // and core's restore is dropped (not refused: that would erase the record)
-      value = memo->second.lastTune;
+      // published again in this run: the last value set on the path is what core stores (its
+      // topic's current value, whoever set it), but core's record may not have it yet (2 s
+      // debounce, saved only while the robot is idle), so the remembered value wins and core's
+      // restore is dropped (not refused: that would erase the record)
+      value = memo->second.lastValue;
     } else {
       memo->second = PersistedTunable{entry->GetValueType(), entry->GetTypeString(), {}};
       value = std::move(restored);
@@ -900,9 +920,13 @@ bool ProbotTunableBackend::ApplyRestoredValue(const std::shared_ptr<Entry>& entr
   if (!value) {
     return false;
   }
-  // the Driver Station write path: decode, set, RecordTuneApplied, onRemoteSet
+  if (!fromCore && valueEntry->HoldsValue(*value)) {
+    // republished with the value it already has (e.g. its own last set value): nothing to tune
+    return false;
+  }
+  // the Driver Station write path: decode, set, RecordTuneApplied, onRemoteSet (the store gets
+  // the value from the UpdateNetwork that follows, which remembers it)
   if (valueEntry->UpdateTunable(*value)) {
-    RememberTune(*entry, *value);
     return true;
   }
   if (fromCore) {
@@ -912,14 +936,26 @@ bool ProbotTunableBackend::ApplyRestoredValue(const std::shared_ptr<Entry>& entr
   return false;
 }
 
-void ProbotTunableBackend::RememberTune(const Entry& entry, std::span<const uint8_t> data) {
+void ProbotTunableBackend::RememberValue(const Entry& entry, std::span<const uint8_t> data) {
   if (!entry.IsCorePersistent()) {
     return;
   }
   std::scoped_lock lock{m_mutex};
+  RememberValueLocked(entry, data);
+}
+
+void ProbotTunableBackend::RememberValueLocked(const Entry& entry,
+                                               std::span<const uint8_t> data) {
+  // the value core now holds for the path (set by the robot program, a getter, a Driver Station
+  // write echoed back or a restore); an entry removed meanwhile no longer owns the path
+  if (!entry.IsCorePersistent() || entry.IsRemoved()) {
+    return;
+  }
   SyncPersistClears();
-  if (auto it = m_persisted.find(entry.GetKey()); it != m_persisted.end()) {
-    it->second.lastTune.emplace(data.begin(), data.end());
+  if (auto it = m_persisted.find(entry.GetKey());
+      it != m_persisted.end() && it->second.valueType == entry.GetValueType() &&
+      it->second.typeString == entry.GetTypeString()) {
+    it->second.lastValue.emplace(data.begin(), data.end());
   }
 }
 
@@ -929,10 +965,11 @@ void ProbotTunableBackend::SyncPersistClears() {
     return;
   }
   m_persistClears = clears;
-  // ClearPersistedTunables() erased core's records: a value tuned before it must not come back
-  // on a republish either (the path then keeps the new tunable's own value, until tuned again)
+  // ClearPersistedTunables() erased core's records and core stores a topic again only once its
+  // value changes: a value set before the clear must not come back on a republish either (the
+  // path then keeps the new tunable's own value, which its publish sets and core then stores)
   for (auto&& [key, memo] : m_persisted) {
-    memo.lastTune.reset();
+    memo.lastValue.reset();
   }
 }
 
@@ -993,7 +1030,9 @@ void ProbotTunableBackend::PublishWaiting() {
       if (entry->IsCorePersistent() && ApplyRestoredValue(entry)) {
         tunedUids.emplace_back(entry->GetUid());
       }
-      entry->UpdateNetwork(true);
+      if (auto stored = entry->UpdateNetwork(true)) {
+        RememberValue(*entry, *stored);
+      }
     } catch (const std::exception& e) {
       TunableRegistry::ReportWarning(std::format(
           "Dashboard tunable '{}{}' failed during initial publish: {}", m_prefix,
@@ -1143,7 +1182,8 @@ void ProbotTunableBackend::Update() {
       continue;
     }
     if (entry->UpdateTunable(write.data)) {
-      RememberTune(*entry, write.data);
+      // remembered for a republish once the update below echoes it to the store, as core stores
+      // the topic's value (a Driver Station write alone does not change it)
       onTuneUids.emplace_back(entry->GetUid());
     } else {
       dash::RejectWrite(write.id, WriteStatus::kDecodeError);
@@ -1173,8 +1213,11 @@ void ProbotTunableBackend::Update() {
       }
 
       lock.unlock();
-      entry->UpdateNetwork(false);
+      auto stored = entry->UpdateNetwork(false);
       lock.lock();
+      if (stored) {
+        RememberValueLocked(*entry, *stored);
+      }
     };
 
     auto updateEntries = [&](auto& entries, bool requeueIfInsertedDuringUpdate) {

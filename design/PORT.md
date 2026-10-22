@@ -186,14 +186,17 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   (R10, `ds::systemTimeValid()`); `HAL_GetRSLState` / `HAL_GetCommsDisableCount` to `ds::rslState()` /
   `ds::commsDisableCount()`, an accepted `SetBrownoutVoltages` to core's low-voltage threshold
   (`io::battery::setLowVoltage`) and a halted robot program to `probot::requestStop()` (R12); opt-in
-  persistent tunables (`properties` `{"persistent": true}`) to core's `PERSISTENT` topics and
-  `ClearPersistedTunables()` to `dashboard::clearPersisted()` (R12 part 2); the
+  persistent tunables (`properties` `{"persistent": true}`) to core's `PERSISTENT` topics (core stores
+  the topic's current value, whoever set it, like NT persistent topics; a republish in the same run
+  applies the last value set on the path) and `ClearPersistedTunables()` to
+  `dashboard::clearPersisted()` (R12 part 2); the
   refused-schema report to core's per-schema limit (R13, `PROBOT_DASH_MAX_SCHEMA_BYTES`). Battery
   current (`io::battery::currentAmps()`, NaN without a sensor) has no WPILib 2027 API and is not
   wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (6 since R12
   persistence), and the bridge leaves a field null when the core lacks the feature (detected with
   `__has_include`, R13 on `dashboard::Limits`, R12 persistence with a requires-check on
-  `dashboard::clearPersisted()`), so the archive falls back (text-only console, the 2024-01-01 clock
+  `dashboard::clearPersisted()`, the check core intends: it adds no feature macro), so the archive
+  falls back (text-only console, the 2024-01-01 clock
   heuristic, `HAL_HANDLE_ERROR` for the RSL state and comms-disable count, no DS stop on a halt, the
   `PROBOT_DASH_MAX_VALUE` advice for a refused schema, no `PERSISTENT` flag and one warning per
   persistent tunable path).

@@ -136,7 +136,8 @@ below).
 Status: part 1 (everything except persistence) delivered as draft PR #37 and wired (CoreOps ABI 5, see
 "P1 R12 part 1 delivered" below). Persistence is in progress on core branch `feat/dash-persist`; the
 prosdk side is wired against its local commit 5513bb0 (CoreOps ABI 6, see "R12 part 2 persistence: prosdk
-side wired" below).
+side wired" below). Core declined storing only DS-written values (it stores the topic's current value,
+like NT persistent topics) and adds no feature macro; prosdk follows both (same section).
 
 ### R13. Dashboard schemas larger than a value
 
@@ -148,7 +149,7 @@ decoded on the DS page. Struct schemas are small and unaffected. Wanted: a separ
 from the value limit. Workaround today: the sketch defines `PROBOT_DASH_MAX_VALUE` 2048 or more before
 `#include <prosdk.h>`. prosdk reports a refused schema once on the console and keeps publishing the values.
 
-Related, in R12 part 2: persistence of DS-written tunables. A core without it keeps no value across a
+Related, in R12 part 2: persistence of tunable values. A core without it keeps no value across a
 reboot, so every tunable starts from its code default. Persistence is a per-tunable opt-in
 (`properties["persistent"] = true`), not a property of robust tunables (see "R12 part 2 persistence: prosdk
 side wired" below).
@@ -509,8 +510,18 @@ not wired yet.
 Wired against the local core commit `feat/dash-persist` 5513bb0 (not a PR yet; the branch was since
 rebased onto `feat/ds-files` as 25a34e8 with the same dashboard code, and prosdk links against that too).
 sdk-target and CI stay on `feat/small-items`, so the archive and the sketches build with the field null.
-Pending core's answer on two points: store only DS-accepted values (5513bb0 also stores the robot's own
-`set()` values after 2 s stable while idle), and a feature macro or header to detect persistence.
+
+Core's answer to prosdk's two questions (final, 2026-10-22):
+- Store only DS-accepted values: declined. Core keeps storing the topic's current value, i.e. what the
+  robot last `set()` on the topic (a DS write changes it only once the robot applies and echoes it),
+  2 s after it last changed and only while no OpMode runs, the same as an NT persistent topic stores
+  its value whoever set it. A stored value therefore wins over the code default after a reboot, also
+  one the robot program set; after changing a default, call `ClearPersistedTunables()`. Core's advice
+  for prosdk's republish memory, followed (below): remember the last value `set()` on the path, not the
+  last applied tune.
+- Feature macro or header: none. The requires-check on `probot::dashboard::clearPersisted()` is the
+  intended detection; after a core release with persistence `PROBOT_VERSION >= PROBOT_VERSION_OF(0,5,0)`
+  also works.
 
 - Opt-in: a mutable tunable with `TunableConfig::properties["persistent"] = true` (the topic property name)
   is published with `TUNABLE | MUTABLE | PERSISTENT` (plus `ROBUST` when robust). Robust alone never sets
@@ -525,15 +536,19 @@ Pending core's answer on two points: store only DS-accepted values (5513bb0 also
   decode or type-check is answered with `rejectWrite()`, which erases the record. A tunable published
   before the store is ready gets its value when it is published by `FlushPending()` or `Update()`. The
   dashboard router lock is recursive so a participant's `FlushPending()` can drain.
-- Republish rule: published again in the same run (Remove and Publish, or a new tunable object on the same
-  path), the tunable gets the last value applied to that path in this run (DS write or restore), or keeps
-  its own value if none was; core's restored write is then dropped without `rejectWrite()` (the record is
-  not erased). Core's record can be older than a tune made less than 2 s ago or while enabled.
-  `ClearPersistedTunables()` also forgets the values remembered for republishing (a counter the backend
-  compares), so a republish after the clear does not bring a cleared value back and core does not store it
-  again. The remembered value is the last applied tune only, while 5513bb0 stores the topic's current value:
-  a value the robot program set after a tune comes back after a reboot but not on a republish in the run.
-  This goes away if core stores only DS-accepted writes (question above).
+- Republish rule (core's rule, see the answer above): published again in the same run (Remove and Publish,
+  or a new tunable object on the same path), the tunable gets the last value set on that path in this run,
+  whoever set it: the backend remembers every value the store took for a persistent topic (the robot
+  program's `Set()` or a getter, published by the next `Update()`; a DS write once applied and echoed; a
+  restore), under its value type and type string. So a republish applies what a reboot would restore once
+  core has saved it; core's record can be older (2 s debounce, saved only while idle), so core's restored
+  write is then dropped without `rejectWrite()` (the record is not erased). A value equal to the tunable's
+  own is not applied (no onTune or tune revision, e.g. Remove and Publish of the same object); a `Set()`
+  not yet published by an update when the tunable is removed is not on the path, for core or for the
+  republish; a tunable of another value type or type string on the path takes core's record.
+  `ClearPersistedTunables()` also forgets the remembered values (a counter the backend compares under its
+  lock), as core stores a topic again only once its value changes: a republish after the clear keeps the
+  new tunable's own value (which its publish sets and core then stores) until a value is set again.
 - Detection: CoreBridge.hpp looks up `probot::dashboard::clearPersisted()` with a requires-expression on a
   dependent call (nothing is declared in core's namespaces) and fills the ABI 6 field `dashClearPersisted`.
   A core without it leaves the field null: the opt-in is a no-op with one console warning per path (a
@@ -544,7 +559,9 @@ Pending core's answer on two points: store only DS-accepted values (5513bb0 also
 - Tests: test/prosdk/dashboard/TunablePersistenceTest.cpp (the fake store restores a stored record on
   publish like 5513bb0: synchronous restore with value, onTune and revision; no or mismatching record;
   refused restore erases the record; robust/Selectable/immutable not persistent; other drained writes kept;
-  published before ready via FlushPending and Update; republish keeps the run's value or its own;
+  published before ready via FlushPending and Update; republish keeps the run's value; a robot `Set()`
+  after a tune is what the republish applies and what core then stores; an always-get tunable; a `Set()`
+  not yet published is not on the path; republish with its own last value is not tuned;
   ClearPersistedTunables, also before a republish; refused restore on the before-ready path; republish with
   another type takes core's record), test/prosdk/dashboard_legacy/PersistFallbackTest.cpp (own executable,
   field null: no flag, one warning per path also across a republish, DS tunes still work), Cancel and

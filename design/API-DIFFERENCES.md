@@ -289,7 +289,7 @@ CoreOps ABI 5): gamepads on ports 0-5 with analog triggers and names (R8), level
 and the halt stop (R12 part 1) and the schema size limit (R13) are in section 3; R14 (the gzip DS
 page) only saves flash. Not delivered yet: R11 (file download). R12's dashboard persistence
 (CoreOps ABI 6, the opt-in persistent tunables of section 7) is wired against core's local branch
-`feat/dash-persist` (5513bb0), not yet published by core.
+`feat/dash-persist` (5513bb0, rebased as 25a34e8), not yet published by core.
 
 ## 7. prosdk additions (not in WPILib 2027)
 
@@ -350,17 +350,24 @@ revision, `onRemoteSet`, `onTune` after the initial publish), as upstream applie
 retained value. A tunable published before core's store exists gets its stored value when it is
 published (the pre-cycle flush, before the robot loop). A stored value that does not decode any more
 is refused, which erases it. `ROBUST` alone never persists (section 3), immutable tunables and the
-`.type` topics of complex tunables are never persistent. Published again in the same run (`Remove`
+`.type` topics of complex tunables are never persistent. What core stores is the topic's current
+value, whoever set it (the robot program's `Set()`, a getter, a Driver Station write once applied and
+echoed), 2 s after it last changed and only while no OpMode runs, like an NT persistent topic or
+`Preferences`: after a reboot a persistent tunable's stored value wins over its code default, so
+changing the default in code has no effect on a robot that stored a value; call
+`ClearPersistedTunables()` once after changing a default. Published again in the same run (`Remove`
 and `Publish`, or a new tunable object on the same path), a persistent tunable gets the last value
-applied to that path in this run (Driver Station write or restore), or keeps its own value if there
-was none: core saves only while the robot is idle, so its record can be older than a value tuned
-while running. What core stores is the topic's current value (also values the robot program sets),
-2 s after it last changed and only while no OpMode runs; storing only Driver Station values is an
-open request to core. Until core answers, the two rules can differ: a value the robot program set
-(after a tune) comes back after a reboot, while a republish in the same run applies the last tuned
-value. `prosdk::platform::ClearPersistedTunables()` (`<prosdk.h>`) erases every stored value (core's
+set on that path in this run, which is what a reboot restores once core has saved it (core's record
+can be older: debounce, idle-only save); a value equal to the tunable's own is not applied (no
+`onTune`), and a tunable of another value type or type string takes core's record. A value is on the
+path once the backend publishes it, at the next `TunableRegistry::Update()` after a `Set()`; a `Set()`
+not yet published when the tunable is removed is lost, for core and for the republish.
+`prosdk::platform::ClearPersistedTunables()` (`<prosdk.h>`) erases every stored value (core's
 `clearPersisted()`; flash write: call it while the robot is stopped) and also what the backend
-remembers for republishing, so a tunable published again afterwards starts from its code value until
-it is tuned again. With a probot-core without persistence the opt-in does nothing: the tunable starts
-from its code value and one console warning per path says so (a republish does not repeat it);
-`ClearPersistedTunables()` returns false.
+remembers for republishing (core stores a topic again only once its value changes), so a tunable
+published again afterwards keeps its own value until a value is set on the path again. With a
+probot-core without persistence the opt-in does nothing: the tunable starts from its code value and
+one console warning per path says so (a republish does not repeat it); `ClearPersistedTunables()`
+returns false. The bridge detects persistence with a requires-check on
+`probot::dashboard::clearPersisted()`, the check core intends (no feature macro; after a core release
+with persistence, `PROBOT_VERSION >= PROBOT_VERSION_OF(0,5,0)` also works).
