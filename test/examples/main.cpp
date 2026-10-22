@@ -1,0 +1,37 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+// Upstream wpilibcExamples/src/test/cpp/examples/*/cpp/main.cpp (identical in every example
+// test), ported to prosdk.
+
+#include <string_view>
+
+#include <catch2/catch_session.hpp>
+
+#include <prosdk/hal/HAL.h>
+
+namespace {
+
+bool IsCatchListCommand(int argc, char** argv) {
+  for (int i = 1; i < argc; ++i) {
+    std::string_view arg{argv[i]};
+    if (arg == "--list-tests" || arg == "--list-tags" ||
+        arg == "--list-reporters" || arg == "--list-listeners") {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+/**
+ * Runs all unit tests.
+ */
+int main(int argc, char** argv) {
+  if (!IsCatchListCommand(argc, argv)) {
+    HAL_Initialize();
+  }
+  return Catch::Session().run(argc, argv);
+}

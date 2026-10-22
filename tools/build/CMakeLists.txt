@@ -108,6 +108,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/modules/apriltag.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/wpilibc.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/commandsv2.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/drivers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/modules/examples.cmake")
 
 # libprosdk.a from every module's objects
 get_property(_modules GLOBAL PROPERTY PROSDK_MODULES)
