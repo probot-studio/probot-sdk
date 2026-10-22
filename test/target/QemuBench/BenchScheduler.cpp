@@ -5,7 +5,7 @@
 // (cmd::Run) and ignores the disabled state, so each Run() executes all of them; per_op is one
 // Run(). Run() also polls the button loop, runs the subsystems' Periodic() and keeps a watchdog
 // epoch per command, as on a robot. heap_bytes is the heap the case's subsystems and commands
-// hold once scheduled.
+// hold once scheduled, in the steady state of the scheduler's watchdog epochs.
 
 #include <format>
 #include <memory>
@@ -51,7 +51,13 @@ void SchedulerCase(const char* name, int commands, int subsystems, uint32_t iter
                          .WithName("Cmd" + std::to_string(i)));
       scheduler.Schedule(cmds.back());
     }
-    scheduler.Run();  // schedules the default commands
+    // The first Run() schedules the default commands. The watchdog's tracer keeps an epoch for one
+    // loop after its last use (wpilibc patch 0014), so the third Run() is the first one that holds
+    // only the steady state: the Initialize() epochs of Schedule() and of the default commands are
+    // gone by then.
+    for (int i = 0; i < 3; ++i) {
+      scheduler.Run();
+    }
     // heap held by the subsystems, the commands and the scheduler's bookkeeping of them
     const long heapBytes = static_cast<long>(heapBefore) - static_cast<long>(HeapFree());
     executes = 0;
@@ -70,6 +76,9 @@ void SchedulerCase(const char* name, int commands, int subsystems, uint32_t iter
     scheduler.CancelAll();
     scheduler.UnregisterAllSubsystems();
   }
+  // the second Run() drops the End(true) epochs of CancelAll(), so the next case starts from the
+  // same heap
+  scheduler.Run();
   scheduler.Run();
 }
 

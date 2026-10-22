@@ -14,6 +14,8 @@ Patches (tools/upstream/patches/commandsv2):
   Subsystem/SubsystemBase keep the static type name of wpiutil/0004 (design/PORT.md section 7).
 - NetworkButton is re-implemented over tunables (ntcore is not ported, PORT.md section 10).
 - Console output (PrintCommand, scheduler warnings) goes to the platform console.
+- The scheduler builds its watchdog epoch names in a reused buffer (no allocation per command per
+  Run(); the Tracer side is wpilibc/0014).
 Every behavior change is listed in design/API-DIFFERENCES.md.
 
 commandsv3 is Java-only (JVM continuations) and has no C++ to vendor.

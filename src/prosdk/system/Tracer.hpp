@@ -69,5 +69,7 @@ class Tracer {
   prosdk::hal::monotonic_clock::time_point m_lastEpochsPrintTime;
 
   prosdk::util::StringMap<std::chrono::nanoseconds> m_epochs;
+  // prosdk: entries kept by ClearEpochs() that this loop has not added again
+  size_t m_unsetEpochs = 0;
 };
 }  // namespace wpi

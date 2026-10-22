@@ -1,0 +1,76 @@
+diff --git a/src/prosdk/impl/commandsv2/cpp/CommandScheduler.cpp b/src/prosdk/impl/commandsv2/cpp/CommandScheduler.cpp
+index c26fa12..0c7366a 100644
+--- a/src/prosdk/impl/commandsv2/cpp/CommandScheduler.cpp
++++ b/src/prosdk/impl/commandsv2/cpp/CommandScheduler.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include <memory>
+ #include <string>
++#include <string_view>
+ #include <utility>
+ #include <vector>
+ 
+@@ -55,6 +56,17 @@ class CommandScheduler::Impl {
+   // via Schedule(CommandPtr&&). These are erased (destroyed) at the very end of
+   // the loop cycle when the command lifecycle is complete.
+   prosdk::util::DenseMap<Command*, CommandPtr> ownedCommands;
++
++  // prosdk: a watchdog epoch name "<name><suffix>" is built in this buffer, reused across loops,
++  // instead of a new std::string per epoch per loop (a heap allocation whenever it is longer than
++  // the 15-character small-string buffer). AddEpoch() does not keep the view it is given.
++  std::string epochName;
++
++  std::string_view EpochName(std::string_view name, std::string_view suffix) {
++    epochName.assign(name);
++    epochName.append(suffix);
++    return epochName;
++  }
+ };
+ 
+ template <typename TMap, typename TKey>
+@@ -131,7 +143,7 @@ void CommandScheduler::Schedule(Command* command) {
+     for (auto&& action : m_impl->initActions) {
+       action(*command);
+     }
+-    m_watchdog.AddEpoch(command->GetName() + ".Initialize()");
++    m_watchdog.AddEpoch(m_impl->EpochName(command->GetName(), ".Initialize()"));
+   }
+ }
+ 
+@@ -170,7 +182,8 @@ void CommandScheduler::Run() {
+     if constexpr (prosdk::RobotBase::IsSimulation()) {
+       subsystem.getFirst()->SimulationPeriodic();
+     }
+-    m_watchdog.AddEpoch(subsystem.getFirst()->GetName() + ".Periodic()");
++    m_watchdog.AddEpoch(
++        m_impl->EpochName(subsystem.getFirst()->GetName(), ".Periodic()"));
+   }
+ 
+   // Cache the active instance to avoid concurrency problems if SetActiveLoop()
+@@ -196,7 +209,7 @@ void CommandScheduler::Run() {
+     for (auto&& action : m_impl->executeActions) {
+       action(*command);
+     }
+-    m_watchdog.AddEpoch(command->GetName() + ".Execute()");
++    m_watchdog.AddEpoch(m_impl->EpochName(command->GetName(), ".Execute()"));
+ 
+     if (command->IsFinished()) {
+       m_impl->scheduledCommands.erase(command);
+@@ -209,7 +222,7 @@ void CommandScheduler::Run() {
+         m_impl->requirements.erase(requirement);
+       }
+ 
+-      m_watchdog.AddEpoch(command->GetName() + ".End(false)");
++      m_watchdog.AddEpoch(m_impl->EpochName(command->GetName(), ".End(false)"));
+       // remove owned commands after everything else is done
+       m_impl->ownedCommands.erase(command);
+     }
+@@ -324,7 +337,7 @@ void CommandScheduler::Cancel(Command* command,
+   for (auto* subsystem : toErase) {
+     m_impl->requirements.erase(subsystem);
+   }
+-  m_watchdog.AddEpoch(command->GetName() + ".End(true)");
++  m_watchdog.AddEpoch(m_impl->EpochName(command->GetName(), ".End(true)"));
+ }
+ 
+ void CommandScheduler::Cancel(Command* command) {
