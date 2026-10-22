@@ -227,13 +227,16 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
 - **Tests.** `test/prosdk/robot` (own executable): the robot host on the HAL sim with a fake core
   table, driving core's hooks on simulated time (disabled -> auto -> teleop -> utility -> e-stop,
   callback order, `AddPeriodic`/timeslice timing, jitter, late pass, opmode selection, halts).
-- **Examples** (`esp32:esp32:esp32s3:PartitionScheme=huge_app`, 2026-10-22; flash / static RAM):
-  `TimedRobotDifferential` 1926441 / 65764 bytes, `OpModeRobotExample` 1904333 / 65772,
-  `TimesliceRobotExample` 1902981 / 65708, `CommandBasedRobot` (commandsv2: scheduler, drive
+- **Examples** (`esp32:esp32:esp32s3:PartitionScheme=huge_app`, `tools/build/build.sh examples` after
+  wave 4, 2026-10-22; flash / static RAM):
+  `TimedRobotDifferential` 1946028 / 66276 bytes, `OpModeRobotExample` 1940332 / 66268,
+  `TimesliceRobotExample` 1922336 / 66196, `CommandBasedRobot` (commandsv2: scheduler, drive
   subsystem, `CommandXboxController`, PID command, autonomous `Selectable`, `SysIdRoutine`)
-  2128932 / 69340, `DriversShowcase` (one of each `drivers/` device: Spark, Servo, BTS7960,
+  2128900 / 69340, `DriversShowcase` (one of each `drivers/` device: Spark, Servo, BTS7960,
   VNH5019, PCA9685 with ProHubMotor and a servo, MPU6050, GoBildaPinpoint, ProHub encoders)
-  1998064 / 67412 (of 3145728 / 327680).
+  1998016 / 67412, `AprilTagFieldPose` 2102008 / 70836, `HalSmoke` 1687057 / 67148
+  (of 3145728 / 327680). The three wave-3 robot examples measured 1926441 / 65764,
+  1904333 / 65772 and 1902981 / 65708 before wave 4.
 
 ## 9. Build (incremental, low load)
 
