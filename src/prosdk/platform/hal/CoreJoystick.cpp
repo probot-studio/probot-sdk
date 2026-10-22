@@ -58,8 +58,8 @@ void SetButton(HAL_JoystickButtons* buttons, int index, bool available, bool pre
 
 }  // namespace
 
-HAL_JoystickPOV CorePovToHal(int degrees) noexcept {
-  switch (degrees) {
+HAL_JoystickPOV CorePovToHal(int povDegrees) noexcept {
+  switch (povDegrees) {
     case 0:
       return HAL_JOYSTICK_POV_UP;
     case 45:
@@ -152,6 +152,23 @@ void ConvertCoreGamepad(const CoreGamepad& pad, CoreJoystickData* out) noexcept 
   }
   std::memcpy(desc.name, pad.name, n);
   desc.name[n] = '\0';
+}
+
+bool CoreJoystickConnected(const CoreJoystickData& data) noexcept {
+  return data.axes.available != 0 || data.buttons.available != 0 || data.povs.available != 0;
+}
+
+uint8_t LostCoreJoysticks(const CoreOps& ops, uint8_t connected,
+                          CoreJoystickData* scratch) noexcept {
+  uint8_t lost = 0;
+  for (int port = 0; port < kCoreMaxGamepads; ++port) {
+    const uint8_t bit = static_cast<uint8_t>(1u << port);
+    if ((connected & bit) != 0 &&
+        !(ReadCoreJoystick(ops, port, scratch) && CoreJoystickConnected(*scratch))) {
+      lost |= bit;
+    }
+  }
+  return lost;
 }
 
 bool ReadCoreJoystick(const CoreOps& ops, int port, CoreJoystickData* out) noexcept {

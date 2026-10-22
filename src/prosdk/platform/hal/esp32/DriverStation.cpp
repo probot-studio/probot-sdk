@@ -4,8 +4,9 @@
 //
 // ESP32-S3 HAL backend: the Driver Station is probot-core's browser Driver Station
 // (design/hal-esp32.md, "Driver Station"). A pre-cycle callback on core's user task (the "pump")
-// reads core's state through CoreOps every cycle; when the Driver Station sent a new packet or the
-// control word changed it stores a new snapshot and wakes the new-data events. HAL_RefreshDSData
+// reads core's state through CoreOps every cycle; when the Driver Station sent a new packet, the
+// control word changed or a connected joystick was lost (core's input timeout) it stores a new
+// snapshot and wakes the new-data events. HAL_RefreshDSData
 // makes the latest snapshot the one the getters return, as on the other backends.
 //
 // Mapping:
@@ -173,6 +174,7 @@ class ProbotCoreDs final : public MrcLibDs {
   prosdk::platform::CoreJoystickData m_stick;
   uint32_t m_lastSeq = 0;
   uint64_t m_lastWord = ~uint64_t{0};
+  uint8_t m_connected = 0;  // ports (bit n = port n) connected in m_latest
 
   // DriverStationDisplay frames (ANSI stripped), last one written to the console
   std::mutex m_displayMutex;
@@ -215,7 +217,11 @@ void ProbotCoreDs::Poll() {
   const CoreOps& ops = GetCoreOps();
   const uint32_t seq = ops.packetSeq();
   const HAL_ControlWord controlWord = MakeControlWord(ops);
-  if (seq == m_lastSeq && controlWord.value == m_lastWord) {
+  // Without a new packet a joystick can still be lost: core neutralizes a port whose frames
+  // stopped (input timeout) without counting a packet, so connected ports are re-read every cycle
+  // and the last stick values of a lost gamepad are never kept.
+  if (seq == m_lastSeq && controlWord.value == m_lastWord &&
+      prosdk::platform::LostCoreJoysticks(ops, m_connected, &m_stick) == 0) {
     return;
   }
   m_lastSeq = seq;
@@ -225,6 +231,7 @@ void ProbotCoreDs::Poll() {
   std::memset(&next, 0, sizeof(next));
   next.controlWord = controlWord;
   next.matchTime = ops.matchTimeSeconds();
+  uint8_t connected = 0;
   for (int i = 0; i < HAL_MAX_JOYSTICKS; ++i) {
     // ports with no frame stay empty (disconnected)
     if (prosdk::platform::ReadCoreJoystick(ops, i, &m_stick)) {
@@ -232,8 +239,12 @@ void ProbotCoreDs::Poll() {
       next.povs[i] = m_stick.povs;
       next.buttons[i] = m_stick.buttons;
       next.descriptors[i] = m_stick.descriptor;
+      if (prosdk::platform::CoreJoystickConnected(m_stick)) {
+        connected |= static_cast<uint8_t>(1u << i);
+      }
     }
   }
+  m_connected = connected;
   {
     std::scoped_lock lock(m_cacheMutex);
     m_latest = next;

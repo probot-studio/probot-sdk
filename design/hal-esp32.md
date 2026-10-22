@@ -209,7 +209,10 @@ Driver Station (design/PORT.md section 8).
   reports no opmode. There is no "first registered option" fallback.
 - Joysticks (prosdk/platform/hal/CoreJoystick.cpp): core gamepad port n = HAL joystick n for
   ports 0-5 (`ds::rawGamepad(0..5)`, core R8; with an older core only port 0 has data). A port
-  without a frame, or one core neutralized (stale), is a disconnected joystick. The raw browser
+  without a frame, or one core neutralized (stale), is a disconnected joystick. Core neutralizes
+  a port whose frames stop for `PROBOT_INPUT_TIMEOUT_MS` (500 ms: an unplugged gamepad, a
+  backgrounded Driver Station tab) without a new packet, so the pump re-reads the connected
+  ports every cycle and drops a lost one at once; the last stick values are never kept. The raw browser
   gamepad is remapped through the snapshot's mapping profile to WPILib's Gamepad (SDL) layout:
   buttons FACE_DOWN, FACE_RIGHT, FACE_LEFT, FACE_UP, BACK, GUIDE, START, LEFT_STICK, RIGHT_STICK,
   LEFT_BUMPER, RIGHT_BUMPER, DPAD_UP/DOWN/LEFT/RIGHT (0..14); axes LEFT_X, LEFT_Y, RIGHT_X,

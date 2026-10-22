@@ -72,6 +72,19 @@ void ConvertCoreGamepad(const CoreGamepad& pad, CoreJoystickData* out) noexcept;
 bool ReadCoreJoystick(const CoreOps& ops, int port, CoreJoystickData* out) noexcept;
 
 /** core POV degrees (-1, 0..315 in steps of 45) -> HAL POV bit mask; anything else is centered. */
-HAL_JoystickPOV CorePovToHal(int degrees) noexcept;
+HAL_JoystickPOV CorePovToHal(int povDegrees) noexcept;
+
+/** True when `data` is a connected joystick (it has an axis, a button or a POV). */
+bool CoreJoystickConnected(const CoreJoystickData& data) noexcept;
+
+/**
+ * The ports of `connected` (bit n = port n) that no longer read as connected joysticks. Core
+ * neutralizes a port when its frames stop for PROBOT_INPUT_TIMEOUT_MS (500 ms: a backgrounded
+ * Driver Station tab, an unplugged gamepad) or the Driver Station releases the robot, without a
+ * new packet; the Driver Station backend checks this every cycle so that it never keeps the
+ * last stick values of a lost gamepad. `scratch` is overwritten.
+ */
+uint8_t LostCoreJoysticks(const CoreOps& ops, uint8_t connected,
+                          CoreJoystickData* scratch) noexcept;
 
 }  // namespace prosdk::platform

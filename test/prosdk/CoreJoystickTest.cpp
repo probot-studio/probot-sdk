@@ -168,7 +168,7 @@ TEST_CASE("Core gamepads map to HAL joysticks 0-5", "[prosdk][hal][joystick]") {
 
   SECTION("8-way POV and D-pad buttons") {
     struct Case {
-      int degrees;
+      int povDegrees;
       HAL_JoystickPOV pov;
       bool up, right, down, left;
     };
@@ -185,8 +185,8 @@ TEST_CASE("Core gamepads map to HAL joysticks 0-5", "[prosdk][hal][joystick]") {
         {30, HAL_JOYSTICK_POV_CENTERED, false, false, false, false},
     };
     for (const Case& c : cases) {
-      CAPTURE(c.degrees);
-      gPorts[3].pov = static_cast<int16_t>(c.degrees);
+      CAPTURE(c.povDegrees);
+      gPorts[3].pov = static_cast<int16_t>(c.povDegrees);
       pf::CoreJoystickData d;
       REQUIRE(pf::ReadCoreJoystick(ops, 3, &d));
       CHECK(d.povs.available == 1);
@@ -209,6 +209,25 @@ TEST_CASE("Core gamepads map to HAL joysticks 0-5", "[prosdk][hal][joystick]") {
     REQUIRE(pf::ReadCoreJoystick(ops, 3, &d));
     CHECK(d.povs.available == 1);
     CHECK(d.povs.povs[0] == HAL_JOYSTICK_POV_RIGHT);
+  }
+
+  SECTION("lost joysticks") {
+    pf::CoreJoystickData d;
+    REQUIRE(pf::ReadCoreJoystick(ops, 0, &d));
+    CHECK(pf::CoreJoystickConnected(d));
+    REQUIRE(pf::ReadCoreJoystick(ops, 5, &d));
+    CHECK_FALSE(pf::CoreJoystickConnected(d));  // neutralized: a frame, but no data
+    // ports 0 and 3 connected in the last snapshot; nothing lost yet
+    CHECK(pf::LostCoreJoysticks(ops, 0x09, &d) == 0);
+    // core's input timeout neutralizes port 0 (no new packet); port 3 stays
+    gPorts[0].axisCount = 0;
+    gPorts[0].buttonCount = 0;
+    CHECK(pf::LostCoreJoysticks(ops, 0x09, &d) == 0x01);
+    // the Driver Station released the robot: no frame on port 3 any more
+    gHasFrame[3] = false;
+    CHECK(pf::LostCoreJoysticks(ops, 0x09, &d) == 0x09);
+    // ports outside the connected mask are not checked
+    CHECK(pf::LostCoreJoysticks(ops, 0x00, &d) == 0);
   }
 
   SECTION("name and gamepad type") {
