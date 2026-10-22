@@ -141,7 +141,7 @@ TEST_CASE("VL53L7CX frame decode: chunked read, word swap, ULD conversion", "[vl
   // 4x4 with the outputs platform.h leaves on (target count, distance, target status).
   constexpr uint32_t kSize = 128;
   std::array<uint8_t, kSize> frame{};
-  frame[0] = 7;  // stream count
+  frame[3] = 7;  // stream count: the ULD reads it from wire byte 0, before the swap
   frame[8] = 0x12;  // header id, repeated in the footer
   frame[9] = 0x34;
   PutHeader(&frame[16], 1, 16, VL53L7CX_NB_TARGET_DETECTED_IDX);  // 16 x u8 at 20
