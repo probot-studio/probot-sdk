@@ -128,13 +128,15 @@ below).
   disabled and prints the error, and the DS still shows the robot as enableable.
 - `battery::currentAmps()` declared in every configuration (NaN when there is no sensor); brownout or
   low-battery flag.
-- Optional persistence of DS-written tunables in NVS (robust tunables), separate namespace.
+- Optional persistence of DS-written tunables in NVS (opt-in per tunable), separate namespace.
 - `rslState()`: current state of the robot signal light / status LED core drives (WPILib `HAL_GetRSLState`).
 - `commsDisableCount()`: number of times outputs were disabled because the DS link was lost (since boot;
   WPILib `HAL_GetCommsDisableCount`).
 
 Status: part 1 (everything except persistence) delivered as draft PR #37 and wired (CoreOps ABI 5, see
-"P1 R12 part 1 delivered" below). Persistence is in progress on core branch `feat/dash-persist`.
+"P1 R12 part 1 delivered" below). Persistence is in progress on core branch `feat/dash-persist`; the
+prosdk side is wired against its local commit 5513bb0 (CoreOps ABI 6, see "R12 part 2 persistence: prosdk
+side wired" below).
 
 ### R13. Dashboard schemas larger than a value
 
@@ -146,8 +148,10 @@ decoded on the DS page. Struct schemas are small and unaffected. Wanted: a separ
 from the value limit. Workaround today: the sketch defines `PROBOT_DASH_MAX_VALUE` 2048 or more before
 `#include <prosdk.h>`. prosdk reports a refused schema once on the console and keeps publishing the values.
 
-Related, still open in R12: persistence of DS-written robust tunables. Core keeps no value across a reboot,
-so prosdk publishes a robust tunable with its code default (upstream NT restores the last tuned value).
+Related, in R12 part 2: persistence of DS-written tunables. A core without it keeps no value across a
+reboot, so every tunable starts from its code default. Persistence is a per-tunable opt-in
+(`properties["persistent"] = true`), not a property of robust tunables (see "R12 part 2 persistence: prosdk
+side wired" below).
 
 Status: delivered as draft PR #36 (`PROBOT_DASH_MAX_SCHEMA_BYTES`) and wired, see "P1 R13 delivered" below.
 The `PROBOT_DASH_MAX_VALUE` workaround above is only for a core without it, and 2048 is not enough for
@@ -425,15 +429,57 @@ comms-disable count). CI builds the sketches against `feat/small-items` (PROBOT_
 
 Core branches `feat/dash-persist` and `feat/ds-files` (work in progress; prosdk does not build against them).
 
-- R12 robust-tunable persistence (`feat/dash-persist`): a topic published with `ROBUST | PERSISTENT` gets
-  its last DS-written value back after a reboot. Core saves DS-accepted values of such topics to NVS
-  (own namespace) with a debounced write, and on `publish()` of a `ROBUST | PERSISTENT` topic with a saved
-  value queues that value as a normal `Write`. prosdk publishes robust tunables with `ROBUST | PERSISTENT`
-  and applies the restored value through its usual write path: it must be visible in the first
-  `drainWrites()` after the publish, so `TunableRegistry::Update()` sets the tunable to it before the robot
-  reads it. Non-persistent topics are unchanged; `/Preferences` keeps its own NVS store.
+- R12 tunable persistence (`feat/dash-persist`): a topic published with `PERSISTENT` gets its stored value
+  back after a reboot. Core saves values of such topics to NVS (own namespace) with a debounced write, and
+  on `publish()` of a `PERSISTENT` topic with a saved value queues that value as a normal `Write`.
+  Correction (2026-10-22): the first version of this design said prosdk publishes every robust tunable
+  with `ROBUST | PERSISTENT`. It does not: ROBUST only means "echo the applied value", and the robust
+  topics prosdk itself creates (the scheduler's Cancel, Selectable's `selected`, the `/Preferences`
+  mirrors) must start from their code value after a reboot. `PERSISTENT` is set only for a mutable tunable
+  that opts in, and prosdk applies the restored value inside `Publish()`, not in a later
+  `TunableRegistry::Update()` (see below). Non-persistent topics are unchanged; `/Preferences` keeps its
+  own NVS store.
 - R11 files (`feat/ds-files`): `probot::files::share(name, fs, dir)` registers a directory of a mounted
   filesystem under a name; the DS gets a "Dosyalar" card listing the shared folders and their files.
   Download only while the robot is idle or e-stopped (no file traffic while it can move); no delete in v1.
   prosdk shares its DataLogManager folder as "logs" (LittleFS `/logs`, or the SD card folder when
   DataLogManager logs there), so `.wpilog` files can be downloaded from the DS.
+
+### R12 part 2 persistence: prosdk side wired (CoreOps ABI 6), 2026-10-22
+
+Wired against the local core commit `feat/dash-persist` 5513bb0 (not a PR yet). sdk-target and CI stay on
+`feat/small-items`, so the archive and the sketches build with the field null. Pending core's answer on two
+points: store only DS-accepted values (5513bb0 also stores the robot's own `set()` values after 2 s stable
+while idle), and a feature macro or header to detect persistence.
+
+- Opt-in: a mutable tunable with `TunableConfig::properties["persistent"] = true` (the topic property name)
+  is published with `TUNABLE | MUTABLE | PERSISTENT` (plus `ROBUST` when robust). Robust alone never sets
+  `PERSISTENT`; immutable tunables, ComplexTunable `.type` topics, the scheduler's Cancel, Selectable's
+  `selected` and the `/Preferences` mirrors never do. Documented as a prosdk addition in
+  design/API-DIFFERENCES.md section 7.
+- Restore: `Publish()` of a new PERSISTENT topic calls `drainWrites()` right after core's `publish()`, takes
+  the restored write for that topic (other topics' drained writes stay queued for `Update()`) and applies
+  it through the DS write validation (type check, set, RecordTuneApplied, onRemoteSet), then
+  `UpdateNetwork(true)` and onTune, as upstream applies a robust tunable's retained value. So the tunable
+  has its stored value when `Publish()` returns (a subsystem constructor reads it). A value that does not
+  decode or type-check is answered with `rejectWrite()`, which erases the record. A tunable published
+  before the store is ready gets its value when it is published by `FlushPending()` or `Update()`. The
+  dashboard router lock is recursive so a participant's `FlushPending()` can drain.
+- Republish rule: published again in the same run (Remove and Publish, or a new tunable object on the same
+  path), the tunable gets the last value applied to that path in this run (DS write or restore), or keeps
+  its own value if none was; core's restored write is then dropped without `rejectWrite()` (the record is
+  not erased). Core's record can be older than a tune made less than 2 s ago or while enabled.
+- Detection: CoreBridge.hpp looks up `probot::dashboard::clearPersisted()` with a requires-expression on a
+  dependent call (nothing is declared in core's namespaces) and fills the ABI 6 field `dashClearPersisted`.
+  A core without it leaves the field null: the opt-in is a no-op with one console warning per tunable
+  ("properties.persistent: this probot-core does not keep dashboard values across reboots ..."), the flag
+  is not set. `prosdk::platform::ClearPersistedTunables()` (Dashboard.hpp) calls `clearPersisted()`
+  (false without it); `prosdk::platform::DashPersistenceSupported()` reports the field.
+- Tests: test/prosdk/dashboard/TunablePersistenceTest.cpp (the fake store restores a stored record on
+  publish like 5513bb0: synchronous restore with value, onTune and revision; no or mismatching record;
+  refused restore erases the record; robust/Selectable/immutable not persistent; other drained writes kept;
+  published before ready via FlushPending and Update; republish keeps the run's value or its own;
+  ClearPersistedTunables), test/prosdk/dashboard_legacy/PersistFallbackTest.cpp (own executable, field
+  null: no flag, one warning per tunable, DS tunes still work), Cancel and Preferences mirrors not
+  PERSISTENT, CoreOpsTest (no-core and fake defaults), FakeCore.hpp leaves ABI 6 null. A single-TU compile
+  of CoreBridge.hpp detects persistence against 5513bb0 and not against `feat/small-items`.

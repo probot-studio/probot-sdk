@@ -84,6 +84,8 @@ uint32_t DefCommsDisableCount() { return 0; }
 bool DefSetLowVoltage(float) { return false; }
 // No core, or core without R13 (0: the limit is unknown).
 uint32_t DefMaxSchemaBytes() { return 0; }
+// No core, or core without dashboard persistence (DashPersistenceSupported() recognizes it).
+bool DefClearPersisted() { return false; }
 
 constexpr CoreOps kDefaultOps{
     kCoreOpsAbiVersion, sizeof(CoreOps), 0, "",
@@ -96,6 +98,7 @@ constexpr CoreOps kDefaultOps{
     DefConsoleLevel, DefSystemTimeValid,
     DefRequestStop, DefRslState, DefCommsDisableCount, DefSetLowVoltage,
     DefMaxSchemaBytes,
+    DefClearPersisted,
 };
 
 // Written once (static initialization, single-threaded) before gInstalled is set.
@@ -243,6 +246,7 @@ bool InstallCoreOps(const CoreOps* ops) noexcept {
   PROSDK_COREOPS_FILL(commsDisableCount);
   PROSDK_COREOPS_FILL(setLowVoltage);
   PROSDK_COREOPS_FILL(dashMaxSchemaBytes);
+  PROSDK_COREOPS_FILL(dashClearPersisted);
 #undef PROSDK_COREOPS_FILL
   if (copy.coreVersionString == nullptr) {
     copy.coreVersionString = "";
@@ -444,6 +448,10 @@ bool GetCommsDisableCount(uint32_t* count) noexcept {
 
 bool SetLowVoltage(double volts) noexcept {
   return gOps.setLowVoltage(static_cast<float>(volts));
+}
+
+bool DashPersistenceSupported() noexcept {
+  return gOps.dashClearPersisted != kDefaultOps.dashClearPersisted;
 }
 
 bool AddCycleCallback(CyclePhase phase, CoreCallback callback, void* context) noexcept {

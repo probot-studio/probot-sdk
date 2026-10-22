@@ -39,7 +39,7 @@
 namespace prosdk::platform {
 
 /** Layout/meaning version of CoreOps; both sides must agree. */
-inline constexpr uint32_t kCoreOpsAbiVersion = 5;
+inline constexpr uint32_t kCoreOpsAbiVersion = 6;
 
 /** probot-core robot::Phase values (probot/robot/state.hpp). */
 enum CorePhase : uint8_t {
@@ -254,6 +254,15 @@ struct CoreOps {
   // configured (PROBOT_DASH_MAX_SCHEMA_BYTES, default 4096), 0 before core's runtime_setup().
   // Null (core without R13): schemas are limited by PROBOT_DASH_MAX_VALUE.
   uint32_t (*dashMaxSchemaBytes)();
+
+  // ---- ABI 6 ----
+  // dashboard persistence (probot-core R12 part 2: probot::dashboard::clearPersisted()). Its
+  // presence also says that core keeps the values of PERSISTENT topics across reboots (NVS): a
+  // publish() that creates the topic queues the stored value as a write, delivered by the next
+  // dashDrainWrites(); dashRejectWrite() on that write erases the record. clearPersisted() erases
+  // every stored value (writes flash: call it while the robot is stopped); false without storage
+  // or when the erase failed. Null (core without persistence): PERSISTENT is not used.
+  bool (*dashClearPersisted)();
 };
 
 /**
@@ -377,6 +386,14 @@ bool GetCommsDisableCount(uint32_t* count) noexcept;
  * Returns false when core refused the value or has no R12.
  */
 bool SetLowVoltage(double volts) noexcept;
+
+// ---- probot-core R12 dashboard persistence ----
+
+/**
+ * True when probot-core keeps PERSISTENT dashboard values across reboots (CoreOps ABI 6
+ * dashClearPersisted present). False without core or with a core without persistence.
+ */
+bool DashPersistenceSupported() noexcept;
 
 /** Where a cycle callback runs relative to core's user loop iteration. */
 enum class CyclePhase : uint8_t { kPre = 0, kPost = 1 };

@@ -8,6 +8,13 @@
 // topic has KEEP_DUPLICATES; schemas are idempotent per name and limited in number and size
 // (core R13: PROBOT_DASH_MAX_SCHEMA_BYTES, 4096; SetMaxSchemaBytes(0) plays a core without R13,
 // whose schemas are limited by the value limit).
+//
+// Persistence (core R12 part 2, feat/dash-persist): a "flash" of stored values by path. publish()
+// of a new topic whose initial flags have PERSISTENT queues the stored value (same value type and
+// type string) as a write for the next drain; rejectWrite() on that delivered write erases the
+// record and sends no frame (nothing in Rejects()); clearPersisted() erases all. Values are stored
+// only by PersistValues() (core's debounced idle save). Built with PROSDK_FAKE_CORE_NO_PERSIST the
+// table plays a core without persistence (dashClearPersisted null, no restore).
 
 #pragma once
 
@@ -57,6 +64,16 @@ const Schema* FindSchema(std::string_view name);
 
 /** Queues a Driver Station write to the live topic at path (like core's pushWrite, unchecked). */
 void PushWrite(std::string_view path, uint8_t valueType, std::span<const uint8_t> data);
+
+/** Stores a value for path as if a previous boot had saved it (value type, type string). */
+void SetPersisted(std::string_view path, uint8_t valueType, std::string_view typeString,
+                  std::span<const uint8_t> data);
+/** The stored value for path, if any. */
+std::optional<std::vector<uint8_t>> GetPersisted(std::string_view path);
+/** Stores the current value of every live PERSISTENT topic (core's save while idle). */
+void PersistValues();
+/** Stored values erased by rejectWrite() of a restored value. */
+int RestoreErases();
 
 /** Writes refused through dashRejectWrite: (topic path, reason). */
 const std::vector<std::pair<std::string, uint8_t>>& Rejects();

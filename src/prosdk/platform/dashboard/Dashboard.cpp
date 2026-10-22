@@ -51,4 +51,8 @@ void RegisterDashboardBackends() {
   });
 }
 
+bool ClearPersistedTunables() {
+  return dashboard::ClearPersisted();
+}
+
 }  // namespace prosdk::platform

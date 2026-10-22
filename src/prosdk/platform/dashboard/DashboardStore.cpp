@@ -40,7 +40,8 @@ SchemaState& Schemas() {
 }
 
 struct Router {
-  prosdk::util::mutex mutex;
+  // recursive: a participant's FlushPending() may drain (a persistent tunable's restored value)
+  prosdk::util::recursive_mutex mutex;
   std::vector<Participant*> participants;
 };
 
@@ -216,6 +217,14 @@ void RejectWrite(uint16_t id, WriteStatus status) noexcept {
   GetCoreOps().dashRejectWrite(id, static_cast<uint8_t>(status));
 }
 
+bool PersistenceSupported() noexcept {
+  return DashPersistenceSupported();
+}
+
+bool ClearPersisted() noexcept {
+  return GetCoreOps().dashClearPersisted();
+}
+
 bool HasSchema(std::string_view name) noexcept {
   auto& s = Schemas();
   std::scoped_lock lock{s.mutex};
@@ -307,7 +316,18 @@ void FlushPending() noexcept {
   if (r.participants.empty() || !StoreReady()) {
     return;
   }
-  for (Participant* p : r.participants) {
+  // a copy: a flush may run tunable callbacks (a restored value's onTune) that register or
+  // remove participants on this task
+  std::vector<Participant*> participants;
+  try {
+    participants = r.participants;
+  } catch (...) {
+    return;  // out of memory: retried next cycle
+  }
+  for (Participant* p : participants) {
+    if (std::find(r.participants.begin(), r.participants.end(), p) == r.participants.end()) {
+      continue;  // removed by an earlier flush
+    }
     try {
       p->FlushPending();
     } catch (...) {

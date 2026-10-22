@@ -117,6 +117,9 @@ TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][plat
     CHECK(count == 99);
     CHECK_FALSE(pf::SetLowVoltage(6.75));
     CHECK(pf::GetCoreOps().dashMaxSchemaBytes() == 0);
+    // no core: no dashboard persistence (ABI 6)
+    CHECK_FALSE(pf::DashPersistenceSupported());
+    CHECK_FALSE(pf::GetCoreOps().dashClearPersisted());
 
     // ---- fake core (unset entries fall back to the defaults) ----
     pf::CoreOps ops{};
@@ -187,6 +190,9 @@ TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][plat
   CHECK(gLowVolts == 6.75f);
   // R13 left null: the limit stays unknown
   CHECK(pf::GetCoreOps().dashMaxSchemaBytes() == 0);
+  // ABI 6 left null (a core without dashboard persistence): the default, not supported
+  CHECK_FALSE(pf::DashPersistenceSupported());
+  CHECK_FALSE(pf::GetCoreOps().dashClearPersisted());
 
   SECTION("invalid options are dropped, long strings truncated at a UTF-8 boundary") {
     std::string longName(70, 'a');

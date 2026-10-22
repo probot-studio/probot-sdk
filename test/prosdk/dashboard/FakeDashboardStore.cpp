@@ -5,6 +5,7 @@
 #include <cstring>
 #include <map>
 #include <mutex>
+#include <set>
 
 #include "prosdk/platform/Console.hpp"
 #include "prosdk/platform/CoreOps.hpp"
@@ -15,10 +16,23 @@ namespace {
 
 constexpr uint16_t kInvalid = 0xFFFF;
 constexpr uint8_t kKeepDuplicates = 16;
+constexpr uint8_t kPersistent = 32;
+#ifdef PROSDK_FAKE_CORE_NO_PERSIST
+constexpr bool kPersistence = false;
+#else
+constexpr bool kPersistence = true;
+#endif
 
 struct Write {
   uint16_t id;
   uint8_t valueType;
+  std::vector<uint8_t> data;
+  bool restore = false;  // a stored value queued by publish()
+};
+
+struct Persisted {
+  uint8_t valueType;
+  std::string typeString;
   std::vector<uint8_t> data;
 };
 
@@ -34,6 +48,9 @@ struct Store {
   std::vector<Write> writes;
   std::vector<std::pair<std::string, uint8_t>> rejects;
   std::string console;
+  std::map<std::string, Persisted, std::less<>> persisted;
+  std::set<uint16_t> restoreDelivered;  // topics whose last delivered write was a restore
+  int restoreErases = 0;
 };
 
 Store& S() {
@@ -89,14 +106,27 @@ uint16_t Publish(const char* path, uint8_t valueType, const char* typeString,
   topic.properties = props;
   topic.flags = flags;
   topic.live = true;
+  size_t id = s.topics.size();
   for (size_t i = 0; i < s.topics.size(); ++i) {
     if (!s.topics[i].live) {
-      s.topics[i] = std::move(topic);
-      return static_cast<uint16_t>(i);
+      id = i;
+      break;
     }
   }
-  s.topics.push_back(std::move(topic));
-  return static_cast<uint16_t>(s.topics.size() - 1);
+  if (id == s.topics.size()) {
+    s.topics.emplace_back();
+  }
+  s.topics[id] = std::move(topic);
+  s.restoreDelivered.erase(static_cast<uint16_t>(id));
+  // core restore(): only for a new topic with PERSISTENT in its initial flags
+  if (kPersistence && (flags & kPersistent) != 0) {
+    auto it = s.persisted.find(p);
+    if (it != s.persisted.end() && it->second.valueType == valueType &&
+        it->second.typeString == t) {
+      s.writes.push_back({static_cast<uint16_t>(id), valueType, it->second.data, true});
+    }
+  }
+  return static_cast<uint16_t>(id);
 }
 
 void Unpublish(uint16_t id) {
@@ -176,6 +206,14 @@ size_t DrainWrites(void (*fn)(const prosdk::platform::CoreDashboardWrite& write,
     writes.swap(S().writes);
   }
   for (auto& w : writes) {
+    {
+      std::scoped_lock lock{S().mutex};
+      if (w.restore) {
+        S().restoreDelivered.insert(w.id);
+      } else {
+        S().restoreDelivered.erase(w.id);
+      }
+    }
     prosdk::platform::CoreDashboardWrite write{w.id, w.valueType,
                                                static_cast<uint16_t>(w.data.size()),
                                                w.data.data()};
@@ -188,7 +226,19 @@ void RejectWrite(uint16_t id, uint8_t reason) {
   auto& s = S();
   std::scoped_lock lock{s.mutex};
   auto t = LiveTopic(id);
+  if (t && s.restoreDelivered.erase(id) != 0) {
+    // a refused restored value: core erases the record and sends no frame
+    s.persisted.erase(t->path);
+    ++s.restoreErases;
+    return;
+  }
   s.rejects.emplace_back(t ? t->path : std::string{"<unknown>"}, reason);
+}
+
+bool ClearPersisted() {
+  std::scoped_lock lock{S().mutex};
+  S().persisted.clear();
+  return true;
 }
 
 void Stats(prosdk::platform::CoreDashboardStats* out) {
@@ -234,6 +284,8 @@ void InstallOnce() {
     ops.dashRejectWrite = RejectWrite;
     ops.dashStats = Stats;
     ops.dashMaxSchemaBytes = MaxSchemaBytes;
+    // ABI 6: left null for a core without persistence
+    ops.dashClearPersisted = kPersistence ? ClearPersisted : nullptr;
     return prosdk::platform::InstallCoreOps(&ops);
   }();
   (void)installed;
@@ -284,6 +336,9 @@ void Reset() {
   s.writes.clear();
   s.rejects.clear();
   s.console.clear();
+  s.persisted.clear();
+  s.restoreDelivered.clear();
+  s.restoreErases = 0;
   prosdk::platform::SetConsoleSink(CaptureConsole);
 }
 
@@ -342,6 +397,40 @@ void PushWrite(std::string_view path, uint8_t valueType, std::span<const uint8_t
       return;
     }
   }
+}
+
+void SetPersisted(std::string_view path, uint8_t valueType, std::string_view typeString,
+                  std::span<const uint8_t> data) {
+  std::scoped_lock lock{S().mutex};
+  S().persisted[std::string{path}] =
+      Persisted{valueType, std::string{typeString}, {data.begin(), data.end()}};
+}
+
+std::optional<std::vector<uint8_t>> GetPersisted(std::string_view path) {
+  std::scoped_lock lock{S().mutex};
+  auto it = S().persisted.find(path);
+  if (it == S().persisted.end()) {
+    return std::nullopt;
+  }
+  return it->second.data;
+}
+
+void PersistValues() {
+  auto& s = S();
+  std::scoped_lock lock{s.mutex};
+  if (!kPersistence) {
+    return;
+  }
+  for (auto& t : s.topics) {
+    if (t.live && t.hasValue && (t.flags & kPersistent) != 0) {
+      s.persisted[t.path] = Persisted{t.valueType, t.typeString, t.value};
+    }
+  }
+}
+
+int RestoreErases() {
+  std::scoped_lock lock{S().mutex};
+  return S().restoreErases;
 }
 
 const std::vector<std::pair<std::string, uint8_t>>& Rejects() {

@@ -185,14 +185,18 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   their level to core's console (R9, `console::write`); `HAL_GetSystemTimeValid` to core's wall-clock flag
   (R10, `ds::systemTimeValid()`); `HAL_GetRSLState` / `HAL_GetCommsDisableCount` to `ds::rslState()` /
   `ds::commsDisableCount()`, an accepted `SetBrownoutVoltages` to core's low-voltage threshold
-  (`io::battery::setLowVoltage`) and a halted robot program to `probot::requestStop()` (R12); the
+  (`io::battery::setLowVoltage`) and a halted robot program to `probot::requestStop()` (R12); opt-in
+  persistent tunables (`properties` `{"persistent": true}`) to core's `PERSISTENT` topics and
+  `ClearPersistedTunables()` to `dashboard::clearPersisted()` (R12 part 2); the
   refused-schema report to core's per-schema limit (R13, `PROBOT_DASH_MAX_SCHEMA_BYTES`). Battery
   current (`io::battery::currentAmps()`, NaN without a sensor) has no WPILib 2027 API and is not
-  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (5 since R12/R13),
-  and the bridge leaves a field null when the core lacks the feature (detected with `__has_include`,
-  R13 on `dashboard::Limits`), so the archive falls back (text-only console, the 2024-01-01 clock
+  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (6 since R12
+  persistence), and the bridge leaves a field null when the core lacks the feature (detected with
+  `__has_include`, R13 on `dashboard::Limits`, R12 persistence with a requires-check on
+  `dashboard::clearPersisted()`), so the archive falls back (text-only console, the 2024-01-01 clock
   heuristic, `HAL_HANDLE_ERROR` for the RSL state and comms-disable count, no DS stop on a halt, the
-  `PROBOT_DASH_MAX_VALUE` advice for a refused schema).
+  `PROBOT_DASH_MAX_VALUE` advice for a refused schema, no `PERSISTENT` flag and one warning per
+  persistent tunable).
 - Outputs (PWM, motor controllers) are zeroed whenever core reports "outputs disabled" and immediately
   on e-stop (core calls a registered e-stop callback on its own task).
 - Features prosdk needs from probot-core are listed in `design/core-requests.md` and are sent to the

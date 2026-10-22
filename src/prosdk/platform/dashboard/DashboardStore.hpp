@@ -17,8 +17,13 @@
 //     PROBOT_DASH_MAX_SCHEMA_BYTES (4096) bytes each (R13; kinematics.proto's descriptor, 4332
 //     bytes, needs more; an older core: PROBOT_DASH_MAX_VALUE, which refuses protobuf
 //     descriptors such as geometry2d.proto's, about 1.3 KB);
-//   - drainWrites() is called from one task (core's user task) and delivers each topic's last
-//     Driver Station write; a delivered topic's current value is re-sent afterwards.
+//   - drainWrites() delivers each topic's last Driver Station write; a delivered topic's current
+//     value is re-sent afterwards. Core allows one draining task at a time; prosdk serializes its
+//     drains with the routing lock, so DrainWrites() may run on any task (core's user task every
+//     cycle, a tunable's publishing task for a persistent tunable);
+//   - persistence (probot-core R12, CoreOps ABI 6): a PERSISTENT topic's value is kept across
+//     reboots; publish() of a new topic queues the stored value as a write for the next
+//     drainWrites(), and rejectWrite() on it erases the record (no frame to the Driver Station).
 // Before the store is ready, topics, values and schemas are kept here and flushed by
 // FlushPending() (run every cycle by RegisterDashboardBackends()). On a limit the store reports
 // once through the console (prosdk::platform::ConsoleWrite) and the robot keeps running.
@@ -120,8 +125,24 @@ bool SetTopicProperties(uint16_t id, const std::string& properties,
 /** Replaces a topic's flags. */
 bool SetTopicFlags(uint16_t id, uint8_t flags) noexcept;
 
-/** Tells the Driver Station a drained write was not applied ('K' frame). */
+/**
+ * Tells the Driver Station a drained write was not applied ('K' frame). For a value core restored
+ * from its persistent storage no frame is sent; core erases the stored value instead.
+ */
 void RejectWrite(uint16_t id, WriteStatus status) noexcept;
+
+/**
+ * True when probot-core keeps PERSISTENT topic values across reboots (probot-core R12, CoreOps
+ * ABI 6). Without it the PERSISTENT flag has no effect and prosdk does not set it.
+ */
+bool PersistenceSupported() noexcept;
+
+/**
+ * Erases every stored PERSISTENT value (core's clearPersisted(); topics keep their current
+ * values and are stored again once they change). Writes flash: call it while the robot is
+ * stopped. False without persistence support or when the erase failed.
+ */
+bool ClearPersisted() noexcept;
 
 /** Reports a store limit once per boot through the console. */
 void ReportLimitOnce(Limit limit, std::string_view path) noexcept;
@@ -153,7 +174,11 @@ class Participant {
     return std::nullopt;
   }
 
-  /** Publishes what waited for the store (store is ready). Same lock rules as OfferWrite. */
+  /**
+   * Publishes what waited for the store (store is ready). Called with the routing lock held: the
+   * same rules as OfferWrite, except that it may call DrainWrites() (the lock is recursive; a
+   * persistent tunable takes its restored value that way).
+   */
   virtual void FlushPending() {}
 
  protected:
@@ -171,8 +196,8 @@ void RemoveParticipant(Participant* participant) noexcept;
 
 /**
  * Drains probot-core's write queue and offers every write to the participants; writes nobody
- * owns are refused with kUnknownId. Call from core's user task (core allows one draining task;
- * a concurrent call returns 0). Returns the number of writes drained.
+ * owns are refused with kUnknownId. Any task (not from OfferWrite); drains are serialized by the
+ * routing lock. Returns the number of writes drained.
  */
 size_t DrainWrites() noexcept;
 

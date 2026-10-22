@@ -38,6 +38,10 @@
 //   - R13 schema size limit (dashboard::Limits::maxSchemaBytes, no new header: detected on the type
 //     at compile time). Without it the archive reports a refused schema against
 //     PROBOT_DASH_MAX_VALUE.
+//   - R12 dashboard persistence (probot::dashboard::clearPersisted(), no new public header:
+//     detected with a requires-check on the call, kCoreHasDashPersist). The PERSISTENT flag value
+//     existed before (core stored it and did nothing), so it is not what is detected. Without it
+//     dashClearPersisted stays null and the archive publishes no tunable PERSISTENT.
 //
 // ODR: every function here only calls core's config-free headers, so all definitions are the same
 // in every translation unit. The pin reservation depends on the sketch's configuration macros and
@@ -106,6 +110,7 @@
 #define PROSDK_CORE_HAS_SMALL_ITEMS 0
 #endif
 
+#include <concepts>
 #include <new>
 
 namespace prosdk::corebridge {
@@ -152,6 +157,11 @@ static_assert(static_cast<uint8_t>(probot::console::Level::Info) ==
                       static_cast<uint8_t>(pf::ConsoleLevel::kError),
               "probot-core console levels changed");
 #endif
+// the archive's dashboard flags (prosdk/platform/dashboard/DashboardStore.hpp kFlag*)
+static_assert(probot::dashboard::TELEMETRY == 1 && probot::dashboard::TUNABLE == 2 &&
+                  probot::dashboard::MUTABLE == 4 && probot::dashboard::ROBUST == 8 &&
+                  probot::dashboard::KEEP_DUPLICATES == 16 && probot::dashboard::PERSISTENT == 32,
+              "probot-core dashboard flag values changed");
 #if PROSDK_CORE_HAS_LOOP_RATE
 static_assert(probot::core::kMinLoopPeriodMs == pf::kCoreLoopPeriodMinMs &&
                   probot::core::kMaxLoopPeriodMs == pf::kCoreLoopPeriodMaxMs,
@@ -343,6 +353,33 @@ constexpr uint32_t (*DashMaxSchemaBytesOp())() {
   }
 }
 
+// R12 persistence. clearPersisted is looked up from a namespace that sees probot::dashboard
+// through a using-directive and called with a dependent (empty) argument pack, so a core without
+// it only makes the requires-check false instead of failing to compile. Nothing here declares a
+// name in core's namespaces.
+namespace persist_probe {
+using namespace probot::dashboard;
+template <typename... A>
+inline bool ClearPersisted(A... a) {
+  return clearPersisted(a...);
+}
+template <typename... A>
+inline constexpr bool kHasClearPersisted = requires(A... a) {
+  { clearPersisted(a...) } -> std::same_as<bool>;
+};
+}  // namespace persist_probe
+
+/** True when the sketch's probot-core keeps PERSISTENT dashboard values across reboots. */
+inline constexpr bool kCoreHasDashPersist = persist_probe::kHasClearPersisted<>;
+
+constexpr bool (*DashClearPersistedOp())() {
+  if constexpr (kCoreHasDashPersist) {
+    return &persist_probe::ClearPersisted<>;
+  } else {
+    return nullptr;
+  }
+}
+
 inline uint16_t DashPublish(const char* path, uint8_t vt, const char* typeString,
                             const char* propertiesJson, uint8_t flags) {
   return probot::dashboard::publish(path, static_cast<probot::dashboard::ValueType>(vt),
@@ -447,6 +484,7 @@ inline bool Install() {
       PROSDK_CORE_WALL_CLOCK_OP,
       PROSDK_CORE_SMALL_ITEMS_OPS,
       DashMaxSchemaBytesOp<probot::dashboard::Limits>(),
+      DashClearPersistedOp(),
   };
   bool ok = pf::InstallCoreOps(&kOps);
   bool hooks = probot::framework::install(probot::framework::Hooks{

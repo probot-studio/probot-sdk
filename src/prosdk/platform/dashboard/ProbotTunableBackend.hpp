@@ -16,8 +16,21 @@
 // that does not decode) is answered with dashRejectWrite.
 //
 // Differences from the NetworkTables backend (design/API-DIFFERENCES.md):
-//   - a robust tunable is ONE topic with the ROBUST flag (no "<path>/value" + "<path>/tune" pair);
-//     the store keeps no value across reboots, so a robust tunable starts from its code value;
+//   - a robust tunable is ONE topic with the ROBUST flag (no "<path>/value" + "<path>/tune" pair).
+//     ROBUST only means "echo the applied value"; it does not make the value persistent, so a
+//     robust tunable starts from its code value (the scheduler's Cancel, Selectable's selected and
+//     the /Preferences mirrors are robust and must not come back after a reboot);
+//   - prosdk addition: a mutable tunable whose TunableConfig::properties has {"persistent": true}
+//     is published with core's PERSISTENT flag when core keeps values across reboots (probot-core
+//     R12, CoreOps ABI 6): core restores its stored value when the topic is created, and Publish()
+//     applies it before returning, through the Driver Station write path (value set,
+//     RecordTuneApplied, onRemoteSet, then onTune after the initial publish, as upstream applies a
+//     robust tunable's retained value); a stored value that does not decode is refused, which
+//     erases it. A tunable published before the store is ready gets its stored value when it is
+//     published (FlushPending() or Update()). Published again in the same run (Remove and Publish,
+//     or a new tunable object on the same path), it gets the last value applied to that path in
+//     this run (or keeps its own value if none was), not core's possibly older record. A core
+//     without persistence: one warning per tunable, the flag is not set;
 //   - before probot-core's runtime_setup() ran, Publish() succeeds and the topic waits; it is
 //     published by the next Update() or FlushPending();
 //   - a topic the store refuses (topic table, pool, name length) makes Publish() return false
@@ -88,6 +101,13 @@ class ProbotTunableBackend final : public prosdk::tunables::TunableBackend,
     uint16_t id;
     std::vector<uint8_t> data;
   };
+  // a persistent tunable published by this backend (by path), and the last value applied to it
+  // in this run (Driver Station write or restored value)
+  struct PersistedTunable {
+    prosdk::platform::dashboard::ValueType valueType;
+    std::string typeString;
+    std::optional<std::vector<uint8_t>> lastTune;
+  };
 
   std::optional<prosdk::platform::dashboard::WriteStatus> OfferWrite(
       uint16_t id, prosdk::platform::dashboard::ValueType valueType,
@@ -95,6 +115,8 @@ class ProbotTunableBackend final : public prosdk::tunables::TunableBackend,
   void FlushPending() override;
 
   void PublishWaiting();
+  bool ApplyRestoredValue(const std::shared_ptr<Entry>& entry);
+  void RememberTune(const Entry& entry, std::span<const uint8_t> data);
   void TrackEntry(const std::shared_ptr<Entry>& entry,
                   const prosdk::tunables::TunableConfig* config,
                   prosdk::tunables::detail::TunableTypeValue type);
@@ -113,6 +135,7 @@ class ProbotTunableBackend final : public prosdk::tunables::TunableBackend,
   std::unordered_map<uint32_t, std::vector<std::string>> m_uids;
   std::unordered_map<uint16_t, std::shared_ptr<ValueEntry>> m_topics;  // store id -> entry
   std::vector<PendingWrite> m_pendingWrites;
+  prosdk::util::StringMap<PersistedTunable> m_persisted;
   std::vector<std::shared_ptr<Entry>> m_waiting;  // not published yet (store not ready)
   std::atomic<bool> m_hasWaiting{false};
   std::vector<std::shared_ptr<Entry>> m_dirtyEntries;

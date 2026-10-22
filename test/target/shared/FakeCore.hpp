@@ -124,6 +124,9 @@ inline bool Install() {
       // low-voltage threshold, refused schemas are reported against PROBOT_DASH_MAX_VALUE
       nullptr, nullptr, nullptr, nullptr,
       nullptr,
+      // ABI 6 (R12 dashClearPersisted) null, as the bridge leaves it for a core without
+      // dashboard persistence: no tunable is published PERSISTENT
+      nullptr,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   // what CoreBridge.hpp reports after probot::framework::install succeeded

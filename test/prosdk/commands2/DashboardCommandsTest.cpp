@@ -102,6 +102,9 @@ TEST_CASE_METHOD(CommandsDashboardFixture,
                  "Scheduler tunable: Driver Station cancel by id clears the value",
                  "[prosdk][commands2][dashboard]") {
   auto& scheduler = CommandScheduler::GetInstance();
+  // Cancel holds raw Command* addresses: robust, never persistent (a stored record is ignored)
+  fake::SetPersisted("/Tunables/Scheduler/Cancel", VT(dash::ValueType::kIntArray), "int[]",
+                     EncodeIntArray({12345}));
   REQUIRE(prosdk::tunables::Publish("Scheduler", scheduler));
   CHECK(fake::GetString("/Tunables/Scheduler/.type") == "Scheduler");
   auto cancel = fake::Find("/Tunables/Scheduler/Cancel");
@@ -109,6 +112,7 @@ TEST_CASE_METHOD(CommandsDashboardFixture,
   CHECK(cancel->valueType == VT(dash::ValueType::kIntArray));
   CHECK((cancel->flags & (dash::kFlagTunable | dash::kFlagMutable | dash::kFlagRobust)) ==
         (dash::kFlagTunable | dash::kFlagMutable | dash::kFlagRobust));
+  CHECK((cancel->flags & dash::kFlagPersistent) == 0);
   CHECK(fake::GetIntArray("/Tunables/Scheduler/Cancel") == std::vector<int64_t>{});
 
   auto command = Forever();

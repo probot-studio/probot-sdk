@@ -16,6 +16,17 @@ prosdk_add_test(prosdk_tests SOURCES ${_cxx_tests} ${_cxx_datalog_support}
 file(GLOB _dashboard_tests CONFIGURE_DEPENDS "${PROSDK_ROOT}/test/prosdk/dashboard/*.cpp")
 prosdk_add_test(prosdk_dashboard_tests SOURCES "${PROSDK_ROOT}/test/prosdk/main.cpp" ${_dashboard_tests})
 
+# own executable: the fake core store without dashboard persistence (a probot-core before R12
+# persistence: CoreOps ABI 6 dashClearPersisted null)
+file(GLOB _dashboard_legacy_tests CONFIGURE_DEPENDS
+  "${PROSDK_ROOT}/test/prosdk/dashboard_legacy/*.cpp")
+prosdk_add_test(prosdk_dashboard_legacy_tests SOURCES "${PROSDK_ROOT}/test/prosdk/main.cpp"
+  ${_dashboard_legacy_tests} "${PROSDK_ROOT}/test/prosdk/dashboard/FakeDashboardStore.cpp"
+  INCLUDES "${PROSDK_ROOT}/test/prosdk/dashboard")
+if(TARGET prosdk_dashboard_legacy_tests)
+  target_compile_definitions(prosdk_dashboard_legacy_tests PRIVATE PROSDK_FAKE_CORE_NO_PERSIST=1)
+endif()
+
 # own executable: the hosted robot program against a fake core table and the HAL sim (CoreOps is
 # installed once per process, and the e-stop latches)
 file(GLOB _robot_tests CONFIGURE_DEPENDS "${PROSDK_ROOT}/test/prosdk/robot/*.cpp")

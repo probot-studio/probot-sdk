@@ -8,6 +8,7 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <variant>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -68,6 +69,19 @@ TEST_CASE_METHOD(PreferencesFixture, "Preferences are published under /Preferenc
   CHECK(fake::GetFloat("/Preferences/gain") == 0.5f);
   CHECK(fake::GetDouble("/Preferences/kP") == 1.25);
   CHECK(fake::GetString("/Preferences/name") == "probot");
+}
+
+TEST_CASE_METHOD(PreferencesFixture, "Preference mirrors are not dashboard-persistent",
+                 "[prosdk][dashboard][preferences]") {
+  // the Preferences store persists them itself; a dashboard record must never come back
+  fake::SetPersisted("/Preferences/kP", VT(dash::ValueType::kDouble), "double",
+                     fake::EncodeDouble(9.0));
+  prefs::Set("kP", prefs::Value{1.25});
+  Cycle();
+  REQUIRE(fake::Find("/Preferences/kP"));
+  CHECK((fake::Find("/Preferences/kP")->flags & dash::kFlagPersistent) == 0);
+  CHECK(fake::GetDouble("/Preferences/kP") == 1.25);
+  CHECK(std::get<double>(*prefs::Get("kP")) == 1.25);
 }
 
 TEST_CASE_METHOD(PreferencesFixture, "Preferences already stored are published on tracking",

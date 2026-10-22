@@ -68,6 +68,16 @@ uint8_t GetFlags(const TunableConfig* config) {
   return flags;
 }
 
+// prosdk addition: properties {"persistent": true} (the NetworkTables topic property of the same
+// name) keeps a mutable tunable's value across reboots in probot-core's store
+bool IsPersistent(const TunableConfig* config) {
+  if (!config || !config->isMutable) {
+    return false;
+  }
+  const prosdk::util::json* persistent = config->properties.lookup("persistent");
+  return persistent != nullptr && persistent->is_bool() && persistent->get_bool();
+}
+
 bool IsAlwaysGet(const TunableConfig* config) {
   return config && config->polling == TunableConfig::Polling::kAlwaysGet;
 }
@@ -224,14 +234,15 @@ class ProbotTunableBackend::Entry {
   enum class UpdateKind { DIRTY, ALWAYS_GET, COMPLEX };
 
   Entry(std::string key, std::string path, uint32_t uid, ValueType valueType,
-        std::string typeString, std::string properties, uint8_t flags)
+        std::string typeString, std::string properties, uint8_t flags, bool persistent)
       : m_key{std::move(key)},
         m_path{std::move(path)},
         m_uid{uid},
         m_valueType{valueType},
         m_typeString{std::move(typeString)},
         m_properties{std::move(properties)},
-        m_flags{flags} {}
+        m_flags{flags},
+        m_persistent{persistent} {}
 
   virtual ~Entry() { Close(); }
 
@@ -241,14 +252,26 @@ class ProbotTunableBackend::Entry {
   uint32_t GetUid() const { return m_uid; }
   const std::string& GetKey() const { return m_key; }
   ValueType GetValueType() const { return m_valueType; }
+  const std::string& GetTypeString() const { return m_typeString; }
   bool IsMutable() const { return (m_flags & dash::kFlagMutable) != 0; }
+  /** Published with core's PERSISTENT flag (core may have queued its stored value). */
+  bool IsCorePersistent() const { return m_corePersistent; }
   virtual void UpdateNetwork(bool force) = 0;
   virtual ValueEntry* AsValueEntry() { return nullptr; }
 
   /** Publishes the store topic (caller holds the backend mutex). */
   dash::PublishResult Open() {
-    auto result = dash::PublishTopic(m_path, m_valueType, m_typeString, m_properties, m_flags);
+    // PERSISTENT only for an opt-in tunable and a core that keeps the values (CoreOps ABI 6)
+    bool persist = m_persistent && dash::PersistenceSupported();
+    auto result = dash::PublishTopic(m_path, m_valueType, m_typeString, m_properties,
+                                     persist ? m_flags | dash::kFlagPersistent : m_flags);
     m_id.store(result.id, std::memory_order_release);
+    m_corePersistent = persist && result.id != dash::kInvalidTopic;
+    if (m_persistent && !persist && result.id != dash::kInvalidTopic) {
+      ReportWarning(
+          "properties.persistent: this probot-core does not keep dashboard values across "
+          "reboots; the tunable starts from its code value");
+    }
     return result;
   }
 
@@ -288,6 +311,8 @@ class ProbotTunableBackend::Entry {
   std::string m_typeString;
   std::string m_properties;
   uint8_t m_flags;
+  bool m_persistent;              // opt-in (properties.persistent), mutable value tunable
+  bool m_corePersistent = false;  // the open topic has core's PERSISTENT flag
   std::atomic<uint16_t> m_id{dash::kInvalidTopic};
   uint64_t m_insertEpoch = 0;
   UpdateKind m_updateKind = UpdateKind::DIRTY;
@@ -491,7 +516,8 @@ class ComplexTunableEntry final : public ProbotTunableBackend::Entry {
               ValueType::kString,
               "string",
               R"({"mutable":false})",
-              dash::kFlagTunable},
+              dash::kFlagTunable,
+              false},
         m_tunableType{std::move(tunableType)} {}
 
   void UpdateNetwork(bool force) override {
@@ -514,7 +540,8 @@ std::shared_ptr<ProbotTunableBackend::Entry> MakeValueEntry(std::string_view key
                                                             std::string_view typeString) {
   return std::make_shared<T>(std::string{key}, std::move(path), uid, valueType,
                              std::string{GetTypeString(typeString, config)},
-                             GetProperties(config).to_string(), GetFlags(config));
+                             GetProperties(config).to_string(), GetFlags(config),
+                             IsPersistent(config));
 }
 
 }  // namespace
@@ -652,6 +679,7 @@ void ProbotTunableBackend::Retire() {
   m_uids.clear();
   m_topics.clear();
   m_pendingWrites.clear();
+  m_persisted.clear();
   m_waiting.clear();
   m_hasWaiting.store(false);
   m_deferredErases.clear();
@@ -667,6 +695,7 @@ bool ProbotTunableBackend::Publish(std::string_view path, uint32_t uid,
                                    detail::TunableBase& tunable, const TunableConfig* config,
                                    detail::TunableTypeValue type) {
   std::shared_ptr<Entry> entry;
+  bool restore = false;
   {
     std::scoped_lock lock{m_mutex};
     if (m_retired) {
@@ -784,6 +813,7 @@ bool ProbotTunableBackend::Publish(std::string_view path, uint32_t uid,
     if (result.id == dash::kInvalidTopic && !result.notReady) {
       return false;  // the store refused the topic (reported once by PublishTopic)
     }
+    restore = entry->IsCorePersistent();
 
     entry->SetInsertEpoch(++m_nextInsertEpoch);
     m_entries[path] = entry;
@@ -798,7 +828,14 @@ bool ProbotTunableBackend::Publish(std::string_view path, uint32_t uid,
     TrackEntry(entry, config, type);
   }
 
+  bool tunedInitialValue = false;
   try {
+    // a persistent tunable takes its stored value now, before Publish returns (upstream applies a
+    // robust tunable's retained value here the same way)
+    if (restore) {
+      dash::DrainWrites();
+      tunedInitialValue = ApplyRestoredValue(entry);
+    }
     entry->UpdateNetwork(true);
   } catch (...) {
     {
@@ -819,7 +856,70 @@ bool ProbotTunableBackend::Publish(std::string_view path, uint32_t uid,
     }
     return false;
   }
+  if (tunedInitialValue) {
+    auto info = TunableRegistry::GetTunable(entry->GetUid());
+    if (info) {
+      NotifyOnTune(entry->GetUid(), info);
+    }
+  }
   return true;
+}
+
+bool ProbotTunableBackend::ApplyRestoredValue(const std::shared_ptr<Entry>& entry) {
+  auto valueEntry = entry->AsValueEntry();
+  const uint16_t id = entry->GetTopicId();
+  std::optional<std::vector<uint8_t>> value;
+  bool fromCore = false;
+  {
+    std::scoped_lock lock{m_mutex};
+    if (m_retired || entry->IsRemoved() || !valueEntry) {
+      return false;
+    }
+    // what core restored: the write for the new topic in the drain that followed its publish
+    std::optional<std::vector<uint8_t>> restored;
+    for (auto it = m_pendingWrites.begin(); it != m_pendingWrites.end(); ++it) {
+      if (it->id == id) {
+        restored = std::move(it->data);
+        m_pendingWrites.erase(it);
+        break;
+      }
+    }
+    auto [memo, first] = m_persisted.try_emplace(entry->GetKey());
+    if (!first && memo->second.valueType == entry->GetValueType() &&
+        memo->second.typeString == entry->GetTypeString()) {
+      // published again in this run: core's record may be older than the value tuned since
+      // (core stores only while the robot is idle), so the last value applied in this run wins
+      // and core's restore is dropped (not refused: that would erase the record)
+      value = memo->second.lastTune;
+    } else {
+      memo->second = PersistedTunable{entry->GetValueType(), entry->GetTypeString(), {}};
+      value = std::move(restored);
+      fromCore = true;
+    }
+  }
+  if (!value) {
+    return false;
+  }
+  // the Driver Station write path: decode, set, RecordTuneApplied, onRemoteSet
+  if (valueEntry->UpdateTunable(*value)) {
+    RememberTune(*entry, *value);
+    return true;
+  }
+  if (fromCore) {
+    // the stored value does not decode any more: core erases the record (no frame to the DS)
+    dash::RejectWrite(id, WriteStatus::kDecodeError);
+  }
+  return false;
+}
+
+void ProbotTunableBackend::RememberTune(const Entry& entry, std::span<const uint8_t> data) {
+  if (!entry.IsCorePersistent()) {
+    return;
+  }
+  std::scoped_lock lock{m_mutex};
+  if (auto it = m_persisted.find(entry.GetKey()); it != m_persisted.end()) {
+    it->second.lastTune.emplace(data.begin(), data.end());
+  }
 }
 
 void ProbotTunableBackend::PublishWaiting() {
@@ -827,6 +927,7 @@ void ProbotTunableBackend::PublishWaiting() {
     return;
   }
   std::vector<std::shared_ptr<Entry>> opened;
+  bool restore = false;
   {
     std::scoped_lock lock{m_mutex};
     if (m_retired) {
@@ -844,6 +945,7 @@ void ProbotTunableBackend::PublishWaiting() {
         if (entry->AsValueEntry()) {
           m_topics[result.id] = std::static_pointer_cast<ValueEntry>(entry);
         }
+        restore = restore || entry->IsCorePersistent();
         opened.emplace_back(entry);
       } else if (result.notReady) {
         m_waiting.emplace_back(entry);
@@ -854,8 +956,16 @@ void ProbotTunableBackend::PublishWaiting() {
       }
     }
   }
+  // persistent tunables take their stored values before their first publish, as in Publish()
+  if (restore) {
+    dash::DrainWrites();
+  }
+  std::vector<uint32_t> tunedUids;
   for (auto&& entry : opened) {
     try {
+      if (entry->IsCorePersistent() && ApplyRestoredValue(entry)) {
+        tunedUids.emplace_back(entry->GetUid());
+      }
       entry->UpdateNetwork(true);
     } catch (const std::exception& e) {
       TunableRegistry::ReportWarning(std::format(
@@ -864,6 +974,12 @@ void ProbotTunableBackend::PublishWaiting() {
     } catch (...) {
       TunableRegistry::ReportWarning(std::format(
           "Dashboard tunable '{}{}' failed during initial publish", m_prefix, entry->GetKey()));
+    }
+  }
+  for (auto uid : tunedUids) {
+    auto info = TunableRegistry::GetTunable(uid);
+    if (info) {
+      NotifyOnTune(uid, info);
     }
   }
 }
@@ -1000,6 +1116,7 @@ void ProbotTunableBackend::Update() {
       continue;
     }
     if (entry->UpdateTunable(write.data)) {
+      RememberTune(*entry, write.data);
       onTuneUids.emplace_back(entry->GetUid());
     } else {
       dash::RejectWrite(write.id, WriteStatus::kDecodeError);
