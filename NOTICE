@@ -90,8 +90,9 @@ Two driver libraries are vendored by hand, not by tools/upstream/wpilib.py:
 - The Melexis MLX90640 and MLX90641 API, from https://github.com/melexis/mlx90640-library
   (commit f6be7ca1) and https://github.com/melexis/mlx90641-library (commit 3c94aa87). Each
   modified file keeps the upstream license header and carries a "Modified by Probot Studio"
-  notice that lists the changes (.c renamed to .cpp, namespace prosdk::melexis, include paths,
-  line endings; the upstream I2C layer replaced by src/prosdk/drivers/thermal/melexis/MelexisI2C.*).
+  notice that lists the changes (MLX90640_API.c renamed to .cpp, namespace prosdk::melexis,
+  include paths, line endings; the upstream I2C layer replaced by
+  src/prosdk/drivers/thermal/melexis/MelexisI2C.*).
 - The ST VL53L7CX Ultra Lite Driver 2.0.0, from https://github.com/STMicroelectronics/x-cube-tof1
   (Drivers/BSP/Components/vl53l7cx/modules, commit 9d721708c394de16aaee9d1579e1f79f2a1e085a),
   unmodified. Its platform layer (platform.h, platform.cpp, VL53L7CXPlatform.hpp in the same

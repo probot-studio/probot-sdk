@@ -224,8 +224,9 @@ The ESP32-S3 units that Boardoza drivers share with each other and with the rest
 
 ### I2C addresses
 
-Addresses that collide on one port. Put the colliding boards on different ports, move one with
-its address pins, or use the TPT29545 switch (`I2CSwitch`).
+Addresses that collide on one port, including the earlier prosdk drivers `MPU6050` and `PCA9685`
+(ProHub). Put the colliding boards on different ports, move one with its address pins, or use the
+TPT29545 switch (`I2CSwitch`).
 
 | Address | Boards |
 |---|---|
@@ -235,6 +236,8 @@ its address pins, or use the TPT29545 switch (`I2CSwitch`).
 | 0x33 | MLX90640, MLX90641 |
 | 0x44-0x47 | OPT3001, OPT4048 |
 | 0x5A | DRV2605L, GP8403 at A2-A0 = 010 |
+| 0x68, 0x69 | BMI088 gyroscope (0x69 default, 0x68 with JP2 shorted), `MPU6050` (0x68 default, 0x69 with AD0 high) |
+| 0x70 | TPT29545 (`I2CSwitch` default), the all-call address that `PCA9685` enables on every PCA9685 (ProHub). Move the switch to 0x71-0x73 with A0/A1 on a port with a PCA9685 |
 | 0x76, 0x77 | MS5611, DPS310 (HP303B), BME688: at most two of them per port |
 
 ### Threads
