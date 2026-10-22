@@ -59,7 +59,7 @@ low cmake --build "$BUILD" -j "$JOBS" --target "${targets[@]}"
 if [ "$run_tests" = 1 ]; then
   [ "$cfg" = host ] || { echo "--test is only for the host build" >&2; exit 2; }
   status=0
-  for t in prosdk_tests wpiutil_tests telemetry_tests tunables_tests hal_tests datalog_tests units_tests wpimath_tests; do
+  for t in prosdk_tests prosdk_dashboard_tests wpiutil_tests telemetry_tests tunables_tests hal_tests datalog_tests units_tests wpimath_tests; do
     if [ -x "$BUILD/$t" ]; then
       echo "== $t"
       low "$BUILD/$t" || status=1
