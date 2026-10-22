@@ -121,6 +121,9 @@ DS lists and downloads files that prosdk writes to LittleFS/SD (WPILib DataLog `
 - `battery::currentAmps()` declared in every configuration (NaN when there is no sensor); brownout or
   low-battery flag.
 - Optional persistence of DS-written tunables in NVS (robust tunables), separate namespace.
+- `rslState()`: current state of the robot signal light / status LED core drives (WPILib `HAL_GetRSLState`).
+- `commsDisableCount()`: number of times outputs were disabled because the DS link was lost (since boot;
+  WPILib `HAL_GetCommsDisableCount`).
 
 ## Status
 
