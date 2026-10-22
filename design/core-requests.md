@@ -143,6 +143,14 @@ from the value limit. Workaround today: the sketch defines `PROBOT_DASH_MAX_VALU
 Related, still open in R12: persistence of DS-written robust tunables. Core keeps no value across a reboot,
 so prosdk publishes a robust tunable with its code default (upstream NT restores the last tuned value).
 
+### R14. Compressed Driver Station page (flash)
+
+`index_html.h` keeps the DS page as uncompressed HTML: `MAIN_page` is 138,439 B of flash in every sketch
+(7 % of a prosdk robot sketch, more than any prosdk library; `design/size.md`). `gzip -9` makes it
+39,421 B. Wanted: store the page gzip-compressed (generated from the HTML by a build step) and serve it
+from `handleRoot` with `Content-Encoding: gzip` (every browser that runs the DS page accepts it). Saves
+about 99 KB of flash per sketch; no protocol or API change.
+
 ## Status
 
 ### P0 delivered (2026-10-22): probot-core branch `feat/framework-api`, draft PR #26 to `dev`
