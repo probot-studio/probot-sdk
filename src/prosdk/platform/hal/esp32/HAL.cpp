@@ -49,6 +49,7 @@ namespace init {
 [[gnu::weak]] void InitializeEncoder();
 [[gnu::weak]] void InitializeI2C();
 [[gnu::weak]] void InitializeNotifier();
+[[gnu::weak]] void InitializePower();
 [[gnu::weak]] void InitializeSerialPort();
 
 std::atomic_bool HAL_IsInitialized{false};
@@ -76,6 +77,7 @@ void InitializeHAL() {
   InitializeMain();
   optional(InitializeNotifier);
   InitializePWM();
+  optional(InitializePower);
   optional(InitializeSerialPort);
   InitializeDriverStationPump();
 }
@@ -183,18 +185,28 @@ HAL_Bool HAL_GetSystemActive(int32_t* status) {
   return esp32::OutputsEnabled();
 }
 
-// Pending probot-core R12 (commsDisableCount, rslState; design/core-requests.md): until core
-// exposes them both report HAL_HANDLE_ERROR, as on systemcore.
+// probot-core R12 (ds::commsDisableCount(), ds::rslState(); design/core-requests.md). A core
+// without R12 reports HAL_HANDLE_ERROR, as systemcore does.
 int32_t HAL_GetCommsDisableCount(int32_t* status) {
   prosdk::hal::init::CheckInit();
-  *status = HAL_HANDLE_ERROR;
-  return 0;
+  uint32_t count = 0;
+  if (!prosdk::platform::GetCommsDisableCount(&count)) {
+    *status = HAL_HANDLE_ERROR;
+    return 0;
+  }
+  *status = HAL_SUCCESS;
+  return count > INT32_MAX ? INT32_MAX : static_cast<int32_t>(count);
 }
 
 HAL_Bool HAL_GetRSLState(int32_t* status) {
   prosdk::hal::init::CheckInit();
-  *status = HAL_HANDLE_ERROR;
-  return false;
+  bool lit = false;
+  if (!prosdk::platform::GetRslState(&lit)) {
+    *status = HAL_HANDLE_ERROR;
+    return false;
+  }
+  *status = HAL_SUCCESS;
+  return lit;
 }
 
 HAL_Bool HAL_Initialize(void) {

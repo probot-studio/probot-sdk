@@ -4,6 +4,9 @@
 // NetworkTablesTelemetryBackendTest.cpp (WPILib 2027) with the store in place of NetworkTables,
 // plus the store-specific behaviour (not-ready store, limits).
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <span>
 #include <string>
 #include <string_view>
@@ -189,9 +192,16 @@ TEST_CASE_METHOD(DashboardFixture, "ProbotTelemetryBackend publishes protobuf",
 
 TEST_CASE_METHOD(DashboardFixture, "ProbotTelemetryBackend adds protobuf descriptors",
                  "[prosdk][dashboard][telemetry]") {
-  // geometry2d.proto's descriptor is ~1.3 KB: over core's default PROBOT_DASH_MAX_VALUE (1024)
-  fake::SetMaxValue(4096);
+  // geometry2d.proto's descriptor is ~1.3 KB: over core's default PROBOT_DASH_MAX_VALUE (1024),
+  // within its default PROBOT_DASH_MAX_SCHEMA_BYTES (4096, core R13): stored with core defaults
   prosdk::util::ProtobufMessage<prosdk::math::Translation2d> message;
+  size_t largest = 0;
+  message.ForEachProtobufDescriptor(
+      [](std::string_view) { return false; },
+      [&](std::string_view, std::span<const uint8_t> descriptor) {
+        largest = std::max(largest, descriptor.size());
+      });
+  CHECK(largest > 1024);
   message.ForEachProtobufDescriptor(
       [&](std::string_view filename) { return telemetry->HasSchema(filename); },
       [&](std::string_view filename, std::span<const uint8_t> descriptor) {
@@ -368,16 +378,15 @@ TEST_CASE_METHOD(DashboardFixture, "ProbotTelemetryBackend reports overlong name
   CHECK(fake::GetDouble("/Telemetry/short") == 1.0);
 }
 
-TEST_CASE_METHOD(DashboardFixture,
-                 "ProbotTelemetryBackend reports a descriptor over the value limit once",
-                 "[prosdk][dashboard][telemetry]") {
-  // core's default limit: the descriptor is refused and reported once; logging goes on
+namespace {
+// Adds Translation2d's protobuf descriptors twice; true if any was stored.
+bool AddTranslationDescriptors(prosdk::backend::ProbotTelemetryBackend& telemetry) {
   prosdk::util::ProtobufMessage<prosdk::math::Translation2d> message;
   for (int i = 0; i < 2; ++i) {
     message.ForEachProtobufDescriptor(
-        [&](std::string_view filename) { return telemetry->HasSchema(filename); },
+        [&](std::string_view filename) { return telemetry.HasSchema(filename); },
         [&](std::string_view filename, std::span<const uint8_t> descriptor) {
-          telemetry->AddSchema(filename, "proto:FileDescriptorProto", descriptor);
+          telemetry.AddSchema(filename, "proto:FileDescriptorProto", descriptor);
         });
   }
   bool stored = false;
@@ -387,8 +396,53 @@ TEST_CASE_METHOD(DashboardFixture,
         return true;
       },
       [](std::string_view, std::span<const uint8_t>) {});
-  CHECK_FALSE(stored);
+  return stored;
+}
+}  // namespace
+
+TEST_CASE_METHOD(DashboardFixture,
+                 "ProbotTelemetryBackend reports a descriptor over the schema limit once",
+                 "[prosdk][dashboard][telemetry]") {
+  // core R13 with a small PROBOT_DASH_MAX_SCHEMA_BYTES: refused, reported once with the size and
+  // the knob; logging goes on
+  fake::SetMaxSchemaBytes(1024);
+  CHECK_FALSE(AddTranslationDescriptors(*telemetry));
   CHECK(CountOf(fake::Console(), "dashboard schema not stored") == 1);
+  CHECK(CountOf(fake::Console(), "more than PROBOT_DASH_MAX_SCHEMA_BYTES (1024)") == 1);
+  CHECK(CountOf(fake::Console(), "PROBOT_DASH_MAX_VALUE") == 0);
   prosdk::telemetry::Log("after", 1.0);
   CHECK(fake::GetDouble("/Telemetry/after") == 1.0);
+}
+
+TEST_CASE_METHOD(DashboardFixture,
+                 "ProbotTelemetryBackend reports a descriptor over an older core's value limit",
+                 "[prosdk][dashboard][telemetry]") {
+  // a core without R13 limits schemas by PROBOT_DASH_MAX_VALUE (1024): the old advice
+  fake::SetMaxSchemaBytes(0);
+  CHECK_FALSE(AddTranslationDescriptors(*telemetry));
+  CHECK(CountOf(fake::Console(), "dashboard schema not stored") == 1);
+  CHECK(CountOf(fake::Console(), "#define PROBOT_DASH_MAX_VALUE 2048") == 1);
+  // ... and the old workaround still works there
+  fake::Reset();
+  dash::ResetForTest();
+  fake::SetMaxSchemaBytes(0);
+  fake::SetMaxValue(2048);
+  CHECK(AddTranslationDescriptors(*telemetry));
+  CHECK(CountOf(fake::Console(), "[prosdk]") == 0);
+}
+
+TEST_CASE_METHOD(DashboardFixture, "ProbotTelemetryBackend logs NaN doubles",
+                 "[prosdk][dashboard][telemetry]") {
+  // e.g. probot-core's io::battery::currentAmps() without a current sensor: stored as NaN,
+  // repeated NaN values are duplicates (same bytes), no console report
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  prosdk::telemetry::Log("current", nan);
+  prosdk::telemetry::Log("current", nan);
+  auto value = fake::GetDouble("/Telemetry/current");
+  REQUIRE(value.has_value());
+  CHECK(std::isnan(*value));
+  CHECK(fake::Find("/Telemetry/current")->sets == 1);
+  prosdk::telemetry::Log("current", 1.5);
+  CHECK(fake::GetDouble("/Telemetry/current") == 1.5);
+  CHECK(CountOf(fake::Console(), "[prosdk]") == 0);
 }

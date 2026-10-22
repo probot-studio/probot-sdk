@@ -118,6 +118,12 @@ inline bool Install() {
       // core without R9/R10: the archive's fallbacks run (console text through consoleWrite
       // without its level, the 2024-01-01 clock heuristic)
       nullptr, nullptr,
+      // ABI 5 (R12 requestStop, rslState, commsDisableCount, setLowVoltage; R13
+      // dashMaxSchemaBytes) null, as the bridge leaves them for a core without R12/R13: a halt
+      // stops nothing, HAL_GetRSLState/HAL_GetCommsDisableCount report HAL_HANDLE_ERROR, no
+      // low-voltage threshold, refused schemas are reported against PROBOT_DASH_MAX_VALUE
+      nullptr, nullptr, nullptr, nullptr,
+      nullptr,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   // what CoreBridge.hpp reports after probot::framework::install succeeded

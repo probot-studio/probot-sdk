@@ -21,7 +21,7 @@ env:
   ARDUINO_CLI_VERSION: "1.5.1"
   ARDUINO_ESP32_VERSION: "3.3.10"
   # probot-core branch or tag the sketches link against (the only place it is named)
-  PROBOT_CORE_REF: "feat/wall-clock"
+  PROBOT_CORE_REF: "feat/small-items"
 
 jobs:
   host:

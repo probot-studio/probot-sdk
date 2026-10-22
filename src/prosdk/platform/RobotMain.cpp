@@ -82,12 +82,28 @@ void FlushDashboard() {
   dashboard::FlushPending();
 }
 
+// While the program is halted: every INIT or START from the Driver Station is stopped again
+// (probot-core R12 requestStop()), so the DS does not show a running robot that does nothing.
+// Without R12 RequestStop() does nothing and the DS can still start the (idle) robot.
+void HaltedPass(void*) {
+  if (RequestStop()) {
+    ConsolePrint(ConsoleLevel::kError,
+                 "[prosdk] robot program {} is halted: Driver Station start stopped. Reboot the "
+                 "robot to run it again.\n",
+                 gName.load(std::memory_order_relaxed));
+  }
+}
+
 void Halt(const char* why) {
   RemoveCycleCallback(CyclePhase::kPre, RobotPass, nullptr);
   gState.store(RobotProgramState::kHalted, std::memory_order_release);
   ConsolePrint(ConsoleLevel::kError,
                "[prosdk] robot program {} halted: {}. Outputs stay disabled until reboot.\n",
                gName.load(std::memory_order_relaxed), why);
+  // stop the opmode the DS is running (core R12; false when idle or without R12), then keep
+  // stopping later starts (a full callback table leaves only this one stop)
+  RequestStop();
+  AddCycleCallback(CyclePhase::kPre, HaltedPass, nullptr);
 }
 
 // Runs fn like upstream StartRobot runs the robot: exceptions are reported, not propagated.
@@ -392,6 +408,7 @@ namespace detail {
 
 void ResetRobotMainForTest() {
   RemoveCycleCallback(CyclePhase::kPre, RobotPass, nullptr);
+  RemoveCycleCallback(CyclePhase::kPre, HaltedPass, nullptr);
   delete gHost.robot;
   gHost = Host{};
   gFactory.store(nullptr, std::memory_order_release);

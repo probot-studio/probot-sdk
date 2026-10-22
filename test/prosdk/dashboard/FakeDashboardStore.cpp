@@ -28,6 +28,7 @@ struct Store {
   size_t maxTopics = 128;
   size_t maxSchemas = 32;
   size_t maxValue = 1024;
+  size_t maxSchemaBytes = 4096;  // core R13 default; 0: a core without R13 (maxValue applies)
   std::vector<Topic> topics;  // id = index
   std::map<std::string, Schema, std::less<>> schemas;
   std::vector<Write> writes;
@@ -158,7 +159,8 @@ bool AddSchema(const char* name, const char* type, const void* data, size_t len)
   if (s.schemas.find(std::string_view{name}) != s.schemas.end()) {
     return true;
   }
-  if (s.schemas.size() >= s.maxSchemas || len > s.maxValue) {
+  const size_t limit = s.maxSchemaBytes != 0 ? s.maxSchemaBytes : s.maxValue;
+  if (s.schemas.size() >= s.maxSchemas || len > limit) {
     return false;
   }
   auto bytes = static_cast<const uint8_t*>(data);
@@ -200,6 +202,11 @@ void Stats(prosdk::platform::CoreDashboardStats* out) {
   out->maxTopics = static_cast<uint16_t>(s.maxTopics);
 }
 
+uint32_t MaxSchemaBytes() {
+  std::scoped_lock lock{S().mutex};
+  return static_cast<uint32_t>(S().maxSchemaBytes);
+}
+
 void ConsoleWriteFn(const char* text, size_t len) {
   std::scoped_lock lock{S().mutex};
   S().console.append(text, len);
@@ -226,6 +233,7 @@ void InstallOnce() {
     ops.dashDrainWrites = DrainWrites;
     ops.dashRejectWrite = RejectWrite;
     ops.dashStats = Stats;
+    ops.dashMaxSchemaBytes = MaxSchemaBytes;
     return prosdk::platform::InstallCoreOps(&ops);
   }();
   (void)installed;
@@ -270,6 +278,7 @@ void Reset() {
   s.maxTopics = 128;
   s.maxSchemas = 32;
   s.maxValue = 1024;
+  s.maxSchemaBytes = 4096;
   s.topics.clear();
   s.schemas.clear();
   s.writes.clear();
@@ -296,6 +305,11 @@ void SetMaxSchemas(size_t maxSchemas) {
 void SetMaxValue(size_t maxValue) {
   std::scoped_lock lock{S().mutex};
   S().maxValue = maxValue;
+}
+
+void SetMaxSchemaBytes(size_t maxSchemaBytes) {
+  std::scoped_lock lock{S().mutex};
+  S().maxSchemaBytes = maxSchemaBytes;
 }
 
 const Topic* Find(std::string_view path) {

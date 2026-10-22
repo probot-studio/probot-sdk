@@ -65,9 +65,9 @@ const char* LimitText(Limit limit) {
              "PROBOT_DASH_POOL_BYTES exhausted); later values are tried again, further failures "
              "are not reported";
     case Limit::kSchemas:
-      return "dashboard schema not stored (PROBOT_DASH_MAX_SCHEMAS reached, schema larger than "
-             "PROBOT_DASH_MAX_VALUE or pool exhausted); values of this type cannot be decoded on "
-             "the Driver Station";
+      return "dashboard schema not stored (PROBOT_DASH_MAX_SCHEMAS reached or "
+             "PROBOT_DASH_POOL_BYTES exhausted); values of this type cannot be decoded on the "
+             "Driver Station";
     case Limit::kProperties:
       return "dashboard topic properties not updated (longer than PROBOT_DASH_MAX_VALUE or pool "
              "exhausted)";
@@ -95,6 +95,43 @@ void DrainOne(const CoreDashboardWrite& write, void* ctx) {
     }
   }
   RejectWrite(write.id, WriteStatus::kUnknownId);
+}
+
+// A schema the store refused, reported once (Limit::kSchemas) with the reason that applies. With
+// probot-core R13 the store says its per-schema limit (PROBOT_DASH_MAX_SCHEMA_BYTES); an older
+// core limits schemas by PROBOT_DASH_MAX_VALUE (1024 by default, less than a protobuf descriptor
+// such as geometry2d.proto's, about 1.3 KB).
+void ReportSchemaRefused(std::string_view name, size_t size) noexcept {
+  auto index = static_cast<size_t>(Limit::kSchemas);
+  if (gReported[index].exchange(true, std::memory_order_acq_rel)) {
+    return;
+  }
+  try {
+    const uint32_t maxSchema = GetCoreOps().dashMaxSchemaBytes();
+    std::string text;
+    if (maxSchema != 0 && size > maxSchema) {
+      text = std::format(
+          "[prosdk] dashboard schema not stored: '{}' has {} bytes, more than "
+          "PROBOT_DASH_MAX_SCHEMA_BYTES ({}); define a larger PROBOT_DASH_MAX_SCHEMA_BYTES (at "
+          "most 32768) before #include <prosdk.h>. Values of this type cannot be decoded on the "
+          "Driver Station\n",
+          name, size, maxSchema);
+    } else if (maxSchema != 0) {
+      text = std::format("[prosdk] {}: '{}'\n", LimitText(Limit::kSchemas), name);
+    } else {
+      text = std::format(
+          "[prosdk] dashboard schema not stored: '{}' ({} bytes): PROBOT_DASH_MAX_SCHEMAS "
+          "reached, PROBOT_DASH_POOL_BYTES exhausted, or larger than PROBOT_DASH_MAX_VALUE "
+          "(this probot-core limits schemas by the value size, 1024 bytes by default; a protobuf "
+          "descriptor needs #define PROBOT_DASH_MAX_VALUE 2048 before #include <prosdk.h>, or a "
+          "probot-core with PROBOT_DASH_MAX_SCHEMA_BYTES). Values of this type cannot be decoded "
+          "on the Driver Station\n",
+          name, size);
+    }
+    ConsoleWrite(text, ConsoleLevel::kWarning);
+  } catch (...) {
+    ConsoleWrite("[prosdk] dashboard schema not stored\n", ConsoleLevel::kWarning);
+  }
 }
 
 }  // namespace
@@ -210,7 +247,7 @@ void AddSchema(std::string_view name, std::string_view type,
       s.hasPending.store(true, std::memory_order_release);
       return;
     }
-    ReportLimitOnce(Limit::kSchemas, name);
+    ReportSchemaRefused(name, data.size());
   } catch (...) {
     ReportLimitOnce(Limit::kSchemas, name);
   }
@@ -261,7 +298,7 @@ void FlushPending() noexcept {
         std::scoped_lock lock{s.mutex};
         s.known[p.name] = true;
       } else {
-        ReportLimitOnce(Limit::kSchemas, p.name);
+        ReportSchemaRefused(p.name, p.data.size());
       }
     }
   }

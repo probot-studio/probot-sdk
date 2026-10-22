@@ -62,7 +62,10 @@ void FlushTelemetry();
 //   - after a probot-core emergency stop it never touches the robot again (core deleted the user
 //     task; outputs are off through the HAL).
 // A halted program (constructor or loop exception, invalid period, robot class without a hosted
-// loop) keeps its outputs off (the HAL output gate) and only reports to the console.
+// loop) keeps its outputs off (the HAL output gate) and reports to the console. With probot-core
+// R12 it also stops the Driver Station (probot::requestStop()) at the halt and again whenever the
+// DS inits or starts an opmode, so the DS does not show a running robot; without R12 the DS can
+// still start it (nothing runs, outputs stay off).
 
 /** Creates the user's robot (on core's user task). */
 using RobotFactory = prosdk::RobotBase* (*)();

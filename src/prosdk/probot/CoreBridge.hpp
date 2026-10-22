@@ -29,6 +29,15 @@
 //     console text goes to core's telemetry ring (telemetry::writeBytes) without its level.
 //   - R10 wall clock (<probot/core/wall_clock.hpp>, ds::systemTimeValid()):
 //     PROSDK_CORE_HAS_WALL_CLOCK. Without it the archive's 2024-01-01 heuristic applies.
+//   - R12 small items (<probot/io/battery_status.hpp>: requestStop(), ds::rslState(),
+//     ds::commsDisableCount(), io::battery::setLowVoltage()): PROSDK_CORE_HAS_SMALL_ITEMS. The
+//     header is the last of R12 part 1 (core PR #37), so a core that has it has all four. Without it
+//     a halted robot program does not stop the Driver Station, HAL_GetRSLState and
+//     HAL_GetCommsDisableCount report HAL_HANDLE_ERROR and core's low-voltage flag stays as core
+//     set it.
+//   - R13 schema size limit (dashboard::Limits::maxSchemaBytes, no new header: detected on the type
+//     at compile time). Without it the archive reports a refused schema against
+//     PROBOT_DASH_MAX_VALUE.
 //
 // ODR: every function here only calls core's config-free headers, so all definitions are the same
 // in every translation unit. The pin reservation depends on the sketch's configuration macros and
@@ -88,6 +97,13 @@
 #define PROSDK_CORE_HAS_WALL_CLOCK 1
 #else
 #define PROSDK_CORE_HAS_WALL_CLOCK 0
+#endif
+
+#if __has_include(<probot/io/battery_status.hpp>)
+#include <probot/io/battery_status.hpp>
+#define PROSDK_CORE_HAS_SMALL_ITEMS 1
+#else
+#define PROSDK_CORE_HAS_SMALL_ITEMS 0
 #endif
 
 #include <new>
@@ -298,6 +314,35 @@ inline bool SystemTimeValid() { return probot::ds::systemTimeValid(); }
 #define PROSDK_CORE_WALL_CLOCK_OP nullptr
 #endif
 
+#if PROSDK_CORE_HAS_SMALL_ITEMS
+inline bool RequestStop() { return probot::requestStop(); }
+inline bool RslState() { return probot::ds::rslState(); }
+inline uint32_t CommsDisableCount() { return probot::ds::commsDisableCount(); }
+inline bool SetLowVoltage(float volts) { return probot::io::battery::setLowVoltage(volts); }
+#define PROSDK_CORE_SMALL_ITEMS_OPS &RequestStop, &RslState, &CommsDisableCount, &SetLowVoltage
+#else
+#define PROSDK_CORE_SMALL_ITEMS_OPS nullptr, nullptr, nullptr, nullptr
+#endif
+
+// R13: core has no accessor for its configured limits, so this reads the store's (under its lock,
+// as core's own detail::maxValue() does). L is a template parameter so that a core without
+// Limits::maxSchemaBytes never instantiates it.
+template <typename L>
+inline uint32_t DashMaxSchemaBytes() {
+  auto& st = probot::dashboard::detail::g_store;
+  probot::core::MuxGuard g(st.mux);
+  const L& lim = st.lim;
+  return st.configured ? lim.maxSchemaBytes : 0;
+}
+template <typename L>
+constexpr uint32_t (*DashMaxSchemaBytesOp())() {
+  if constexpr (requires(const L& lim) { lim.maxSchemaBytes; }) {
+    return &DashMaxSchemaBytes<L>;
+  } else {
+    return nullptr;
+  }
+}
+
 inline uint16_t DashPublish(const char* path, uint8_t vt, const char* typeString,
                             const char* propertiesJson, uint8_t flags) {
   return probot::dashboard::publish(path, static_cast<probot::dashboard::ValueType>(vt),
@@ -400,6 +445,8 @@ inline bool Install() {
       PROSDK_CORE_OPMODE_OPS,
       PROSDK_CORE_CONSOLE_OP,
       PROSDK_CORE_WALL_CLOCK_OP,
+      PROSDK_CORE_SMALL_ITEMS_OPS,
+      DashMaxSchemaBytesOp<probot::dashboard::Limits>(),
   };
   bool ok = pf::InstallCoreOps(&kOps);
   bool hooks = probot::framework::install(probot::framework::Hooks{
@@ -413,6 +460,7 @@ inline bool Install() {
 #undef PROSDK_CORE_OPMODE_OPS
 #undef PROSDK_CORE_CONSOLE_OP
 #undef PROSDK_CORE_WALL_CLOCK_OP
+#undef PROSDK_CORE_SMALL_ITEMS_OPS
 
 /**
  * True once the bridge is installed: the CoreOps table and prosdk's framework hooks (evaluated

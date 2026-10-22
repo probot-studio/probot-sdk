@@ -53,6 +53,8 @@ struct FakeCore {
   uint32_t period = 20;
   uint32_t overruns = 0;
   std::vector<uint32_t> periodRequests;
+  int stopRequests = 0;  // probot::requestStop() calls
+  int stops = 0;         // ... that stopped an INIT or RUN phase
 };
 FakeCore gCore;
 
@@ -76,6 +78,17 @@ uint32_t FakePeriod() { return gCore.period; }
 uint32_t FakeOverruns() { return gCore.overruns; }
 uint64_t FakeSelectedId() { return gCore.selectedId; }
 uint64_t FakeActiveId() { return gCore.activeId; }
+// probot::requestStop() (R12): stops an INIT or RUN phase like the DS STOP button
+bool FakeRequestStop() {
+  ++gCore.stopRequests;
+  if (gCore.estop || !(pf::IsCoreInitPhase(gCore.phase) || pf::IsCoreRunPhase(gCore.phase))) {
+    return false;
+  }
+  ++gCore.stops;
+  gCore.phase = pf::kCorePhaseStopped;
+  gCore.outputs = false;
+  return true;
+}
 void FakeConsole(const char* text, size_t len) {
   std::scoped_lock lock{gConsoleMutex};
   gConsole.append(text, len);
@@ -146,6 +159,9 @@ void InstallOnce() {
     ops.loopOverruns = FakeOverruns;
     ops.selectedOpModeId = FakeSelectedId;
     ops.activeOpModeId = FakeActiveId;
+    // R12: requestStop only; rslState, commsDisableCount and setLowVoltage stay null (the
+    // fallbacks are checked below), R13 dashMaxSchemaBytes too
+    ops.requestStop = FakeRequestStop;
     REQUIRE(pf::InstallCoreOps(&ops));
     REQUIRE(pf::AddCycleCallback(pf::CyclePhase::kPre, MirrorCore, nullptr));
     return true;
@@ -725,6 +741,21 @@ TEST_CASE("RobotHost halts a program that cannot run", "[robothost]") {
     CHECK(pf::RobotProgramHalted());
     CHECK(Console().find("constructor failure for the test") != std::string::npos);
     CHECK(Console().find("halted") != std::string::npos);
+    // R12: the halt asked core to stop (nothing ran yet), and every later DS start is stopped
+    CHECK(gCore.stopRequests >= 1);
+    CHECK(gCore.stops == 0);
+    gCore.phase = pf::kCorePhaseTeleopInit;
+    Pass();
+    CHECK(gCore.stops == 1);
+    CHECK(gCore.phase == pf::kCorePhaseStopped);
+    CHECK(Console().find("Driver Station start stopped") != std::string::npos);
+    gCore.phase = pf::kCorePhaseAutoRun;
+    gCore.outputs = true;
+    Pass();
+    CHECK(gCore.stops == 2);
+    CHECK_FALSE(gCore.outputs);
+    Passes(3);  // idle: nothing more to stop
+    CHECK(gCore.stops == 2);
   }
   SECTION("robot class without a periodic loop") {
     StartProgram<DirectRobot>();
@@ -748,9 +779,29 @@ TEST_CASE("RobotHost halts a program that cannot run", "[robothost]") {
     CHECK(pf::GetRobotProgramState() == pf::RobotProgramState::kHalted);
     CHECK(LoopThrowRobot::calls == 1);
     CHECK(Console().find("loop failure for the test") != std::string::npos);
+    // R12: the running teleop was stopped at the halt
+    CHECK(gCore.stops == 1);
+    CHECK(gCore.phase == pf::kCorePhaseStopped);
   }
   pf::detail::ResetRobotMainForTest();
   CHECK_FALSE(pf::RobotProgramHalted());
+  // after the reset the halted pass no longer stops DS starts
+  const int stops = gCore.stops;
+  gCore.phase = pf::kCorePhaseTeleopInit;
+  Pass();
+  CHECK(gCore.stops == stops);
+  gCore.phase = pf::kCorePhaseStopped;
+}
+
+TEST_CASE("RobotHost runs with a core whose R12 entries are null", "[robothost]") {
+  InstallOnce();
+  // the fake core leaves rslState, commsDisableCount and setLowVoltage null: not available
+  bool lit = false;
+  CHECK_FALSE(pf::GetRslState(&lit));
+  uint32_t count = 0;
+  CHECK_FALSE(pf::GetCommsDisableCount(&count));
+  CHECK_FALSE(pf::SetLowVoltage(6.75));
+  CHECK(pf::GetCoreOps().dashMaxSchemaBytes() == 0);
 }
 
 // last: the e-stop latches for the rest of the process

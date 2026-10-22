@@ -5,7 +5,9 @@
 // follows core's dashboard.hpp semantics: publish is idempotent for the same path and type and
 // fails for another type, a full table, a name/type over 255 bytes or properties over the value
 // limit; set copies at most the value limit and drops values equal to the last one unless the
-// topic has KEEP_DUPLICATES; schemas are idempotent per name and limited in number.
+// topic has KEEP_DUPLICATES; schemas are idempotent per name and limited in number and size
+// (core R13: PROBOT_DASH_MAX_SCHEMA_BYTES, 4096; SetMaxSchemaBytes(0) plays a core without R13,
+// whose schemas are limited by the value limit).
 
 #pragma once
 
@@ -45,6 +47,8 @@ void SetReady(bool ready);
 void SetMaxTopics(size_t maxTopics);
 void SetMaxSchemas(size_t maxSchemas);
 void SetMaxValue(size_t maxValue);
+/** Per-schema byte limit (core R13, default 4096); 0: a core without R13 (the value limit). */
+void SetMaxSchemaBytes(size_t maxSchemaBytes);
 
 /** The live topic at path, or nullptr. */
 const Topic* Find(std::string_view path);

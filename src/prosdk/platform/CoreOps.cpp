@@ -77,6 +77,13 @@ bool DefSystemTimeValid() {
   constexpr std::time_t k20240101 = 1704067200;
   return std::time(nullptr) >= k20240101;
 }
+// No core, or core without R12 (the accessors below recognize these entries as "not available").
+bool DefRequestStop() { return false; }
+bool DefRslState() { return false; }
+uint32_t DefCommsDisableCount() { return 0; }
+bool DefSetLowVoltage(float) { return false; }
+// No core, or core without R13 (0: the limit is unknown).
+uint32_t DefMaxSchemaBytes() { return 0; }
 
 constexpr CoreOps kDefaultOps{
     kCoreOpsAbiVersion, sizeof(CoreOps), 0, "",
@@ -87,6 +94,8 @@ constexpr CoreOps kDefaultOps{
     DefSetLoopPeriod, DefLoopPeriod, DefOverruns,
     DefSetOpModeOptions, DefOpModeId, DefOpModeId, DefFalse,
     DefConsoleLevel, DefSystemTimeValid,
+    DefRequestStop, DefRslState, DefCommsDisableCount, DefSetLowVoltage,
+    DefMaxSchemaBytes,
 };
 
 // Written once (static initialization, single-threaded) before gInstalled is set.
@@ -229,6 +238,11 @@ bool InstallCoreOps(const CoreOps* ops) noexcept {
   PROSDK_COREOPS_FILL(utilityAvailable);
   PROSDK_COREOPS_FILL(consoleWriteLevel);
   PROSDK_COREOPS_FILL(systemTimeValid);
+  PROSDK_COREOPS_FILL(requestStop);
+  PROSDK_COREOPS_FILL(rslState);
+  PROSDK_COREOPS_FILL(commsDisableCount);
+  PROSDK_COREOPS_FILL(setLowVoltage);
+  PROSDK_COREOPS_FILL(dashMaxSchemaBytes);
 #undef PROSDK_COREOPS_FILL
   if (copy.coreVersionString == nullptr) {
     copy.coreVersionString = "";
@@ -406,6 +420,30 @@ bool UtilityAvailable() noexcept {
 
 bool SystemTimeValid() noexcept {
   return gOps.systemTimeValid();
+}
+
+bool RequestStop() noexcept {
+  return gOps.requestStop();
+}
+
+bool GetRslState(bool* lit) noexcept {
+  if (gOps.rslState == kDefaultOps.rslState || lit == nullptr) {
+    return false;
+  }
+  *lit = gOps.rslState();
+  return true;
+}
+
+bool GetCommsDisableCount(uint32_t* count) noexcept {
+  if (gOps.commsDisableCount == kDefaultOps.commsDisableCount || count == nullptr) {
+    return false;
+  }
+  *count = gOps.commsDisableCount();
+  return true;
+}
+
+bool SetLowVoltage(double volts) noexcept {
+  return gOps.setLowVoltage(static_cast<float>(volts));
 }
 
 bool AddCycleCallback(CyclePhase phase, CoreCallback callback, void* context) noexcept {

@@ -20,6 +20,7 @@
 
 #include <prosdk/driverstation/RobotState.hpp>
 #include <prosdk/framework/TimedRobot.hpp>
+#include <prosdk/hal/Errors.h>
 #include <prosdk/hal/HAL.h>
 #include <prosdk/platform/CoreOps.hpp>
 #include <prosdk/platform/RobotHost.hpp>
@@ -148,6 +149,16 @@ void CaseRobot(Ctx& ctx) {
   }
   // 20 ms loop + 10 ms AddPeriodic -> core passes every 10 ms (gcd)
   QCHECK_MSG(ctx, core.periodMs.load() == 10, "core period {} ms", core.periodMs.load());
+  {
+    // the fake core leaves the R12 entries null (a core without R12): the systemcore answers
+    int32_t status = 0;
+    HAL_GetRSLState(&status);
+    QCHECK(ctx, status == HAL_HANDLE_ERROR);
+    status = 0;
+    HAL_GetCommsDisableCount(&status);
+    QCHECK(ctx, status == HAL_HANDLE_ERROR);
+    QCHECK(ctx, !pf::RequestStop());
+  }
 
   struct Step {
     int64_t atMs;

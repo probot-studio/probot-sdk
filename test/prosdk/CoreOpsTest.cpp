@@ -1,7 +1,8 @@
 // Copyright (c) Probot Studio. Hand-written; see LICENSE.
 //
-// prosdk::platform R6/R7/R9/R10 accessors (CoreOps.hpp): the no-core defaults, then the opmode
-// list sanitizing, the leveled console and the wall-clock flag against a fake probot-core table. One TEST_CASE because InstallCoreOps is once per
+// prosdk::platform R6/R7/R9/R10/R12 accessors (CoreOps.hpp): the no-core defaults, then the opmode
+// list sanitizing, the leveled console, the wall-clock flag and the R12 small items against a fake
+// probot-core table. One TEST_CASE because InstallCoreOps is once per
 // process (no other host test installs a table); Catch2 re-runs it per SECTION, so the no-core
 // part runs only on the first pass.
 
@@ -59,6 +60,25 @@ void FakeConsoleLevel(uint8_t level, const char* text, size_t len) {
 }
 bool gTimeValid = false;
 bool FakeSystemTimeValid() { return gTimeValid; }
+int gStopRequests = 0;
+bool gStoppable = false;
+bool FakeRequestStop() {
+  ++gStopRequests;
+  bool stopped = gStoppable;
+  gStoppable = false;
+  return stopped;
+}
+bool gRsl = false;
+bool FakeRslState() { return gRsl; }
+uint32_t FakeCommsDisableCount() { return 7; }
+float gLowVolts = 0.0f;
+bool FakeSetLowVoltage(float volts) {
+  if (!(volts >= 0.0f && volts < 100.0f)) {
+    return false;
+  }
+  gLowVolts = volts;
+  return true;
+}
 
 pf::CoreOpModeOption Opt(uint64_t id, uint8_t mode, const char* name, const char* group = "",
                          const char* description = "") {
@@ -67,7 +87,7 @@ pf::CoreOpModeOption Opt(uint64_t id, uint8_t mode, const char* name, const char
 
 }  // namespace
 
-TEST_CASE("CoreOps R6/R7 accessors: defaults, then a fake core", "[prosdk][platform]") {
+TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][platform]") {
   if (!pf::HasCoreOps()) {
     // ---- no core installed (first pass) ----
     CHECK_FALSE(pf::FrameworkInstalled());
@@ -87,6 +107,16 @@ TEST_CASE("CoreOps R6/R7 accessors: defaults, then a fake core", "[prosdk][platf
     CHECK_FALSE(pf::UtilityAvailable());
     // no core: the clock counts as set once it is past 2024-01-01 (true on a host)
     CHECK(pf::SystemTimeValid() == (std::time(nullptr) >= 1704067200));
+    // no core: R12 entries are not available, R13 limit unknown
+    CHECK_FALSE(pf::RequestStop());
+    bool lit = true;
+    CHECK_FALSE(pf::GetRslState(&lit));
+    CHECK(lit);  // unchanged
+    uint32_t count = 99;
+    CHECK_FALSE(pf::GetCommsDisableCount(&count));
+    CHECK(count == 99);
+    CHECK_FALSE(pf::SetLowVoltage(6.75));
+    CHECK(pf::GetCoreOps().dashMaxSchemaBytes() == 0);
 
     // ---- fake core (unset entries fall back to the defaults) ----
     pf::CoreOps ops{};
@@ -102,6 +132,10 @@ TEST_CASE("CoreOps R6/R7 accessors: defaults, then a fake core", "[prosdk][platf
     ops.utilityAvailable = FakeUtility;
     ops.consoleWriteLevel = FakeConsoleLevel;
     ops.systemTimeValid = FakeSystemTimeValid;
+    ops.requestStop = FakeRequestStop;
+    ops.rslState = FakeRslState;
+    ops.commsDisableCount = FakeCommsDisableCount;
+    ops.setLowVoltage = FakeSetLowVoltage;
     REQUIRE(pf::InstallCoreOps(&ops));
 
     // R9: the console reaches core's leveled console with its level (one call per write)
@@ -129,6 +163,30 @@ TEST_CASE("CoreOps R6/R7 accessors: defaults, then a fake core", "[prosdk][platf
   CHECK_FALSE(pf::SystemTimeValid());
   gTimeValid = true;
   CHECK(pf::SystemTimeValid());
+
+  // R12: requestStop, RSL state, comms-disable count and the low-voltage threshold are core's
+  gStopRequests = 0;
+  gStoppable = true;
+  CHECK(pf::RequestStop());
+  CHECK_FALSE(pf::RequestStop());  // nothing left to stop
+  CHECK(gStopRequests == 2);
+  bool lit = false;
+  gRsl = true;
+  REQUIRE(pf::GetRslState(&lit));
+  CHECK(lit);
+  gRsl = false;
+  REQUIRE(pf::GetRslState(&lit));
+  CHECK_FALSE(lit);
+  uint32_t count = 0;
+  REQUIRE(pf::GetCommsDisableCount(&count));
+  CHECK(count == 7);
+  CHECK_FALSE(pf::GetRslState(nullptr));
+  CHECK(pf::SetLowVoltage(6.75));
+  CHECK(gLowVolts == 6.75f);
+  CHECK_FALSE(pf::SetLowVoltage(-1.0));
+  CHECK(gLowVolts == 6.75f);
+  // R13 left null: the limit stays unknown
+  CHECK(pf::GetCoreOps().dashMaxSchemaBytes() == 0);
 
   SECTION("invalid options are dropped, long strings truncated at a UTF-8 boundary") {
     std::string longName(70, 'a');

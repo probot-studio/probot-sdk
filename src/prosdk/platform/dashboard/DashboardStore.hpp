@@ -13,7 +13,9 @@
 //     PROBOT_DASH_MAX_VALUE or an exhausted pool (PROBOT_DASH_POOL_BYTES);
 //   - set() copies at most PROBOT_DASH_MAX_VALUE (1024) bytes and drops values equal to the last
 //     one unless the topic has KEEP_DUPLICATES;
-//   - addSchema() keeps at most PROBOT_DASH_MAX_SCHEMAS (32) schemas;
+//   - addSchema() keeps at most PROBOT_DASH_MAX_SCHEMAS (32) schemas of at most
+//     PROBOT_DASH_MAX_SCHEMA_BYTES (4096) bytes each (R13; an older core: PROBOT_DASH_MAX_VALUE,
+//     which refuses protobuf descriptors such as geometry2d.proto's, about 1.3 KB);
 //   - drainWrites() is called from one task (core's user task) and delivers each topic's last
 //     Driver Station write; a delivered topic's current value is re-sent afterwards.
 // Before the store is ready, topics, values and schemas are kept here and flushed by
@@ -80,7 +82,7 @@ enum class Limit : uint8_t {
   kName,        // path or type string over 255 bytes
   kStore,       // other publish refusal (pool, properties size, type conflict)
   kValue,       // value not stored (over PROBOT_DASH_MAX_VALUE or pool exhausted)
-  kSchemas,     // schema not stored (schema table full, size, pool)
+  kSchemas,     // schema not stored (schema table full, schema size limit, pool)
   kProperties,  // properties not updated
   kCount
 };

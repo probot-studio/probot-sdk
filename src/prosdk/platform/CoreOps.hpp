@@ -18,7 +18,10 @@
 // CoreGamepad fields of ABI 3 the way core 0.4.0 behaved (trigger buttons as 0/1, 4-way POV,
 // the mapping profile's name, standard mapping). Without R9 (leveled console) the console text
 // goes to consoleWrite (core's telemetry ring) without its level; without R10 (wall clock) the
-// system time counts as valid once the clock is past 2024-01-01 (SystemTimeValid()).
+// system time counts as valid once the clock is past 2024-01-01 (SystemTimeValid()). Without R12
+// (small items) RequestStop() stops nothing, the RSL state and the comms-disable count are unknown
+// and core's low-voltage threshold is not set; without R13 (schema size limit) the dashboard
+// reports a refused schema against PROBOT_DASH_MAX_VALUE.
 //
 // ABI rules: only append fields, bump kCoreOpsAbiVersion on any change of meaning or layout. The
 // archive refuses a table whose abiVersion differs or whose size is smaller than its own.
@@ -36,7 +39,7 @@
 namespace prosdk::platform {
 
 /** Layout/meaning version of CoreOps; both sides must agree. */
-inline constexpr uint32_t kCoreOpsAbiVersion = 4;
+inline constexpr uint32_t kCoreOpsAbiVersion = 5;
 
 /** probot-core robot::Phase values (probot/robot/state.hpp). */
 enum CorePhase : uint8_t {
@@ -229,6 +232,28 @@ struct CoreOps {
   // wall clock (probot-core R10: probot::ds::systemTimeValid): true once a Driver Station set the
   // robot's clock since boot. Null (core without R10): the archive's 2024-01-01 heuristic.
   bool (*systemTimeValid)();
+
+  // ---- ABI 5 ----
+  // small items (probot-core R12). Null (core without R12): the archive's fallbacks (no stop, RSL
+  // state and comms-disable count unknown, no low-voltage threshold).
+  // probot::requestStop(): stops the active OpMode like the Driver Station STOP button
+  // (cooperative; cancels a pending INIT or START). false: nothing to stop, a stop already in
+  // progress, or e-stopped. Any task.
+  bool (*requestStop)();
+  // ds::rslState(): the robot signal light is lit (blinking in a RUN phase that may move the
+  // robot, solid on otherwise; false before core's runtime started)
+  bool (*rslState)();
+  // ds::commsDisableCount(): times a lost Driver Station link stopped an enabled (START) robot
+  // since boot (PB-E303)
+  uint32_t (*commsDisableCount)();
+  // io::battery::setLowVoltage(): threshold of core's isLowVoltage() flag in volts, 0 = off (core's
+  // default). false (threshold unchanged) for a negative, NaN or >= 100 V value.
+  bool (*setLowVoltage)(float volts);
+
+  // dashboard schema size limit (probot-core R13): the store's per-schema byte limit as
+  // configured (PROBOT_DASH_MAX_SCHEMA_BYTES, default 4096), 0 before core's runtime_setup().
+  // Null (core without R13): schemas are limited by PROBOT_DASH_MAX_VALUE.
+  uint32_t (*dashMaxSchemaBytes)();
 };
 
 /**
@@ -322,6 +347,36 @@ bool UtilityAvailable() noexcept;
  * 2024-01-01 (something such as the sketch's SNTP or settimeofday set it).
  */
 bool SystemTimeValid() noexcept;
+
+// ---- probot-core R12 accessors ----
+//
+// Any task (not an ISR or an emergency-stop callback), any time. Without core (host build, tests)
+// or with a core without R12 they report "not available" and change nothing.
+
+/**
+ * Stops the active opmode as if the Driver Station pressed STOP (core's probot::requestStop():
+ * cooperative, cancels a pending INIT or START). Returns false when there was nothing to stop, a
+ * stop was already in progress, the robot is e-stopped, or core has no R12.
+ */
+bool RequestStop() noexcept;
+
+/**
+ * Whether the robot signal light is lit (HAL_GetRSLState): blinking while a RUN phase may move
+ * the robot, solid on otherwise. Returns false (and leaves *lit unchanged) when core has no R12.
+ */
+bool GetRslState(bool* lit) noexcept;
+
+/**
+ * Times a lost Driver Station link stopped the enabled robot since boot (HAL_GetCommsDisableCount).
+ * Returns false (and leaves *count unchanged) when core has no R12.
+ */
+bool GetCommsDisableCount(uint32_t* count) noexcept;
+
+/**
+ * Sets the threshold of core's low-voltage flag (io::battery::setLowVoltage, volts, 0 = off).
+ * Returns false when core refused the value or has no R12.
+ */
+bool SetLowVoltage(double volts) noexcept;
 
 /** Where a cycle callback runs relative to core's user loop iteration. */
 enum class CyclePhase : uint8_t { kPre = 0, kPost = 1 };

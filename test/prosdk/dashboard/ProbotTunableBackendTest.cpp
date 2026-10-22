@@ -477,8 +477,8 @@ TEST_CASE_METHOD(DashboardFixture, "ProbotTunableBackend publishes and tunes pro
                  "[prosdk][dashboard][tunable]") {
   const prosdk::math::Translation2d initial{5.25_m, 6.5_m};
   const prosdk::math::Translation2d tuned{7.75_m, 8.5_m};
-  // geometry2d.proto's descriptor is ~1.3 KB: over core's default PROBOT_DASH_MAX_VALUE (1024)
-  fake::SetMaxValue(4096);
+  // geometry2d.proto's descriptor is ~1.3 KB: within core's default PROBOT_DASH_MAX_SCHEMA_BYTES
+  // (4096, core R13), so core's defaults store it
   tunables::detail::TunableProtobuf<prosdk::math::Translation2d> value{RobustConfig(), initial};
   tunables::Publish("translation", value);
 
