@@ -42,7 +42,7 @@ PROSDK_ROBOT_MAIN(Robot)
 - If the constructor or the loop throws, the error is shown and the program stops with outputs
   disabled until reboot. An e-stop always turns the outputs off.
 - Examples: `examples/TimedRobotDifferential`, `examples/OpModeRobotExample`,
-  `examples/TimesliceRobotExample`. Details: [design/PORT.md](design/PORT.md) section 8.1.
+  `examples/TimesliceRobotExample`, `examples/CommandBasedRobot` (command-based, `prosdk::cmd`). Details: [design/PORT.md](design/PORT.md) section 8.1.
 
 ## Developer quick start
 

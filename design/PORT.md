@@ -125,8 +125,10 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `__FIRST_SYSTEMCORE__` test (priority_mutex.hpp, HandlesInternal.hpp, RobotBase.hpp IsSimulation/IsReal,
   Preferences.cpp, DataLogManager.cpp, MotorSafety.cpp).
 - RTTI: off. `GetTypeName(*this)` (Demangle.hpp) is replaced: commands get their name from
-  `CommandHelper<Base, CRTP>` using a `__PRETTY_FUNCTION__`-based `prosdk::util::GetTypeName<T>()`;
-  subsystems use the same through a helper, with `SetName()` still available.
+  `CommandHelper<Base, CRTP>` using a `__PRETTY_FUNCTION__`-based `prosdk::util::GetTypeName<T>()`
+  (patch `commandsv2/0001`); subsystems keep the static base name (`prosdk::cmd::SubsystemBase`, which
+  upstream C++ also gives, since it names them in the base constructor) and are named with
+  `SubsystemBase(name)` or `SetName()`. No other `typeid`/`dynamic_cast` is used by commandsv2.
 - Exceptions: on. Upstream throw sites stay. The robot framework catches exceptions that escape user code,
   reports them to the DS console and moves the robot to a safe stopped state instead of rebooting.
 - Threads: no WPILib thread is created with the default pthread config (2 KB stack, priority 5, which
@@ -227,7 +229,9 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   callback order, `AddPeriodic`/timeslice timing, jitter, late pass, opmode selection, halts).
 - **Examples** (`esp32:esp32:esp32s3:PartitionScheme=huge_app`, 2026-10-22; flash / static RAM):
   `TimedRobotDifferential` 1926441 / 65764 bytes, `OpModeRobotExample` 1904333 / 65772,
-  `TimesliceRobotExample` 1902981 / 65708 (of 3145728 / 327680).
+  `TimesliceRobotExample` 1902981 / 65708, `CommandBasedRobot` (commandsv2: scheduler, drive
+  subsystem, `CommandXboxController`, PID command, autonomous `Selectable`, `SysIdRoutine`)
+  2128932 / 69340 (of 3145728 / 327680).
 
 ## 9. Build (incremental, low load)
 
