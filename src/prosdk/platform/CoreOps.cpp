@@ -88,6 +88,9 @@ uint32_t DefMaxSchemaBytes() { return 0; }
 bool DefClearPersisted() { return false; }
 // No core, or core without R15 (GetLoopGridRestarts() recognizes it).
 uint32_t DefLoopGridRestarts() { return 0; }
+// No core, or core without R11 (FileSharingSupported() recognizes it): nothing is shared.
+bool DefFilesShare(const char*, const char*) { return false; }
+bool DefFilesUnshare(const char*) { return false; }
 
 constexpr CoreOps kDefaultOps{
     kCoreOpsAbiVersion, sizeof(CoreOps), 0, "",
@@ -102,6 +105,7 @@ constexpr CoreOps kDefaultOps{
     DefMaxSchemaBytes,
     DefClearPersisted,
     DefLoopGridRestarts,
+    DefFilesShare, DefFilesUnshare,
 };
 
 // Written once (static initialization, single-threaded) before gInstalled is set.
@@ -251,6 +255,8 @@ bool InstallCoreOps(const CoreOps* ops) noexcept {
   PROSDK_COREOPS_FILL(dashMaxSchemaBytes);
   PROSDK_COREOPS_FILL(dashClearPersisted);
   PROSDK_COREOPS_FILL(loopGridRestarts);
+  PROSDK_COREOPS_FILL(filesShare);
+  PROSDK_COREOPS_FILL(filesUnshare);
 #undef PROSDK_COREOPS_FILL
   if (copy.coreVersionString == nullptr) {
     copy.coreVersionString = "";
@@ -464,6 +470,24 @@ bool SetLowVoltage(double volts) noexcept {
 
 bool DashPersistenceSupported() noexcept {
   return gOps.dashClearPersisted != kDefaultOps.dashClearPersisted;
+}
+
+bool FileSharingSupported() noexcept {
+  return gOps.filesShare != kDefaultOps.filesShare;
+}
+
+bool ShareFiles(const char* name, const char* vfsDir) noexcept {
+  if (name == nullptr || vfsDir == nullptr) {
+    return false;
+  }
+  return gOps.filesShare(name, vfsDir);
+}
+
+bool UnshareFiles(const char* name) noexcept {
+  if (name == nullptr) {
+    return false;
+  }
+  return gOps.filesUnshare(name);
 }
 
 bool AddCycleCallback(CyclePhase phase, CoreCallback callback, void* context) noexcept {

@@ -130,6 +130,9 @@ inline bool Install() {
       // ABI 7 (R15 loopGridRestarts) null, as the bridge leaves it for a core without R15: the
       // robot host re-aligns on counted overruns only
       nullptr,
+      // ABI 8 (R11 filesShare/filesUnshare) null, as the bridge leaves them for a core without
+      // file sharing: DataLogManager's folder is not offered on the Driver Station
+      nullptr, nullptr,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   // what CoreBridge.hpp reports after probot::framework::install succeeded

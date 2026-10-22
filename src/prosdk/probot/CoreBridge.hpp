@@ -52,6 +52,10 @@
 //   - R15 dashboard limits (probot::dashboard::limits(), same commit, detected the same way):
 //     dashMaxSchemaBytes reads it. Without it the bridge reads the store's limits from
 //     dashboard::detail::g_store under the store's lock, as before.
+//   - R11 file sharing (PROBOT_HAS_FILES_SHARE from <probot/files/files.hpp>, and a requires-check
+//     on the VFS-path overload probot::files::share(name, vfsDir) and on unshare(name):
+//     kCoreHasFilesShare). Without it filesShare/filesUnshare stay null and nothing is shared
+//     (DataLogManager's folder does not appear on the Driver Station).
 //
 // ODR: every function here only calls core's config-free headers, so all definitions are the same
 // in every translation unit. The pin reservation depends on the sketch's configuration macros and
@@ -118,6 +122,10 @@
 #define PROSDK_CORE_HAS_SMALL_ITEMS 1
 #else
 #define PROSDK_CORE_HAS_SMALL_ITEMS 0
+#endif
+
+#if __has_include(<probot/files/files.hpp>)
+#include <probot/files/files.hpp>
 #endif
 
 #include <concepts>
@@ -497,6 +505,55 @@ constexpr uint32_t (*LoopGridRestartsOp())() {
   }
 }
 
+// R11 file sharing, looked up like clearPersisted (persist_probe). The macro marks the feature;
+// the requires-check makes sure the VFS-path overload (the one prosdk calls; the fs::FS overload
+// came first in core's drafts) and unshare() exist.
+#if defined(PROBOT_HAS_FILES_SHARE)
+namespace files_probe {
+using namespace probot::files;
+template <typename... A>
+inline bool Share(A... a) {
+  return share(a...);
+}
+template <typename... A>
+inline bool Unshare(A... a) {
+  return unshare(a...);
+}
+template <typename... A>
+inline constexpr bool kHasShare = requires(A... a) {
+  { share(a...) } -> std::same_as<bool>;
+};
+template <typename... A>
+inline constexpr bool kHasUnshare = requires(A... a) {
+  { unshare(a...) } -> std::same_as<bool>;
+};
+}  // namespace files_probe
+
+/** True when the sketch's probot-core offers folders on the Driver Station (R11). */
+inline constexpr bool kCoreHasFilesShare =
+    files_probe::kHasShare<const char*, const char*> && files_probe::kHasUnshare<const char*>;
+#else
+inline constexpr bool kCoreHasFilesShare = false;
+#endif
+
+constexpr bool (*FilesShareOp())(const char*, const char*) {
+#if defined(PROBOT_HAS_FILES_SHARE)
+  if constexpr (kCoreHasFilesShare) {
+    return &files_probe::Share<const char*, const char*>;
+  }
+#endif
+  return nullptr;
+}
+
+constexpr bool (*FilesUnshareOp())(const char*) {
+#if defined(PROBOT_HAS_FILES_SHARE)
+  if constexpr (kCoreHasFilesShare) {
+    return &files_probe::Unshare<const char*>;
+  }
+#endif
+  return nullptr;
+}
+
 #if PROSDK_CORE_HAS_OPMODES
 inline bool SetOpModeOptions(const pf::CoreOpModeOption* options, size_t count) {
   if (count > pf::kCoreOpModeMaxOptions || (count != 0 && options == nullptr)) {
@@ -545,6 +602,7 @@ inline bool Install() {
       DashMaxSchemaBytesOp<probot::dashboard::Limits>(),
       DashClearPersistedOp(),
       LoopGridRestartsOp(),
+      FilesShareOp(), FilesUnshareOp(),
   };
   bool ok = pf::InstallCoreOps(&kOps);
   bool hooks = probot::framework::install(probot::framework::Hooks{

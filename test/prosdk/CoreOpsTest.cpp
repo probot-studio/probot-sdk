@@ -124,6 +124,10 @@ TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][plat
     uint32_t restarts = 99;
     CHECK_FALSE(pf::GetLoopGridRestarts(&restarts));
     CHECK(restarts == 99);
+    // no core: no file sharing (ABI 8)
+    CHECK_FALSE(pf::FileSharingSupported());
+    CHECK_FALSE(pf::ShareFiles("logs", "/littlefs/logs"));
+    CHECK_FALSE(pf::UnshareFiles("logs"));
 
     // ---- fake core (unset entries fall back to the defaults) ----
     pf::CoreOps ops{};
@@ -202,6 +206,11 @@ TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][plat
   CHECK_FALSE(pf::GetLoopGridRestarts(&restarts));
   CHECK(restarts == 99);
   CHECK_FALSE(pf::GetLoopGridRestarts(nullptr));
+  // ABI 8 left null (a core without R11): nothing is shared
+  CHECK_FALSE(pf::FileSharingSupported());
+  CHECK_FALSE(pf::ShareFiles("logs", "/littlefs/logs"));
+  CHECK_FALSE(pf::UnshareFiles("logs"));
+  CHECK_FALSE(pf::ShareFiles(nullptr, nullptr));
 
   SECTION("invalid options are dropped, long strings truncated at a UTF-8 boundary") {
     std::string longName(70, 'a');

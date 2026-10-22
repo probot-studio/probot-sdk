@@ -22,7 +22,8 @@
 // (small items) RequestStop() stops nothing, the RSL state and the comms-disable count are unknown
 // and core's low-voltage threshold is not set; without R13 (schema size limit) the dashboard
 // reports a refused schema against PROBOT_DASH_MAX_VALUE; without R15 (grid restarts) the robot
-// host re-aligns its schedule only when loopOverruns changes.
+// host re-aligns its schedule only when loopOverruns changes; without R11 (file sharing) the
+// Driver Station offers no files and DataLogManager's folder is not shared.
 //
 // ABI rules: only append fields, bump kCoreOpsAbiVersion on any change of meaning or layout. The
 // archive refuses a table whose abiVersion differs or whose size is smaller than its own.
@@ -40,7 +41,7 @@
 namespace prosdk::platform {
 
 /** Layout/meaning version of CoreOps; both sides must agree. */
-inline constexpr uint32_t kCoreOpsAbiVersion = 7;
+inline constexpr uint32_t kCoreOpsAbiVersion = 8;
 
 /** probot-core robot::Phase values (probot/robot/state.hpp). */
 enum CorePhase : uint8_t {
@@ -273,6 +274,18 @@ struct CoreOps {
   // on start on a new grid. A period change is not counted. Null (core without R15): the robot
   // host re-aligns only when loopOverruns changes.
   uint32_t (*loopGridRestarts)();
+
+  // ---- ABI 8 ----
+  // file sharing (probot-core R11: probot::files::share(name, vfsDir), probot::files::unshare(name)).
+  // filesShare offers the files directly in vfsDir, an absolute ESP-IDF VFS path such as
+  // "/littlefs/logs", on the Driver Station's "Dosyalar" card under name (1-15 of A-Z a-z 0-9 _ -),
+  // replacing a share of the same name; false for an invalid name or path (relative, "." or ".."
+  // segments, longer than 95 bytes) or a fifth name. filesUnshare removes a share; false when no
+  // share has that name. Both wait (at most 1 s) until a running Driver Station transfer of the
+  // old share stopped, so the file system may be unmounted afterwards. Any task, not an ISR. Null
+  // (core without R11): nothing is shared.
+  bool (*filesShare)(const char* name, const char* vfsDir);
+  bool (*filesUnshare)(const char* name);
 };
 
 /**
@@ -411,6 +424,34 @@ bool SetLowVoltage(double volts) noexcept;
  * dashClearPersisted present). False without core or with a core without persistence.
  */
 bool DashPersistenceSupported() noexcept;
+
+// ---- probot-core R11 file sharing ----
+//
+// Any task (not an ISR or an emergency-stop callback). Without core (host build, tests) or with a
+// core without R11 nothing is shared and nothing is printed.
+
+/**
+ * True when the sketch's probot-core can offer folders on the Driver Station (CoreOps ABI 8
+ * filesShare present). False without core or with a core without R11.
+ */
+bool FileSharingSupported() noexcept;
+
+/**
+ * Offers the files directly in vfsDir (an absolute VFS path of a mounted file system, for example
+ * "/littlefs/logs" or "/sd/logs") on the Driver Station's "Dosyalar" card (Logs page) under name,
+ * replacing a share of the same name (core's probot::files::share(name, vfsDir)). The Driver
+ * Station lists and downloads them only while the robot is idle. May block up to 1 s while a
+ * transfer of a replaced share stops. Returns false without file sharing support, for an invalid
+ * name or path (core's rules) or when core already offers 4 other shares.
+ */
+bool ShareFiles(const char* name, const char* vfsDir) noexcept;
+
+/**
+ * Stops offering the share name (core's probot::files::unshare(name)); afterwards its file system
+ * may be unmounted. May block up to 1 s while a running transfer stops. Returns false without file
+ * sharing support or when no share has that name.
+ */
+bool UnshareFiles(const char* name) noexcept;
 
 /** Where a cycle callback runs relative to core's user loop iteration. */
 enum class CyclePhase : uint8_t { kPre = 0, kPost = 1 };
