@@ -9,6 +9,8 @@
 // and sends periodic frames. No FRC heartbeat is sent, so FRC CAN motor controllers stay
 // disabled. After an emergency stop periodic frames stop and new sends are refused (driving the
 // TX pin low would hold the bus dominant and jam it, so CAN TX is not forced low).
+// The TX/RX GPIOs are claimed in the HAL pin table when the bus starts (DIO/PWM/... on them fail);
+// the bus is never stopped, so the claim lasts until reboot.
 
 #include "prosdk/hal/CAN.h"
 
@@ -186,11 +188,21 @@ int32_t EnsureStarted() {
                      "CAN has no pins: call prosdk::platform::SetCanConfig(tx, rx, bitrate) "
                      "first (and connect a CAN transceiver)");
   }
-  for (int gpio : {config.tx, config.rx}) {
-    int32_t status = CheckPinUsable(gpio, "CAN");
-    if (status != HAL_SUCCESS) {
-      return status;
+  HAL_DigitalHandle claims[2] = {HAL_INVALID_HANDLE, HAL_INVALID_HANDLE};
+  auto releaseClaims = [&] {
+    for (HAL_DigitalHandle& claim : claims) {
+      ReleasePin(claim, HAL_HandleEnum::CAN);
+      claim = HAL_INVALID_HANDLE;
     }
+  };
+  for (int i = 0; i < 2; ++i) {
+    auto claimed = ClaimPin(i == 0 ? config.tx : config.rx, HAL_HandleEnum::CAN, "CAN",
+                            i == 0 ? "CAN bus 0 (TWAI TX)" : "CAN bus 0 (TWAI RX)");
+    if (!claimed) {
+      releaseClaims();
+      return claimed.error();
+    }
+    claims[i] = *claimed;
   }
   twai_timing_config_t timing;
   switch (config.bitrate) {
@@ -207,6 +219,7 @@ int32_t EnsureStarted() {
       timing = TWAI_TIMING_CONFIG_1MBITS();
       break;
     default:  // SetCanConfig accepts only the rates above
+      releaseClaims();
       return MakeError(HAL_ERR_CANSessionMux_NotInitialized,
                        std::format("CAN: unsupported bit rate {}", config.bitrate));
   }
@@ -231,6 +244,10 @@ int32_t EnsureStarted() {
     }
   }
   if (err != ESP_OK) {
+    for (int gpio : {config.tx, config.rx}) {
+      gpio_reset_pin(static_cast<gpio_num_t>(gpio));
+    }
+    releaseClaims();
     return MakeError(HAL_ERR_CANSessionMux_NotInitialized,
                      std::format("CAN could not start on TX {} / RX {} ({})", config.tx,
                                  config.rx, EspErrName(err)));

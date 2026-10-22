@@ -4,7 +4,8 @@
 // kOnboard is UART1 and kMXP is UART2, on the pins from prosdk::platform::SetSerialPins (onboard
 // default RX 15 / TX 16; MXP has no default). UART0 is the console and USB is not a serial port
 // here: kUSB1/kUSB2 report HAL_SERIAL_PORT_NOT_FOUND. A UART that Arduino's Serial1/Serial2
-// already opened is refused. Defaults: 9600 8N1, no flow control, read timeout 0 (a read returns
+// already opened is refused. The RX/TX GPIOs are claimed in the HAL pin table while the port is
+// open, so DIO/PWM/... on them fail (and work again after HAL_CloseSerial). Defaults: 9600 8N1, no flow control, read timeout 0 (a read returns
 // what is buffered; WPILib's SerialPort sets its own timeout).
 // Software flow control and DTR/DSR are not supported; RTS/CTS needs pins and is not offered.
 
@@ -19,6 +20,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <tuple>
 
 #include "Esp32Internal.hpp"
 #include "prosdk/hal/ErrorHandling.hpp"
@@ -47,6 +49,8 @@ struct SerialPortState {
   bool termination = false;
   char terminator = '\n';
   bool flushOnAccess = false;
+  HAL_DigitalHandle rxClaim = HAL_INVALID_HANDLE;  // ClaimPin entries of rx/tx
+  HAL_DigitalHandle txClaim = HAL_INVALID_HANDLE;
 
   ~SerialPortState() {
     if (installed) {
@@ -57,6 +61,8 @@ struct SerialPortState {
         gpio_reset_pin(static_cast<gpio_num_t>(gpio));
       }
     }
+    ReleasePin(rxClaim, HAL_HandleEnum::SERIAL_PORT);
+    ReleasePin(txClaim, HAL_HandleEnum::SERIAL_PORT);
   }
 };
 
@@ -123,14 +129,6 @@ HAL_SerialPortHandle HAL_InitializeSerialPort(HAL_SerialPort port, int32_t* stat
                                     static_cast<int>(uart), static_cast<int>(uart)));
     return HAL_INVALID_HANDLE;
   }
-  for (int gpio : {config.rx, config.tx}) {
-    if (gpio >= 0) {
-      *status = CheckPinUsable(gpio, "Serial");
-      if (*status != HAL_SUCCESS) {
-        return HAL_INVALID_HANDLE;
-      }
-    }
-  }
   auto resource = serialHandles->Allocate(static_cast<int16_t>(index), "Serial");
   if (!resource) {
     *status = resource.error();
@@ -138,6 +136,25 @@ HAL_SerialPortHandle HAL_InitializeSerialPort(HAL_SerialPort port, int32_t* stat
   }
   auto [handle, state] = *resource;
   state->uart = uart;
+  // claim the pins (released by ~SerialPortState, also on the failure paths below)
+  const char* portName = index == 0 ? "kOnboard" : "kMXP";
+  for (auto [gpio, claim, role] : {std::tuple{config.rx, &state->rxClaim, "RX"},
+                                   std::tuple{config.tx, &state->txClaim, "TX"}}) {
+    if (gpio < 0) {
+      continue;
+    }
+    auto claimed = ClaimPin(gpio, HAL_HandleEnum::SERIAL_PORT, "Serial",
+                            std::format("Serial port {} (UART{} {})", portName,
+                                        static_cast<int>(uart), role));
+    if (!claimed) {
+      serialHandles->Free(handle);
+      *status = claimed.error();
+      return HAL_INVALID_HANDLE;
+    }
+    *claim = *claimed;
+  }
+  state->rx = config.rx;
+  state->tx = config.tx;
   uart_config_t uc{};
   uc.baud_rate = 9600;
   uc.data_bits = UART_DATA_8_BITS;
@@ -160,8 +177,6 @@ HAL_SerialPortHandle HAL_InitializeSerialPort(HAL_SerialPort port, int32_t* stat
                                     EspErrName(err)));
     return HAL_INVALID_HANDLE;
   }
-  state->rx = config.rx;
-  state->tx = config.tx;
   *status = HAL_SUCCESS;
   return handle;
 }

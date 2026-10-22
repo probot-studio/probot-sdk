@@ -7,12 +7,20 @@
 // 80 MHz capture timer of the group. Both edges are captured in an interrupt; the period is
 // rising edge to rising edge and the high time rising to falling edge. Without an edge for
 // 100 ms the signal is treated as constant: frequency 0, output 1.0 or 0.0 from the pin level.
+//
+// ISR vs free: the capture callback may run on the core that registered it while another task
+// frees the input. Its context is therefore never the (heap) DutyInput but a static slot index
+// plus a generation number; the slot outlives every input. Freeing invalidates the slot's
+// generation, deletes the channel and then waits until no callback is inside the slot before the
+// slot can be reused, so a late callback can neither touch freed memory nor write into the next
+// input's slot.
 
 #include "prosdk/hal/DutyCycle.h"
 
 #include <driver/gpio.h>
 #include <driver/mcpwm_cap.h>
 #include <esp_attr.h>
+#include <esp_rom_sys.h>
 #include <esp_timer.h>
 
 #include <atomic>
@@ -31,9 +39,10 @@ using namespace prosdk::hal::esp32;
 namespace {
 
 constexpr int kNumGroups = 2;
+constexpr int kNumSlots = 6;  // capture channels in total
 constexpr uint32_t kStaleMs = 100;
 
-std::mutex gMutex;
+std::mutex gMutex;  // capture timers, slot ownership
 mcpwm_cap_timer_handle_t gCaptureTimers[kNumGroups] = {};
 uint32_t gResolutionHz[kNumGroups] = {};
 
@@ -41,18 +50,35 @@ uint32_t NowMs() {
   return static_cast<uint32_t>(esp_timer_get_time() / 1000);
 }
 
-struct DutyInput final : PinDriver {
-  int gpio = -1;
-  int group = -1;
-  mcpwm_cap_channel_handle_t channel = nullptr;
-  // written by the capture interrupt
+// Capture state written by the interrupt. Static: never freed.
+struct CaptureSlot {
+  bool used = false;                     // gMutex
+  uint32_t nextGeneration = 1;           // gMutex
+  std::atomic<uint32_t> generation{0};   // 0 = no owner: the callback ignores the edge
+  std::atomic<uint32_t> inCallback{0};   // callbacks currently inside this slot
   std::atomic<uint32_t> lastRise{0};
   std::atomic<uint32_t> periodTicks{0};
   std::atomic<uint32_t> highTicks{0};
   std::atomic<uint32_t> lastEdgeMs{0};
   std::atomic<bool> seenRise{false};
+};
+CaptureSlot gSlots[kNumSlots];
+
+// callback context: slot index in the low 3 bits, generation above
+void* MakeContext(int slot, uint32_t generation) {
+  return reinterpret_cast<void*>(static_cast<uintptr_t>((generation << 3) | slot));
+}
+
+struct DutyInput final : PinDriver {
+  int gpio = -1;
+  int group = -1;
+  int slot = -1;
+  mcpwm_cap_channel_handle_t channel = nullptr;
 
   ~DutyInput() override {
+    if (slot >= 0) {
+      gSlots[slot].generation.store(0, std::memory_order_seq_cst);
+    }
     if (channel != nullptr) {
       mcpwm_capture_channel_disable(channel);
       mcpwm_del_capture_channel(channel);
@@ -60,30 +86,71 @@ struct DutyInput final : PinDriver {
     if (IsValidGpio(gpio)) {
       gpio_reset_pin(static_cast<gpio_num_t>(gpio));
     }
+    if (slot >= 0) {
+      // a callback that saw the old generation finishes within microseconds
+      while (gSlots[slot].inCallback.load(std::memory_order_seq_cst) != 0) {
+        esp_rom_delay_us(1);
+      }
+      std::scoped_lock lock(gMutex);
+      gSlots[slot].used = false;
+    }
   }
 
+  const CaptureSlot& State() const { return gSlots[slot]; }
+
   bool Fresh() const {
-    return NowMs() - lastEdgeMs.load(std::memory_order_relaxed) < kStaleMs &&
-           periodTicks.load(std::memory_order_relaxed) != 0;
+    return NowMs() - State().lastEdgeMs.load(std::memory_order_relaxed) < kStaleMs &&
+           State().periodTicks.load(std::memory_order_relaxed) != 0;
   }
 };
 
 bool OnCapture(mcpwm_cap_channel_handle_t, const mcpwm_capture_event_data_t* edata,
                void* context) {
-  auto* in = static_cast<DutyInput*>(context);
-  uint32_t value = edata->cap_value;
-  if (edata->cap_edge == MCPWM_CAP_EDGE_POS) {
-    if (in->seenRise.load(std::memory_order_relaxed)) {
-      in->periodTicks.store(value - in->lastRise.load(std::memory_order_relaxed),
-                            std::memory_order_relaxed);
+  const auto value = reinterpret_cast<uintptr_t>(context);
+  CaptureSlot& in = gSlots[value & 7];
+  in.inCallback.fetch_add(1, std::memory_order_seq_cst);
+  if (in.generation.load(std::memory_order_seq_cst) == static_cast<uint32_t>(value >> 3)) {
+    uint32_t cap = edata->cap_value;
+    if (edata->cap_edge == MCPWM_CAP_EDGE_POS) {
+      if (in.seenRise.load(std::memory_order_relaxed)) {
+        in.periodTicks.store(cap - in.lastRise.load(std::memory_order_relaxed),
+                             std::memory_order_relaxed);
+      }
+      in.lastRise.store(cap, std::memory_order_relaxed);
+      in.seenRise.store(true, std::memory_order_relaxed);
+    } else if (in.seenRise.load(std::memory_order_relaxed)) {
+      in.highTicks.store(cap - in.lastRise.load(std::memory_order_relaxed),
+                         std::memory_order_relaxed);
     }
-    in->lastRise.store(value, std::memory_order_relaxed);
-    in->seenRise.store(true, std::memory_order_relaxed);
-  } else if (in->seenRise.load(std::memory_order_relaxed)) {
-    in->highTicks.store(value - in->lastRise.load(std::memory_order_relaxed),
-                        std::memory_order_relaxed);
+    in.lastEdgeMs.store(NowMs(), std::memory_order_relaxed);
   }
-  in->lastEdgeMs.store(NowMs(), std::memory_order_relaxed);
+  in.inCallback.fetch_sub(1, std::memory_order_seq_cst);
+  return false;
+}
+
+// gMutex held. Takes a free slot, clears its capture state and returns its new generation.
+bool TakeSlot(int* slot, uint32_t* generation) {
+  for (int i = 0; i < kNumSlots; ++i) {
+    CaptureSlot& s = gSlots[i];
+    if (s.used) {
+      continue;
+    }
+    s.used = true;
+    uint32_t gen = s.nextGeneration;
+    s.nextGeneration = (gen + 1) & 0x1FFFFFFF;  // fits above the 3 slot bits
+    if (s.nextGeneration == 0) {
+      s.nextGeneration = 1;
+    }
+    s.lastRise.store(0, std::memory_order_relaxed);
+    s.periodTicks.store(0, std::memory_order_relaxed);
+    s.highTicks.store(0, std::memory_order_relaxed);
+    s.lastEdgeMs.store(0, std::memory_order_relaxed);
+    s.seenRise.store(false, std::memory_order_relaxed);
+    s.generation.store(gen, std::memory_order_seq_cst);
+    *slot = i;
+    *generation = gen;
+    return true;
+  }
   return false;
 }
 
@@ -118,6 +185,12 @@ esp_err_t EnsureCaptureTimer(int group) {
 
 HAL_Status StartCapture(DutyInput& in) {
   std::scoped_lock lock(gMutex);
+  uint32_t generation = 0;
+  if (!TakeSlot(&in.slot, &generation)) {
+    return MakeError(HAL_NO_AVAILABLE_RESOURCES,
+                     std::format("DutyCycle: no capture channel left for GPIO {} (6 inputs)",
+                                 in.gpio));
+  }
   esp_err_t err = ESP_ERR_NOT_FOUND;
   for (int group = 0; group < kNumGroups; ++group) {
     err = EnsureCaptureTimer(group);
@@ -137,7 +210,8 @@ HAL_Status StartCapture(DutyInput& in) {
     }
     mcpwm_capture_event_callbacks_t cbs{};
     cbs.on_cap = &OnCapture;
-    err = mcpwm_capture_channel_register_event_callbacks(in.channel, &cbs, &in);
+    err = mcpwm_capture_channel_register_event_callbacks(in.channel, &cbs,
+                                                         MakeContext(in.slot, generation));
     if (err == ESP_OK) {
       err = mcpwm_capture_channel_enable(in.channel);
     }
@@ -214,7 +288,7 @@ double HAL_GetDutyCycleFrequency(HAL_DutyCycleHandle dutyCycleHandle, int32_t* s
     return 0.0;
   }
   return static_cast<double>(gResolutionHz[in->group]) /
-         static_cast<double>(in->periodTicks.load(std::memory_order_relaxed));
+         static_cast<double>(in->State().periodTicks.load(std::memory_order_relaxed));
 }
 
 double HAL_GetDutyCycleOutput(HAL_DutyCycleHandle dutyCycleHandle, int32_t* status) {
@@ -226,8 +300,8 @@ double HAL_GetDutyCycleOutput(HAL_DutyCycleHandle dutyCycleHandle, int32_t* stat
   if (!in->Fresh()) {
     return gpio_get_level(static_cast<gpio_num_t>(in->gpio)) != 0 ? 1.0 : 0.0;
   }
-  uint32_t period = in->periodTicks.load(std::memory_order_relaxed);
-  uint32_t high = in->highTicks.load(std::memory_order_relaxed);
+  uint32_t period = in->State().periodTicks.load(std::memory_order_relaxed);
+  uint32_t high = in->State().highTicks.load(std::memory_order_relaxed);
   if (high >= period) {
     return 1.0;
   }
@@ -241,7 +315,7 @@ int32_t HAL_GetDutyCycleHighTime(HAL_DutyCycleHandle dutyCycleHandle, int32_t* s
   if (in == nullptr || !in->Fresh()) {
     return 0;
   }
-  uint64_t high = in->highTicks.load(std::memory_order_relaxed);
+  uint64_t high = in->State().highTicks.load(std::memory_order_relaxed);
   return static_cast<int32_t>(high * 1000000000ULL / gResolutionHz[in->group]);
 }
 

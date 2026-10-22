@@ -59,6 +59,7 @@ enum class PinMode : uint8_t {
   kDutyCycle,
   kAnalogInput,
   kAddressableLed,
+  kPeripheral,  // claimed by a UART or the TWAI controller (ClaimPin)
 };
 
 /** Hardware owned by one pin; the destructor releases it (called when the handle is freed). */
@@ -97,6 +98,18 @@ AllocateSmartIo(int32_t gpio, HAL_HandleEnum type, std::string_view what);
 /** Frees a smartIo handle and waits (up to 1 s) until no other thread holds the port. */
 void FreeSmartIo(HAL_DigitalHandle handle, HAL_HandleEnum type,
                  std::shared_ptr<SmartIo>&& port, const char* what);
+
+/**
+ * Claims a GPIO for a peripheral that is not one of the pin APIs (UART, TWAI) after
+ * CheckPinUsable, so DIO/PWM/... on the same GPIO fail with HAL_RESOURCE_IS_ALLOCATED naming
+ * `owner`. `type` is the peripheral's handle type (SERIAL_PORT, CAN). Release with ReleasePin.
+ */
+prosdk::cxx::expected<HAL_DigitalHandle, HAL_Status> ClaimPin(int32_t gpio, HAL_HandleEnum type,
+                                                            std::string_view what,
+                                                            std::string_view owner);
+
+/** Releases a ClaimPin claim (no-op for HAL_INVALID_HANDLE). */
+void ReleasePin(HAL_DigitalHandle handle, HAL_HandleEnum type);
 
 /** Detaches any Arduino peripheral-manager bus from the pin (no-op when unused). */
 void ReleaseArduinoPin(int32_t gpio);

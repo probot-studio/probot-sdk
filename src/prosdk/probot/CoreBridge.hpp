@@ -12,6 +12,16 @@
 //   - reserves the GPIO pins core owns (status LED, RSL, enable line, battery sensor) so the HAL
 //     refuses them.
 //
+// probot::framework::install accepts one framework per program. If another framework was
+// installed first, the bridge reports it through NoteFrameworkInstall (an error on the console at
+// boot, repeated by HAL_Initialize) and the sketch keeps running without prosdk's per-cycle work:
+// it does not abort, so the robot still boots and the Driver Station can show the error.
+//
+// Optional core features are detected with __has_include and compiled out when missing (their
+// CoreOps entries stay null and the archive's defaults apply):
+//   - R6 loop rate (<probot/core/loop_timing.hpp>): PROSDK_CORE_HAS_LOOP_RATE
+//   - R7 opmode list and UTILITY mode (<probot/robot/opmodes.hpp>): PROSDK_CORE_HAS_OPMODES
+//
 // ODR: every function here only calls core's config-free headers, so all definitions are the same
 // in every translation unit. The pin reservation depends on the sketch's configuration macros and
 // therefore runs from an internal-linkage initializer (one per translation unit, the archive keeps
@@ -37,9 +47,57 @@
 #error "prosdk needs probot-core >= 0.4.0 (found older PROBOT_VERSION)."
 #endif
 
+#if __has_include(<probot/core/loop_timing.hpp>)
+#include <probot/core/loop_timing.hpp>
+#define PROSDK_CORE_HAS_LOOP_RATE 1
+#else
+#define PROSDK_CORE_HAS_LOOP_RATE 0
+#endif
+
+#if __has_include(<probot/robot/opmodes.hpp>)
+#include <probot/robot/opmodes.hpp>
+#define PROSDK_CORE_HAS_OPMODES 1
+#else
+#define PROSDK_CORE_HAS_OPMODES 0
+#endif
+
+#include <new>
+
 namespace prosdk::corebridge {
 
 namespace pf = prosdk::platform;
+
+// The archive's copies of core's enums and limits must match core.
+static_assert(static_cast<uint8_t>(probot::robot::Phase::STOPPED) == pf::kCorePhaseStopped &&
+              static_cast<uint8_t>(probot::robot::Phase::AUTO_INIT) == pf::kCorePhaseAutoInit &&
+              static_cast<uint8_t>(probot::robot::Phase::AUTO_RUN) == pf::kCorePhaseAutoRun &&
+              static_cast<uint8_t>(probot::robot::Phase::TELEOP_INIT) ==
+                  pf::kCorePhaseTeleopInit &&
+              static_cast<uint8_t>(probot::robot::Phase::TELEOP_RUN) == pf::kCorePhaseTeleopRun &&
+              static_cast<uint8_t>(probot::robot::Phase::TRANSITION) == pf::kCorePhaseTransition,
+              "probot-core Phase values changed");
+static_assert(static_cast<uint8_t>(probot::robot::OpMode::AUTO) == pf::kCoreModeAuto &&
+                  static_cast<uint8_t>(probot::robot::OpMode::TELEOP) == pf::kCoreModeTeleop,
+              "probot-core OpMode values changed");
+#if PROSDK_CORE_HAS_OPMODES
+static_assert(static_cast<uint8_t>(probot::robot::Phase::UTILITY_INIT) ==
+                      pf::kCorePhaseUtilityInit &&
+                  static_cast<uint8_t>(probot::robot::Phase::UTILITY_RUN) ==
+                      pf::kCorePhaseUtilityRun &&
+                  static_cast<uint8_t>(probot::robot::OpMode::UTILITY) == pf::kCoreModeUtility,
+              "probot-core UTILITY values changed");
+static_assert(probot::robot::OpModeRegistry::kMaxOptions == pf::kCoreOpModeMaxOptions &&
+                  probot::robot::OpModeRegistry::kMaxName == pf::kCoreOpModeMaxName &&
+                  probot::robot::OpModeRegistry::kMaxGroup == pf::kCoreOpModeMaxGroup &&
+                  probot::robot::OpModeRegistry::kMaxDescription ==
+                      pf::kCoreOpModeMaxDescription,
+              "probot-core opmode list limits changed");
+#endif
+#if PROSDK_CORE_HAS_LOOP_RATE
+static_assert(probot::core::kMinLoopPeriodMs == pf::kCoreLoopPeriodMinMs &&
+                  probot::core::kMaxLoopPeriodMs == pf::kCoreLoopPeriodMaxMs,
+              "probot-core loop period limits changed");
+#endif
 
 inline uint8_t Phase() { return static_cast<uint8_t>(probot::ds::phase()); }
 inline uint8_t SelectedMode() { return static_cast<uint8_t>(probot::ds::selectedMode()); }
@@ -166,6 +224,46 @@ inline void DashStats(pf::CoreDashboardStats* out) {
   *out = pf::CoreDashboardStats{s.topics, s.maxTopics, s.bytesUsed, s.bytesMax, s.dropped};
 }
 
+#if PROSDK_CORE_HAS_LOOP_RATE
+inline bool SetLoopPeriodMs(uint32_t ms) { return probot::setLoopPeriodMs(ms); }
+inline uint32_t LoopPeriodMs() { return probot::loopPeriodMs(); }
+inline uint32_t LoopOverruns() { return probot::loopOverruns(); }
+#define PROSDK_CORE_LOOP_RATE_OPS &SetLoopPeriodMs, &LoopPeriodMs, &LoopOverruns
+#else
+#define PROSDK_CORE_LOOP_RATE_OPS nullptr, nullptr, nullptr
+#endif
+
+#if PROSDK_CORE_HAS_OPMODES
+inline bool SetOpModeOptions(const pf::CoreOpModeOption* options, size_t count) {
+  if (count > pf::kCoreOpModeMaxOptions || (count != 0 && options == nullptr)) {
+    return false;
+  }
+  if (count == 0) {
+    return probot::ds::setOpModeOptions(nullptr, 0);
+  }
+  auto* list = new (std::nothrow) probot::ds::OpModeOption[count];
+  if (list == nullptr) {
+    return false;
+  }
+  for (size_t i = 0; i < count; ++i) {
+    list[i] = probot::ds::OpModeOption{options[i].id,
+                                       static_cast<probot::ds::OpMode>(options[i].mode),
+                                       options[i].name, options[i].group,
+                                       options[i].description};
+  }
+  bool ok = probot::ds::setOpModeOptions(list, count);
+  delete[] list;
+  return ok;
+}
+inline uint64_t SelectedOpModeId() { return probot::ds::selectedOpModeId(); }
+inline uint64_t ActiveOpModeId() { return probot::ds::activeOpModeId(); }
+inline bool UtilityAvailable() { return probot::ds::utilityAvailable(); }
+#define PROSDK_CORE_OPMODE_OPS \
+  &SetOpModeOptions, &SelectedOpModeId, &ActiveOpModeId, &UtilityAvailable
+#else
+#define PROSDK_CORE_OPMODE_OPS nullptr, nullptr, nullptr, nullptr
+#endif
+
 inline bool Install() {
   static constexpr pf::CoreOps kOps{
       pf::kCoreOpsAbiVersion, sizeof(pf::CoreOps), PROBOT_VERSION, PROBOT_VERSION_STRING,
@@ -175,15 +273,25 @@ inline bool Install() {
       &ConsoleWrite,
       &DashPublish, &DashUnpublish, &DashSet, &DashSetProperties, &DashSetFlags, &DashHasSchema,
       &DashAddSchema, &DashDrainWrites, &DashRejectWrite, &DashStats,
+      PROSDK_CORE_LOOP_RATE_OPS,
+      PROSDK_CORE_OPMODE_OPS,
   };
   bool ok = pf::InstallCoreOps(&kOps);
-  probot::framework::install(probot::framework::Hooks{
+  bool hooks = probot::framework::install(probot::framework::Hooks{
       &pf::detail::Boot, &pf::detail::PreCycle, &pf::detail::PostCycle,
       &pf::detail::EmergencyStop});
-  return ok;
+  pf::NoteFrameworkInstall(hooks);
+  return ok && hooks;
 }
 
-/** True once the bridge is installed (evaluated during static initialization). */
+#undef PROSDK_CORE_LOOP_RATE_OPS
+#undef PROSDK_CORE_OPMODE_OPS
+
+/**
+ * True once the bridge is installed: the CoreOps table and prosdk's framework hooks (evaluated
+ * once per program during static initialization; an inline variable, so every translation unit
+ * that includes <prosdk.h> shares it).
+ */
 inline const bool kInstalled = Install();
 
 namespace {

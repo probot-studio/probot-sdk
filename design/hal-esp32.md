@@ -27,7 +27,10 @@ Driver Station (design/PORT.md section 8).
     `PROBOT_RSL_PIN`, `PROBOT_ESTOP_ENABLE_PIN`, `PROBOT_BATTERY_ADC_PIN`, the battery I2C pins),
     reported by the sketch-side bridge (`ReserveCorePins`);
   - is already attached to an Arduino peripheral (`perimanGetPinBusType`, e.g. a pin used by
-    `Wire`, `Serial1`, `ledcAttach`, `analogRead` outside the HAL).
+    `Wire`, `Serial1`, `ledcAttach`, `analogRead` outside the HAL);
+  - is the RX/TX pin of a serial port the HAL opened or the TX/RX pin of the started CAN bus:
+    these claim their pins in `smartIoHandles` (`ClaimPin`, the owner shows in the error message)
+    and release them on close (serial) or never (CAN runs until reboot).
 - Free/Clean releases everything the HAL created: the hardware unit (MCPWM timer/generator, PCNT
   unit, capture channel, RMT channel, UART driver, TWAI driver), the Arduino peripheral-manager
   attachment, and the pin, which returns to `gpio_reset_pin` state (input with pull-up). After an
@@ -116,6 +119,10 @@ Driver Station (design/PORT.md section 8).
   from the driver).
 - Frequency = 1 / (rising-to-rising period); output = high time / period; high time in ns.
 - No edge for 100 ms: frequency 0, output 1.0 or 0.0 from the pin level, high time 0.
+- The capture ISR writes into one of 6 static slots and checks the slot's generation (packed into
+  the callback context) first; Free clears the generation, deletes the channel and waits for a
+  running callback to finish before the slot is reused, so a late interrupt never touches freed
+  memory.
 
 ### Analog inputs (AnalogInput.cpp)
 - Channel = GPIO 1..10 (ADC1 channels 0..9). ADC2 (GPIO 11..20) cannot be read while WiFi is on;
@@ -145,7 +152,8 @@ Driver Station (design/PORT.md section 8).
 ### Serial (SerialPort.cpp)
 - kOnboard = UART1 (default RX 15 / TX 16), kMXP = UART2 (no default pins:
   `prosdk::platform::SetSerialPins(1, rx, tx)`). kUSB1/kUSB2: `HAL_SERIAL_PORT_NOT_FOUND`
-  (UART0/USB are the console). A UART that `Serial1`/`Serial2` already opened is refused.
+  (UART0/USB are the console). A UART that `Serial1`/`Serial2` already opened is refused. The RX
+  and TX pins are claimed like DIO pins while the port is open (DIO/PWM on them is refused).
 - 1 KB RX and TX buffers. Defaults 9600 8N1, no flow control, read timeout 0.
 - Supported: baud rate, data bits 5..8, parity none/odd/even (mark/space refused), stop bits
   1/1.5/2, read timeout, termination character (reads stop after it), write buffer flush on
@@ -156,7 +164,8 @@ Driver Station (design/PORT.md section 8).
 - TWAI (bus 0 only) with an external transceiver. Pins and bit rate from
   `prosdk::platform::SetCanConfig(tx, rx, bitrate)`: 125, 250 or 500 kbit/s or 1 Mbit/s (the
   default). The bus starts on the first CAN call; without a configuration CAN calls fail with a
-  message.
+  message. Starting claims the TX and RX pins (DIO/PWM on them is refused); the bus is never
+  stopped, so the claim lasts until reboot.
 - Classic CAN only: 0..8 data bytes; CAN FD frames are refused. 11-bit and 29-bit ids, RTR.
 - One `prosdk-can` thread (FreeRTOS priority 3, the prosdk thread default) receives frames (latest frame per id for
   `HAL_ReadCAN*`, plus stream sessions with overrun reporting), sends periodic frames and recovers
@@ -172,10 +181,21 @@ Driver Station (design/PORT.md section 8).
   new snapshot when a packet arrived or the control word changed and wakes the new-data events.
 - Control word: robot mode from core's phase (AUTO_* autonomous, TELEOP_* teleop, otherwise the
   mode selected on the Driver Station); enabled = `outputsEnabled()`; e-stop latched; DS attached
-  = a Driver Station client is connected; FMS never. Opmode: the first option registered with
-  `HAL_SetOpModeOptions` for the robot mode (core selects only auto/teleop; the core opmode list,
-  core-requests.md R7, is not wired yet).
-- Joysticks: core gamepad port n = HAL joystick n (up to 6). The raw browser gamepad is remapped
+  = a Driver Station client is connected; FMS never. UTILITY_INIT/UTILITY_RUN map to WPILib's
+  utility mode.
+- Opmodes (core-requests.md R7): `HAL_SetOpModeOptions` replaces core's opmode list. The WPILib
+  opmode id (robot mode in bits 56-57, name hash below) is the core option id; the mode is
+  autonomous, teleop or utility (other modes are skipped with a console warning); name, group and
+  description are cut to core's limits (63/63/255 bytes, at a UTF-8 boundary) and the list to 64
+  options, each with a console warning; text and background colors are dropped (the browser DS
+  has no colored entries). A refused list returns `HAL_NO_AVAILABLE_RESOURCES` and the previous
+  list stays. The control word's opmode is core's `activeOpModeId()` (latched at INIT) while an
+  INIT or RUN phase is active and `selectedOpModeId()` while idle, so `OpModeRobot` constructs the
+  selected opmode while disabled; an id whose mode differs from the control word's robot mode
+  reports no opmode. There is no "first registered option" fallback.
+- Joysticks: core gamepad port n = HAL joystick n. The backend reads ports 0-5, but core's
+  `rawGamepad` (R2) delivers port 0 only, so joysticks 1-5 report no data until core R8 (more
+  gamepads) lands. The raw browser gamepad is remapped
   through core's active mapping profile to WPILib's Gamepad (SDL) layout: buttons FACE_DOWN,
   FACE_RIGHT, FACE_LEFT, FACE_UP, BACK, GUIDE, START, LEFT_STICK, RIGHT_STICK, LEFT_BUMPER,
   RIGHT_BUMPER, DPAD_UP/DOWN/LEFT/RIGHT (0..14); axes LEFT_X, LEFT_Y, RIGHT_X, RIGHT_Y (Y down
@@ -189,8 +209,11 @@ Driver Station (design/PORT.md section 8).
 - `HAL_GetVinVoltage` = core's battery reading (0 without a configured battery sensor:
   `PROBOT_BATTERY_ADC_PIN` or `PROBOT_BATTERY_INA`). Brownout from it with hysteresis (defaults
   6.75 V / 7.25 V, settable 4..13 V; never browned out below 0.5 V, i.e. no sensor).
-- 3.3 V rail: fixed 3.3 V and active; current, fault counts and enabling it are not available
-  (`HAL_HANDLE_ERROR`). `HAL_GetCPUTemp` = the chip's temperature sensor.
+- 3.3 V rail (the module's regulator, no monitoring): `HAL_GetUserVoltage3V3` 3.3 and
+  `HAL_GetUserActive3V3` true, `HAL_GetUserCurrentFaults3V3` 0 and `HAL_ResetUserCurrentFaults`
+  succeed (fixed values with `HAL_SUCCESS`); `HAL_GetUserCurrent3V3` and
+  `HAL_SetUserRailEnabled3V3` report `HAL_HANDLE_ERROR` (no current sensor, the rail cannot be
+  switched). `HAL_GetCPUTemp` = the chip's temperature sensor.
 
 ### Threads (Threads.cpp)
 - WPILib's Linux real-time priorities map to FreeRTOS: 0 -> 1 (core's user task level),
@@ -212,6 +235,17 @@ Driver Station (design/PORT.md section 8).
   device `*Sim` classes link but do nothing on the robot.
 - Runtime type `HAL_RUNTIME_SYSTEMCORE` (the closest real-robot type); serial number from the
   WiFi MAC.
+- `HAL_GetTeamNumber` is always 0: a Probot has no team number; the robot is found through its own
+  WiFi access point, not a team-number address.
+- `HAL_GetRSLState` and `HAL_GetCommsDisableCount` report `HAL_HANDLE_ERROR` (as on systemcore)
+  until probot-core exposes them (core-requests.md R12: `rslState()`, `commsDisableCount()`).
+- Framework install: `<prosdk.h>` installs prosdk's hooks into probot-core at static
+  initialization. If another framework already holds core's hooks (`probot::framework::install`
+  returns false), prosdk prints an error to the console at once and again from `HAL_Initialize`,
+  and does not abort: the sketch keeps running, but prosdk's per-cycle work (Driver Station
+  snapshots, robot loop) never runs and PWM outputs stay off (the output gate also requires the
+  install, since the e-stop and pre-cycle hooks that guard it are not called). A sketch that does
+  not include `<prosdk.h>` gets the same `HAL_Initialize` error.
 
 ## Not supported
 

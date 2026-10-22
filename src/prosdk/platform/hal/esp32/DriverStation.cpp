@@ -9,11 +9,15 @@
 // makes the latest snapshot the one the getters return, as on the other backends.
 //
 // Mapping:
-//  - control word: robot mode from core's phase (AUTO_* autonomous, TELEOP_* teleop, otherwise
-//    the mode selected on the Driver Station); enabled = core outputsEnabled(); e-stop latched;
-//    DS attached = a Driver Station client is connected; never FMS attached. The opmode is the
-//    first option registered with HAL_SetOpModeOptions for that robot mode (core selects only
-//    the robot mode).
+//  - control word: robot mode from core's phase (AUTO_* autonomous, TELEOP_* teleop, UTILITY_*
+//    utility, otherwise the mode selected on the Driver Station); enabled = core outputsEnabled()
+//    (true only in a started RUN phase); e-stop latched; DS attached = a Driver Station client is
+//    connected; never FMS attached.
+//  - opmodes (probot-core R7): HAL_SetOpModeOptions publishes the options as core's opmode list
+//    (core option id = WPILib opmode id; mode from the id's robot-mode bits). The control word
+//    carries core's activeOpModeId() (latched at INIT) in the INIT and RUN phases and its
+//    selectedOpModeId() while idle, so OpModeRobot constructs the selected opmode while disabled
+//    and starts it on enable, as with the FRC Driver Station.
 //  - joysticks: core gamepad port n is HAL joystick n. Raw browser (W3C) buttons and axes are
 //    remapped through core's active mapping profile into WPILib's Gamepad order (SDL): buttons
 //    FACE_DOWN..DPAD_RIGHT (0..14), axes LEFT_X, LEFT_Y, RIGHT_X, RIGHT_Y, LEFT_TRIGGER,
@@ -205,18 +209,47 @@ void ConvertGamepad(const CoreGamepad& pad, HAL_JoystickAxes* axes, HAL_Joystick
                 m.name != nullptr ? m.name : "Probot gamepad");
 }
 
-HAL_RobotMode RobotModeFromCore(const CoreOps& ops) {
-  switch (ops.phase()) {
+HAL_RobotMode RobotModeFromCoreMode(uint8_t mode) {
+  switch (mode) {
+    case prosdk::platform::kCoreModeAuto:
+      return HAL_ROBOT_MODE_AUTONOMOUS;
+    case prosdk::platform::kCoreModeUtility:
+      return HAL_ROBOT_MODE_UTILITY;
+    default:
+      return HAL_ROBOT_MODE_TELEOPERATED;
+  }
+}
+
+HAL_RobotMode RobotModeFromCore(const CoreOps& ops, uint8_t phase) {
+  switch (phase) {
     case prosdk::platform::kCorePhaseAutoInit:
     case prosdk::platform::kCorePhaseAutoRun:
       return HAL_ROBOT_MODE_AUTONOMOUS;
     case prosdk::platform::kCorePhaseTeleopInit:
     case prosdk::platform::kCorePhaseTeleopRun:
       return HAL_ROBOT_MODE_TELEOPERATED;
+    case prosdk::platform::kCorePhaseUtilityInit:
+    case prosdk::platform::kCorePhaseUtilityRun:
+      return HAL_ROBOT_MODE_UTILITY;
     default:
-      return ops.selectedMode() == prosdk::platform::kCoreModeAuto
-                 ? HAL_ROBOT_MODE_AUTONOMOUS
-                 : HAL_ROBOT_MODE_TELEOPERATED;
+      return RobotModeFromCoreMode(ops.selectedMode());
+  }
+}
+
+// WPILib opmode robot mode -> core mode; false for HAL_ROBOT_MODE_UNKNOWN.
+bool CoreModeFromRobotMode(HAL_RobotMode mode, uint8_t* out) {
+  switch (mode) {
+    case HAL_ROBOT_MODE_AUTONOMOUS:
+      *out = prosdk::platform::kCoreModeAuto;
+      return true;
+    case HAL_ROBOT_MODE_TELEOPERATED:
+      *out = prosdk::platform::kCoreModeTeleop;
+      return true;
+    case HAL_ROBOT_MODE_UTILITY:
+      *out = prosdk::platform::kCoreModeUtility;
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -267,9 +300,6 @@ class ProbotCoreDs final : public MrcLibDs {
   prosdk::util::EventVector m_newDataEvents;
   BackendPrintFunction m_backendPrintFunc;
 
-  std::mutex m_optionsMutex;
-  std::vector<int64_t> m_opModeIds;  // HAL_OpModeOption::id of the registered options
-
   std::mutex m_cacheMutex;
   Snapshot m_latest;   // written by Poll
   Snapshot m_current;  // what the getters return (after HAL_RefreshDSData)
@@ -299,17 +329,15 @@ HAL_ControlWord ProbotCoreDs::MakeControlWord(const CoreOps& ops) {
     word.value = 0;
     return word;
   }
-  HAL_RobotMode mode = RobotModeFromCore(ops);
-  int64_t hash = 0;
-  {
-    std::scoped_lock lock(m_optionsMutex);
-    for (int64_t id : m_opModeIds) {
-      if (HAL_OpMode_GetRobotMode(id) == mode) {
-        hash = HAL_OpMode_GetHash(id);
-        break;
-      }
-    }
-  }
+  const uint8_t phase = ops.phase();
+  const HAL_RobotMode mode = RobotModeFromCore(ops, phase);
+  // INIT/RUN: the opmode the run was INITed with; idle: the Driver Station's current choice
+  const bool active =
+      prosdk::platform::IsCoreInitPhase(phase) || prosdk::platform::IsCoreRunPhase(phase);
+  const int64_t id =
+      static_cast<int64_t>(active ? ops.activeOpModeId() : ops.selectedOpModeId());
+  // core ids are WPILib ids (HAL_SetOpModeOptions); one of another mode is never reported
+  const int64_t hash = id != 0 && HAL_OpMode_GetRobotMode(id) == mode ? HAL_OpMode_GetHash(id) : 0;
   return HAL_MakeControlWord(hash, mode, ops.outputsEnabled(), ops.isEStopped(), false, true);
 }
 
@@ -395,10 +423,36 @@ int32_t ProbotCoreDs::setOpModeOptions(const struct HAL_OpModeOption* options, i
   if (count < 0 || count > 1000 || (count != 0 && !options)) {
     return HAL_PARAMETER_OUT_OF_RANGE;
   }
-  std::scoped_lock lock(m_optionsMutex);
-  m_opModeIds.clear();
+  // core option id = WPILib opmode id (robot mode in bits 56-57, name hash below); textColor
+  // and backgroundColor have no place in core's list and are dropped
+  struct Strings {
+    std::string name, group, description;
+  };
+  std::vector<Strings> strings;
+  std::vector<prosdk::platform::CoreOpModeOption> list;
+  strings.reserve(count);
+  list.reserve(count);
   for (int32_t i = 0; i < count; ++i) {
-    m_opModeIds.push_back(options[i].id);
+    const HAL_OpModeOption& o = options[i];
+    auto text = [](const WPI_String& s) {
+      return s.str != nullptr ? std::string{s.str, s.len} : std::string{};
+    };
+    Strings& st = strings.emplace_back(Strings{text(o.name), text(o.group), text(o.description)});
+    uint8_t mode = 0;
+    if (!CoreModeFromRobotMode(HAL_OpMode_GetRobotMode(o.id), &mode) ||
+        HAL_OpMode_GetHash(o.id) == 0) {
+      esp32::Log(std::format("Driver Station: opmode \"{}\" has no robot mode or name hash "
+                             "(id {:#x}); not listed",
+                             st.name, o.id));
+      continue;
+    }
+    list.push_back(prosdk::platform::CoreOpModeOption{
+        static_cast<uint64_t>(o.id), mode, st.name.c_str(), st.group.c_str(),
+        st.description.c_str()});
+  }
+  // validates, truncates to core's limits (with console warnings) and publishes
+  if (!prosdk::platform::SetOpModeOptions(list.data(), list.size())) {
+    return HAL_NO_AVAILABLE_RESOURCES;
   }
   return 0;
 }

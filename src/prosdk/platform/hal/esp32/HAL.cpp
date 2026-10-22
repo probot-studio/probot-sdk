@@ -20,6 +20,7 @@
 #include "Esp32Internal.hpp"
 #include "prosdk/hal/CAN.h"
 #include "prosdk/hal/Errors.h"
+#include "prosdk/platform/CoreOps.hpp"
 #include "prosdk/util/mutex.hpp"
 #include "prosdk/util/string.h"
 #include "prosdk/util/timestamp.hpp"
@@ -144,6 +145,7 @@ void HAL_GetComments(struct WPI_String* comments) {
   comments->str = nullptr;
 }
 
+// No team number: the robot is identified by its WiFi AP, not an FRC team (design/hal-esp32.md).
 int32_t HAL_GetTeamNumber(void) {
   return 0;
 }
@@ -159,6 +161,8 @@ HAL_Bool HAL_GetSystemActive(int32_t* status) {
   return esp32::OutputsEnabled();
 }
 
+// Pending probot-core R12 (commsDisableCount, rslState; design/core-requests.md): until core
+// exposes them both report HAL_HANDLE_ERROR, as on systemcore.
 int32_t HAL_GetCommsDisableCount(int32_t* status) {
   prosdk::hal::init::CheckInit();
   *status = HAL_HANDLE_ERROR;
@@ -188,6 +192,16 @@ HAL_Bool HAL_Initialize(void) {
   prosdk::hal::init::InitializeHAL();
 
   prosdk::hal::init::HAL_IsInitialized.store(true);
+
+  if (!prosdk::platform::HasCoreOps()) {
+    esp32::Log(
+        "ERROR: probot-core is not connected (include <prosdk.h> in the sketch): no Driver "
+        "Station, PWM outputs stay off");
+  } else if (!prosdk::platform::FrameworkInstalled()) {
+    esp32::Log(
+        "ERROR: another framework owns probot-core's hooks (probot::framework::install failed): "
+        "the robot loop and Driver Station input do not run, PWM outputs stay off");
+  }
 
   prosdk::hal::InitializeDriverStation();
 

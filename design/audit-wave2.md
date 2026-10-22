@@ -282,6 +282,12 @@ outside section 10.
    option per mode. `hal-esp32.md` records this as "not wired yet": a pending item, not an exclusion.
 10. The 48 upstream non-C++ files in section 6 (bookkeeping only).
 
+Follow-up (wave 3, 2026-10-22): items 1, 2, 7, 8 and 9 are now recorded in `hal-esp32.md`
+(team number 0; RSL state and comms-disable count pending core R12; the actual 3.3 V rail
+behavior; joysticks 1-5 empty until core R8). Item 9 is wired: the HAL opmode list goes to core
+R7, the control word reports core's active/selected opmode id, UTILITY maps to core's UTILITY
+phases, and the "first registered option" fallback is gone.
+
 ### 7.2 Reason recorded elsewhere (hal-esp32.md, API-DIFFERENCES.md, PORT.md section 7), not in section 10
 
 1. CTRE PCM (22 functions), REV PH (26) and PDP/PDH (25) are stubbed on ESP32. Reason: they need the

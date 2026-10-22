@@ -152,6 +152,25 @@ void FreeSmartIo(HAL_DigitalHandle handle, HAL_HandleEnum type,
   port.reset();
 }
 
+prosdk::cxx::expected<HAL_DigitalHandle, HAL_Status> ClaimPin(int32_t gpio, HAL_HandleEnum type,
+                                                            std::string_view what,
+                                                            std::string_view owner) {
+  auto resource = AllocateSmartIo(gpio, type, what);
+  if (!resource) {
+    return prosdk::cxx::unexpected(resource.error());
+  }
+  auto& [handle, port] = *resource;
+  port->mode = PinMode::kPeripheral;
+  port->previousAllocation = owner;
+  return handle;
+}
+
+void ReleasePin(HAL_DigitalHandle handle, HAL_HandleEnum type) {
+  if (handle != HAL_INVALID_HANDLE) {
+    smartIoHandles->Free(handle, type);
+  }
+}
+
 void ReleaseArduinoPin(int32_t gpio) {
   if (IsValidGpio(gpio) &&
       perimanGetPinBusType(static_cast<uint8_t>(gpio)) != ESP32_BUS_TYPE_INIT) {
@@ -174,8 +193,11 @@ bool EStopped() {
   return gEStop.load(std::memory_order_acquire) || platform::EmergencyStopped();
 }
 
+// Without prosdk's framework hooks (another framework owns core's hooks) the e-stop callback
+// and the pre-cycle gate never run, so the gate stays closed.
 bool OutputsEnabled() {
-  return !EStopped() && platform::GetCoreOps().outputsEnabled();
+  return !EStopped() && platform::FrameworkInstalled() &&
+         platform::GetCoreOps().outputsEnabled();
 }
 
 void UpdateOutputGate() {
