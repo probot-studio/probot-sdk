@@ -14,6 +14,9 @@ namespace prosdk::platform {
  *   - registers prosdk::backend::ProbotTelemetryBackend("/Telemetry") as the telemetry backend
  *     for "" (all paths) and prosdk::backend::ProbotTunableBackend("/Tunables") as the tunable
  *     backend for "", replacing what was registered for "" before;
+ *   - shows prosdk::Preferences as robust tunables /Preferences/<key> (own tunable backend for
+ *     "/Preferences"); Driver Station edits are written back to the Preferences store
+ *     (prosdk/platform/dashboard/DashboardPreferences.hpp);
  *   - installs the alert tracking backend: active alerts appear under /Telemetry/Alerts/<group>
  *     (.type "Alerts", string[] errors/warnings/infos, newest first);
  *   - adds a pre-cycle callback (Driver Station writes are drained into the tunable backend,

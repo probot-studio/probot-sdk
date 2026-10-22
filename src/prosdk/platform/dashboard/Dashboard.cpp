@@ -8,6 +8,7 @@
 #include "prosdk/platform/Console.hpp"
 #include "prosdk/platform/CoreOps.hpp"
 #include "prosdk/platform/dashboard/DashboardAlerts.hpp"
+#include "prosdk/platform/dashboard/DashboardPreferences.hpp"
 #include "prosdk/platform/dashboard/DashboardStore.hpp"
 #include "prosdk/platform/dashboard/ProbotTelemetryBackend.hpp"
 #include "prosdk/platform/dashboard/ProbotTunableBackend.hpp"
@@ -38,6 +39,7 @@ void RegisterDashboardBackends() {
         "", std::make_shared<prosdk::backend::ProbotTelemetryBackend>("/Telemetry"));
     prosdk::tunables::TunableRegistry::RegisterBackend(
         "", std::make_shared<prosdk::backend::ProbotTunableBackend>("/Tunables"));
+    dashboard::TrackPreferences();
     dashboard::TrackAlerts();
     if (!AddCycleCallback(CyclePhase::kPre, DashboardPreCycle, nullptr) ||
         !AddCycleCallback(CyclePhase::kPost, DashboardPostCycle, nullptr)) {

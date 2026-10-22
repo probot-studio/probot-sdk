@@ -15,6 +15,10 @@
 //   Host   memory only, unless SetPreferencesFile() names a JSON file, which is then loaded on
 //          first use and rewritten on every change.
 // The store is loaded on first use. Thread-safe.
+//
+// Driver Station: once the robot host registers the dashboard backends, every key is also a
+// tunable /Preferences/<key> on the Driver Station; edits there are written back through Set()
+// (prosdk/platform/dashboard/DashboardPreferences.hpp).
 
 #pragma once
 
@@ -22,6 +26,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -56,5 +61,15 @@ void SetPreferencesFile(std::string_view path);
 
 /** Drops the in-memory copy; the next access loads the persisted state again. */
 void Reload();
+
+/**
+ * Change counter: increases whenever a key is added, changed or removed (and on Reload()). Cheap;
+ * does not load the store. The Driver Station mirror (prosdk/platform/dashboard/
+ * DashboardPreferences.hpp) re-reads Entries() only when it changed.
+ */
+uint64_t Revision();
+
+/** All keys with their values, sorted by key (loads the store on first use). */
+std::vector<std::pair<std::string, Value>> Entries();
 
 }  // namespace prosdk::platform::prefs

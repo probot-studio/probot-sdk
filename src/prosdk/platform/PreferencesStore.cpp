@@ -2,6 +2,7 @@
 
 #include "prosdk/platform/PreferencesStore.hpp"
 
+#include <atomic>
 #include <cstdio>
 #include <limits>
 #include <map>
@@ -34,6 +35,12 @@ struct Store {
 Store& GetStore() {
   static Store store;
   return store;
+}
+
+std::atomic<uint64_t> gRevision{0};
+
+void Changed() {
+  gRevision.fetch_add(1, std::memory_order_acq_rel);
 }
 
 std::string Serialize(const std::map<std::string, Value, std::less<>>& values) {
@@ -249,6 +256,7 @@ void Set(std::string_view key, Value value) {
   } else {
     values.emplace(std::string{key}, std::move(value));
   }
+  Changed();
   SavePersisted(store);
 }
 
@@ -260,6 +268,7 @@ void Init(std::string_view key, Value value) {
     return;
   }
   values.emplace(std::string{key}, std::move(value));
+  Changed();
   SavePersisted(store);
 }
 
@@ -279,6 +288,7 @@ void Remove(std::string_view key) {
     return;
   }
   values.erase(it);
+  Changed();
   SavePersisted(store);
 }
 
@@ -295,6 +305,18 @@ void Reload() {
   std::scoped_lock lock{store.mutex};
   store.loaded = false;
   store.values.clear();
+  Changed();
+}
+
+uint64_t Revision() {
+  return gRevision.load(std::memory_order_acquire);
+}
+
+std::vector<std::pair<std::string, Value>> Entries() {
+  auto& store = GetStore();
+  std::scoped_lock lock{store.mutex};
+  auto& values = Loaded(store).values;
+  return {values.begin(), values.end()};
 }
 
 }  // namespace prosdk::platform::prefs
