@@ -224,7 +224,6 @@ void InitializeI2C();
 void InitializeMain();
 void InitializeNotifier();
 void InitializePWM();
-void InitializePower();
 void InitializeSerialPort();
 void InitializeSmartIo();
 void InitializeDriverStationPump();

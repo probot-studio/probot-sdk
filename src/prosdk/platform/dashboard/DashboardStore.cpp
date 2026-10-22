@@ -122,11 +122,11 @@ void ReportSchemaRefused(std::string_view name, size_t size) noexcept {
       text = std::format(
           "[prosdk] dashboard schema not stored: '{}' ({} bytes): PROBOT_DASH_MAX_SCHEMAS "
           "reached, PROBOT_DASH_POOL_BYTES exhausted, or larger than PROBOT_DASH_MAX_VALUE "
-          "(this probot-core limits schemas by the value size, 1024 bytes by default; a protobuf "
-          "descriptor needs #define PROBOT_DASH_MAX_VALUE 2048 before #include <prosdk.h>, or a "
+          "(this probot-core limits schemas by the value size, 1024 bytes by default: "
+          "#define PROBOT_DASH_MAX_VALUE {} or more before #include <prosdk.h>, or use a "
           "probot-core with PROBOT_DASH_MAX_SCHEMA_BYTES). Values of this type cannot be decoded "
           "on the Driver Station\n",
-          name, size);
+          name, size, size);
     }
     ConsoleWrite(text, ConsoleLevel::kWarning);
   } catch (...) {

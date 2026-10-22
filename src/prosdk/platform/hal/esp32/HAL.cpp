@@ -49,7 +49,6 @@ namespace init {
 [[gnu::weak]] void InitializeEncoder();
 [[gnu::weak]] void InitializeI2C();
 [[gnu::weak]] void InitializeNotifier();
-[[gnu::weak]] void InitializePower();
 [[gnu::weak]] void InitializeSerialPort();
 
 std::atomic_bool HAL_IsInitialized{false};
@@ -77,7 +76,6 @@ void InitializeHAL() {
   InitializeMain();
   optional(InitializeNotifier);
   InitializePWM();
-  optional(InitializePower);
   optional(InitializeSerialPort);
   InitializeDriverStationPump();
 }

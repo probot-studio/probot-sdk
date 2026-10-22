@@ -18,6 +18,8 @@
 #include "prosdk/math/geometry/Translation2d.hpp"
 #include "prosdk/math/geometry/proto/Translation2dProto.hpp"
 #include "prosdk/math/geometry/struct/Translation2dStruct.hpp"
+#include "prosdk/math/kinematics/ChassisVelocities.hpp"
+#include "prosdk/math/kinematics/proto/ChassisVelocitiesProto.hpp"
 #include "prosdk/telemetry/Telemetry.hpp"
 #include "prosdk/telemetry/TelemetryEntry.hpp"
 #include "prosdk/util/SmallVector.hpp"
@@ -379,9 +381,10 @@ TEST_CASE_METHOD(DashboardFixture, "ProbotTelemetryBackend reports overlong name
 }
 
 namespace {
-// Adds Translation2d's protobuf descriptors twice; true if any was stored.
-bool AddTranslationDescriptors(prosdk::backend::ProbotTelemetryBackend& telemetry) {
-  prosdk::util::ProtobufMessage<prosdk::math::Translation2d> message;
+// Adds T's protobuf descriptors twice; true if any was stored.
+template <typename T>
+bool AddDescriptors(prosdk::backend::ProbotTelemetryBackend& telemetry) {
+  prosdk::util::ProtobufMessage<T> message;
   for (int i = 0; i < 2; ++i) {
     message.ForEachProtobufDescriptor(
         [&](std::string_view filename) { return telemetry.HasSchema(filename); },
@@ -397,6 +400,10 @@ bool AddTranslationDescriptors(prosdk::backend::ProbotTelemetryBackend& telemetr
       },
       [](std::string_view, std::span<const uint8_t>) {});
   return stored;
+}
+
+bool AddTranslationDescriptors(prosdk::backend::ProbotTelemetryBackend& telemetry) {
+  return AddDescriptors<prosdk::math::Translation2d>(telemetry);
 }
 }  // namespace
 
@@ -417,17 +424,33 @@ TEST_CASE_METHOD(DashboardFixture,
 TEST_CASE_METHOD(DashboardFixture,
                  "ProbotTelemetryBackend reports a descriptor over an older core's value limit",
                  "[prosdk][dashboard][telemetry]") {
-  // a core without R13 limits schemas by PROBOT_DASH_MAX_VALUE (1024): the old advice
+  // a core without R13 limits schemas by PROBOT_DASH_MAX_VALUE (1024): advice with the size
+  // (geometry2d.proto, 1360 bytes)
   fake::SetMaxSchemaBytes(0);
   CHECK_FALSE(AddTranslationDescriptors(*telemetry));
   CHECK(CountOf(fake::Console(), "dashboard schema not stored") == 1);
-  CHECK(CountOf(fake::Console(), "#define PROBOT_DASH_MAX_VALUE 2048") == 1);
+  CHECK(CountOf(fake::Console(), "#define PROBOT_DASH_MAX_VALUE 1360 or more") == 1);
   // ... and the old workaround still works there
   fake::Reset();
   dash::ResetForTest();
   fake::SetMaxSchemaBytes(0);
   fake::SetMaxValue(2048);
   CHECK(AddTranslationDescriptors(*telemetry));
+  CHECK(CountOf(fake::Console(), "[prosdk]") == 0);
+}
+
+TEST_CASE_METHOD(DashboardFixture,
+                 "ProbotTelemetryBackend needs a larger schema limit for kinematics.proto",
+                 "[prosdk][dashboard][telemetry]") {
+  // kinematics.proto's descriptor (4332 bytes, the largest in wpimath) is over core's default
+  // PROBOT_DASH_MAX_SCHEMA_BYTES (4096): refused and reported with its size; 8192 stores it
+  CHECK_FALSE(AddDescriptors<prosdk::math::ChassisVelocities>(*telemetry));
+  CHECK(CountOf(fake::Console(),
+                "has 4332 bytes, more than PROBOT_DASH_MAX_SCHEMA_BYTES (4096)") == 1);
+  fake::Reset();
+  dash::ResetForTest();
+  fake::SetMaxSchemaBytes(8192);
+  CHECK(AddDescriptors<prosdk::math::ChassisVelocities>(*telemetry));
   CHECK(CountOf(fake::Console(), "[prosdk]") == 0);
 }
 

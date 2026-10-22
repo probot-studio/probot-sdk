@@ -6,7 +6,8 @@
 #            tools/upstream/arduino-macros.txt), the precompiled archive and the header check
 #            (every public header after #include <Arduino.h>, exact Arduino flags)
 #   examples: the archive, every examples/* sketch and the HAL link test
-#            (tools/build/hal_link_test.py) compiled against probot-core at PROBOT_CORE_REF
+#            (tools/build/hal_link_test.py) compiled against probot-core at PROBOT_CORE_REF, and
+#            the HAL link test again against PROBOT_CORE_OLDEST_REF (the bridge's fallbacks)
 #   qemu:    manual only (workflow_dispatch): the archive and the on-target smoke test in
 #            Espressif's QEMU (tools/qemu/run.sh, test/target/README.md), two boots
 name: CI
@@ -22,6 +23,9 @@ env:
   ARDUINO_ESP32_VERSION: "3.3.10"
   # probot-core branch or tag the sketches link against (the only place it is named)
   PROBOT_CORE_REF: "feat/small-items"
+  # oldest probot-core the bridge supports (framework API and dashboard store, before R6-R13):
+  # building against it compiles every fallback branch of src/prosdk/probot/CoreBridge.hpp
+  PROBOT_CORE_OLDEST_REF: "feat/dashboard-store"
 
 jobs:
   host:
@@ -119,6 +123,19 @@ jobs:
         run: >-
           python3 tools/build/hal_link_test.py --out .build/hal-link --compile
           --core "$GITHUB_WORKSPACE/.upstream/probot-core"
+
+      - name: Check out the oldest supported probot-core
+        uses: actions/checkout@v4
+        with:
+          repository: probot-studio/probot-core
+          ref: ${{ env.PROBOT_CORE_OLDEST_REF }}
+          path: .upstream/probot-core-oldest
+          token: ${{ secrets.PROBOT_CORE_TOKEN || github.token }}
+
+      - name: HAL link test against the oldest supported core
+        run: >-
+          python3 tools/build/hal_link_test.py --out .build/hal-link-oldest --compile
+          --core "$GITHUB_WORKSPACE/.upstream/probot-core-oldest"
 
   qemu:
     if: github.event_name == 'workflow_dispatch'

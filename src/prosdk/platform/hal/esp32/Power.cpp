@@ -4,10 +4,11 @@
 // configured: PROBOT_BATTERY_ADC_PIN or PROBOT_BATTERY_INA). Brownout is computed from it with
 // the WPILib defaults (6.75 V, recovery 7.25 V) and is only reported (RobotController::
 // IsBrownedOut); it does not disable outputs as the roboRIO/systemcore hardware does
-// (design/hal-esp32.md, "Power"). With probot-core R12 the brownout voltage is also core's
-// low-voltage threshold (io::battery::setLowVoltage, core's own default is off): set at HAL
-// initialization and by every HAL_SetBrownoutVoltages, so core's isLowVoltage() flips at the same
-// voltage (without prosdk's recovery hysteresis). Battery current (core's
+// (design/hal-esp32.md, "Power"). With probot-core R12 an accepted HAL_SetBrownoutVoltages also
+// sets core's low-voltage threshold (io::battery::setLowVoltage) to the brownout voltage, so
+// core's isLowVoltage() flips at the same voltage (without prosdk's recovery hysteresis). The
+// WPILib default (6.75 V) is not forwarded: core's flag stays off (core's default) or at the
+// sketch's own setLowVoltage() until the program calls SetBrownoutVoltages. Battery current (core's
 // io::battery::currentAmps(), NaN without an INA sensor) has no HAL function: WPILib 2027 has no
 // robot input current, and PowerDistribution is not supported. There is no switchable 3.3 V
 // user rail.
@@ -34,13 +35,6 @@ std::atomic<double> gBrownout{6.75};
 std::atomic<double> gRecovery{7.25};
 std::atomic<bool> gBrownedOut{false};
 }  // namespace
-
-namespace prosdk::hal::init {
-// Weak reference from HAL_Initialize (HAL.cpp): runs only when a sketch links this module.
-void InitializePower() {
-  prosdk::platform::SetLowVoltage(gBrownout.load());
-}
-}  // namespace prosdk::hal::init
 
 extern "C" {
 
