@@ -149,10 +149,15 @@ void CaseExceptions(Ctx& ctx) {
   QCHECK_MSG(ctx, chronoText == "01:02:05", "chrono '{}'", chronoText);
 
   // 6. console: prosdk::cxx::println (stdout -> UART0) and the platform console
-  //    (ConsoleWrite -> fake core's Driver Station console and stderr -> UART0)
+  //    (ConsoleWrite -> fake core's Driver Station console and stderr -> UART0). The fake core has
+  //    no leveled console (CoreOps consoleWriteLevel null, a core without R9): a leveled write
+  //    still reaches its text console.
   prosdk::cxx::println("QEMU-PRINT println {} {:.2f}", "ok", 2.5);
   prosdk::platform::ConsolePrint("QEMU-PRINT console {}\n", 7);
   QCHECK(ctx, fakecore::Console().find("QEMU-PRINT console 7") != std::string::npos);
+  prosdk::platform::ConsolePrint(prosdk::platform::ConsoleLevel::kError, "QEMU-PRINT error {}\n",
+                                 9);
+  QCHECK(ctx, fakecore::Console().find("QEMU-PRINT error 9") != std::string::npos);
 }
 
 }  // namespace qemu

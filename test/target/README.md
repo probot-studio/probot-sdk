@@ -58,7 +58,7 @@ The `CASE` line reports the task's peak stack use and the heap change.
 | id | what runs on the target |
 |----|-------------------------|
 | a | LQR gains (Eigen DARE) against upstream's test values, a Kalman filter, a Sleipnir problem compiled in the sketch, Sleipnir in the archive (`Ellipse2d::Nearest`, `ArmFeedforward`), the upstream 2018 spline trajectory, TrapezoidProfile, odometry |
-| b | exceptions: thrown in the sketch and unwound through the archive's trajectory parameterizer, thrown in the archive (`std::runtime_error`), the wpilibc HAL error path (`DigitalInput{22}` -> `prosdk::RuntimeError`, also initializes the HAL), nested exceptions; `std::format` (floats, units, chrono); `prosdk::cxx::println` and the platform console (Driver Station console + UART) |
+| b | exceptions: thrown in the sketch and unwound through the archive's trajectory parameterizer, thrown in the archive (`std::runtime_error`), the wpilibc HAL error path (`DigitalInput{22}` -> `prosdk::RuntimeError`, also initializes the HAL), nested exceptions; `std::format` (floats, units, chrono); `prosdk::cxx::println` and the platform console (Driver Station console + UART; the fake core has no R9 leveled console, so an error-level write checks the text fallback) |
 | c | `std::thread` under `ScopedThreadConfig` (name, priority, core, stack checked from inside the thread), mutex/condition variable, prosdk time against `esp_timer`, `prosdk::Notifier` periodic (10 ms for 1 s) and one-shot (50 ms) |
 | e | `prosdk::Preferences` on NVS: boot 1 writes every type, boot 2 reads them back from the same flash image |
 | f | `DataLogManager` on LittleFS (`/littlefs/logs`, the huge_app `spiffs` partition): writer thread, flush, the `.wpilog` read back; boot 2 finds boot 1's log |

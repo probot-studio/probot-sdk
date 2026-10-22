@@ -357,8 +357,8 @@ core and stack; `Notifier` periodic and one-shot timing on esp_timer; `Preferenc
 through disabled/auto/teleop/e-stop with `AddPeriodic`; stack and heap use. It does not prove any
 peripheral HAL path (MCPWM, LEDC, PCNT, RMT, TWAI, ADC, I2C, UART devices, GPIO electrical
 behaviour, `drivers/`), probot-core (WiFi, Driver Station, gamepads, real hooks, e-stop line,
-battery) or real-time performance (QEMU runs at emulation speed on a host clock); those need a
-board.
+battery) or real-time performance (QEMU's clock counts guest instructions, `-icount shift=2`, 4 ns
+each, not the ESP32-S3's real speed); those need a board.
 
 Measured 2026-10-22 (`tools/qemu/run.sh --boots 2`, both boots `pass=8 fail=0`): peak stack on the
 24576-byte user task 12.5 to 12.6 KB for the math case (LQR, Kalman, Sleipnir, trajectory), 5.3 KB

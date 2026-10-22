@@ -81,6 +81,10 @@ bool Install() {
       &DashAddSchema, &DashDrain, &DashReject, &DashStats,
       &SetLoopPeriod, &LoopPeriod, &Overruns,
       &SetOpModeOptions, &NoOpMode, &NoOpMode, &NoUtility,
+      // ABI 4 (R9 consoleWriteLevel, R10 systemTimeValid) null, as the bridge leaves them for a
+      // core without R9/R10: the archive's fallbacks run (console text through consoleWrite
+      // without its level, the 2024-01-01 clock heuristic)
+      nullptr, nullptr,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   // what CoreBridge.hpp reports after probot::framework::install succeeded
