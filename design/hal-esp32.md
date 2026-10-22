@@ -94,7 +94,7 @@ Driver Station (design/PORT.md section 8).
   after an e-stop periodic frames stop and new sends fail with
   `HAL_ERR_CANSessionMux_NotAllowed`.
 - **Brownout** is reported only (`HAL_GetBrownedOut`); outputs are not cut by hardware as on the
-  roboRIO.
+  roboRIO. With probot-core R12 the brownout voltage is also core's low-voltage threshold (Power).
 
 ## Modules
 
@@ -322,6 +322,22 @@ Driver Station (design/PORT.md section 8).
 - `HAL_GetVinVoltage` = core's battery reading (0 without a configured battery sensor:
   `PROBOT_BATTERY_ADC_PIN` or `PROBOT_BATTERY_INA`). Brownout from it with hysteresis (defaults
   6.75 V / 7.25 V, settable 4..13 V; never browned out below 0.5 V, i.e. no sensor).
+- Core's low-voltage flag (R12 `io::battery::setLowVoltage()` / `isLowVoltage()`, core's default
+  off): prosdk sets its threshold to the brownout voltage at HAL initialization (6.75 V) and on
+  every `HAL_SetBrownoutVoltages` (`RobotController::SetBrownoutVoltages`), so core's flag flips
+  at the voltage where `RobotController::IsBrownedOut()` enters brownout (core's flag has no
+  recovery voltage). Only when the sketch links the power module (`Power.cpp`: any `RobotController`
+  power or battery call, e.g. through `MotorController::SetVoltage` or a PWM motor's
+  `GetVoltage`); otherwise core's threshold stays off.
+  Without R12 nothing is forwarded.
+- Battery current: core's `io::battery::currentAmps()` (R12: declared in every configuration, NaN
+  without an INA sensor, before its first sample or after a failed read) has no HAL function.
+  WPILib 2027 has no robot input current (`HAL_GetVinCurrent` and `RobotController::
+  GetInputCurrent` are gone; systemcore reports total current only through a PowerDistribution,
+  which this HAL does not support: `HAL_InitializePowerDistribution` fails, every other PD call
+  reports `HAL_HANDLE_ERROR` and 0). A sketch reads it from core directly and checks
+  `std::isnan()`; logged through prosdk telemetry or a `DataLog` a NaN is stored as NaN (the
+  dashboard store drops repeats of the same bytes).
 - 3.3 V rail (the module's regulator, no monitoring): `HAL_GetUserVoltage3V3` 3.3 and
   `HAL_GetUserActive3V3` true, `HAL_GetUserCurrentFaults3V3` 0 and `HAL_ResetUserCurrentFaults`
   succeed (fixed values with `HAL_SUCCESS`); `HAL_GetUserCurrent3V3` and
@@ -351,8 +367,11 @@ Driver Station (design/PORT.md section 8).
   image; the probot has none), so `RobotController::GetComments()` is `""`.
 - `HAL_GetTeamNumber` is always 0: a Probot has no team number; the robot is found through its own
   WiFi access point, not a team-number address.
-- `HAL_GetRSLState` and `HAL_GetCommsDisableCount` report `HAL_HANDLE_ERROR` (as on systemcore)
-  until probot-core exposes them (core-requests.md R12: `rslState()`, `commsDisableCount()`).
+- `HAL_GetRSLState` = core's `ds::rslState()` (R12: the signal light core draws is lit; blinking
+  in a RUN phase that may move the robot, solid on otherwise, tracked with or without
+  `PROBOT_RSL_PIN`). `HAL_GetCommsDisableCount` = core's `ds::commsDisableCount()` (times the DS
+  timeout stopped an enabled robot since boot, PB-E303; a timeout during INIT and PB-E304 are not
+  counted). With a core without R12 both report `HAL_HANDLE_ERROR` (as on systemcore).
 - Framework install: `<prosdk.h>` installs prosdk's hooks into probot-core at static
   initialization. If another framework already holds core's hooks (`probot::framework::install`
   returns false), prosdk prints an error to the console at once and again from `HAL_Initialize`,

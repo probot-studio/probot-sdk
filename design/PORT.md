@@ -183,10 +183,16 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   (W3C order) to WPILib HID (SDL order) with the remap in one place; battery to `RobotController`;
   telemetry/tunables backends to core's dashboard store; alerts to the DS alert widget; console lines with
   their level to core's console (R9, `console::write`); `HAL_GetSystemTimeValid` to core's wall-clock flag
-  (R10, `ds::systemTimeValid()`). CoreOps fields are only appended, each change bumps
-  `kCoreOpsAbiVersion` (4 since R9/R10), and the bridge leaves a field null when the core lacks the
-  feature (detected with `__has_include`), so the archive falls back (text-only console, the
-  2024-01-01 clock heuristic).
+  (R10, `ds::systemTimeValid()`); `HAL_GetRSLState` / `HAL_GetCommsDisableCount` to `ds::rslState()` /
+  `ds::commsDisableCount()`, the brownout voltage to core's low-voltage threshold
+  (`io::battery::setLowVoltage`) and a halted robot program to `probot::requestStop()` (R12); the
+  refused-schema report to core's per-schema limit (R13, `PROBOT_DASH_MAX_SCHEMA_BYTES`). Battery
+  current (`io::battery::currentAmps()`, NaN without a sensor) has no WPILib 2027 API and is not
+  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (5 since R12/R13),
+  and the bridge leaves a field null when the core lacks the feature (detected with `__has_include`,
+  R13 on `dashboard::Limits`), so the archive falls back (text-only console, the 2024-01-01 clock
+  heuristic, `HAL_HANDLE_ERROR` for the RSL state and comms-disable count, no DS stop on a halt, the
+  `PROBOT_DASH_MAX_VALUE` advice for a refused schema).
 - Outputs (PWM, motor controllers) are zeroed whenever core reports "outputs disabled" and immediately
   on e-stop (core calls a registered e-stop callback on its own task).
 - Features prosdk needs from probot-core are listed in `design/core-requests.md` and are sent to the
@@ -212,8 +218,12 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `HAL_SendError`; anything else is reported too instead of terminating). The program then
   **halts**: its pass callback is removed, the HAL output gate stays closed
   (`platform::RobotProgramHalted()`), core keeps running so the Driver Station shows the error.
-  A robot class that derives from `RobotBase` directly (blocking `StartCompetition()`) and a main
-  loop period outside 1..1000 ms are reported and halt the same way.
+  A robot class that derives from `RobotBase` directly (blocking `StartCompetition()`), a main
+  loop period outside 1..1000 ms, a failed HAL initialization and a full core callback table are
+  reported and halt the same way. With probot-core R12 the halt calls `probot::requestStop()` once
+  (stops the opmode the DS is running) and a pre-cycle callback then stops every later INIT or
+  START (one console line each), so the DS does not show the halted program as running; without
+  R12 the DS can still start it (nothing runs, outputs stay off).
 - **Schedule.** The robot's `PeriodicPriorityQueue` keeps the upstream schedule (main loop,
   `AddPeriodic`, `TimesliceRobot` slots, `PeriodicOpMode` callbacks). Core's pass period is the
   greatest common divisor, in whole milliseconds (at most 1000), of the callback periods and of their
@@ -232,7 +242,8 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   pass late moves a callback to another pass. A pass that changes core's phase and ends late also
   restarts core's grid, but core does not count it as an overrun (a one-shot hook pass), so the
   schedule keeps its phase until the next counted overrun or period change; the robot's mode
-  init runs in the pass after the phase change, which core does count. Upstream
+  init runs in the pass after the phase change, which core does count. Core request R15 asks for
+  a grid-restart counter so the host can re-align on every restart. Upstream
   watchdogs (`IterativeRobotBase`, `OpModeRobot`) still report loop overruns; core's late-pass
   count is reported as a warning (at most once per second, after that pass's callbacks).
 - **Modes and opmodes** come only from the HAL Driver Station layer (`hal-esp32.md`): enabled = core
@@ -249,15 +260,16 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
 - **Tests.** `test/prosdk/robot` (own executable): the robot host on the HAL sim with a fake core
   table, driving core's hooks on simulated time (disabled -> auto -> teleop -> utility -> e-stop,
   callback order, `AddPeriodic`/timeslice timing, jitter, late pass, opmode selection, halts).
-- **Examples** (`esp32:esp32:esp32s3:PartitionScheme=huge_app`, `tools/build/build.sh examples` after
-  R9/R10 against probot-core `feat/wall-clock`, 2026-10-22; flash / static RAM):
-  `TimedRobotDifferential` 1946484 / 72196 bytes, `OpModeRobotExample` 1940584 / 72204,
-  `TimesliceRobotExample` 1922844 / 72140, `CommandBasedRobot` (commandsv2: scheduler, drive
-  subsystem, `CommandXboxController`, PID command, autonomous `Selectable`, `SysIdRoutine`)
-  2082048 / 75316, `DriversShowcase` (one of each `drivers/` device: Spark, Servo, BTS7960,
-  VNH5019, PCA9685 with ProHubMotor and a servo, MPU6050, GoBildaPinpoint, ProHub encoders)
-  1998568 / 72828, `AprilTagFieldPose` 2097676 / 71220, `HalSmoke` 1692585 / 73220
-  (of 3145728 / 327680). The 63 ported upstream examples: `design/examples.md` (Sizes).
+- **Examples** (`esp32:esp32:esp32s3:PartitionScheme=huge_app`, `tools/build/build.sh examples` with
+  CoreOps ABI 5 (3450336) against probot-core `feat/small-items` 09a6fe4, 2026-10-22; flash / static
+  RAM): `TimedRobotDifferential` 1846484 / 72276 bytes, `CommandBasedRobot` (commandsv2: scheduler,
+  drive subsystem, `CommandXboxController`, PID command, autonomous `Selectable`, `SysIdRoutine`)
+  1982192 / 75348, `DriversShowcase` (one of each `drivers/` device: Spark, Servo, BTS7960, VNH5019,
+  PCA9685 with ProHubMotor and a servo, MPU6050, GoBildaPinpoint, ProHub encoders) 1898592 / 72844,
+  `AprilTagFieldPose` 1997696 / 71316, `HalSmoke` 1591645 / 73308 (of 3145728 / 327680; about
+  100 KB less flash than against `feat/wall-clock`, core R14, `design/size.md` section 9). Last
+  measured against `feat/wall-clock` (R9/R10): `OpModeRobotExample` 1940584 / 72204,
+  `TimesliceRobotExample` 1922844 / 72140. The 63 ported upstream examples: `design/examples.md` (Sizes).
 
 ## 9. Build (incremental, low load)
 
@@ -303,7 +315,7 @@ Re-implemented for this platform: `NetworkButton` and `NetworkBooleanEvent` over
 (`wpilibc/0011`); Preferences on the DS as robust tunables `/Preferences/<key>` written back to NVS
 (`src/prosdk/platform/dashboard/DashboardPreferences.*`); `DataLogManager` console capture through a
 console tee and old-log deletion from esp_littlefs space (`wpilibc/0012`); DataLog sink to flash/SD (the DS
-sink, downloading `.wpilog` files from the Driver Station, is pending core R11: until then a log is read by
+sink, downloading `.wpilog` files from the Driver Station, is pending core R11 (in progress on core's `feat/ds-files`): until then a log is read by
 dumping the LittleFS partition);
 telemetry and tunables backends over probot-core; Servo; prosdk drivers carried over from the old SDK
 (BTS7960, VNH5019, MPU6050 gyro, ProHub PCA9685 + UART encoder).
