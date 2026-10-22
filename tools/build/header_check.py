@@ -32,6 +32,11 @@ NOT_STANDALONE_PATTERNS: dict[str, str] = {
         "Eigen internal header (IWYU private; errors unless included through its module header)",
     r"^src/prosdk/thirdparty/gcem/gcem_incl/":
         "gcem internal header (uses GCLIM, return_t, GCEM_* that only gcem.hpp declares first)",
+    r"^src/prosdk/thirdparty/apriltag/common/(doubles|floats)\.h$":
+        "AprilTag C-only header (static inline functions convert void* implicitly, invalid C++); "
+        "no prosdk or AprilTag source includes it",
+    r"^src/prosdk/thirdparty/apriltag/common/doubles_floats_impl\.h$":
+        "AprilTag C template fragment (needs TNAME etc. from doubles.h/floats.h)",
 }
 
 

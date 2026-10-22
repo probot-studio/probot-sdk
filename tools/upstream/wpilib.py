@@ -314,12 +314,15 @@ def _tok(toks, j):
 
 @dataclass
 class Rule:
-    kind: str                # header | source | test | test-header
+    kind: str                # header | source | test | test-header | resource
     src: str                 # upstream dir (repo-relative)
     dst: str                 # destination dir (prosdk repo-relative)
     include: list[str]
     exclude: dict[str, str] = field(default_factory=dict)  # glob -> reason
     include_base: str | None = None  # registers include names relative to this dest dir
+    # kind "resource": {"prefix": ..., "namespace": ...} as passed to upstream's
+    # generate_resources() (cmake/modules/GenResources.cmake)
+    resource: dict | None = None
 
 
 @dataclass
@@ -333,7 +336,10 @@ class Module:
 
 DEFAULT_TRANSFORMS = {"rename": True, "fs": False, "cxx23": True, "arduino_renames": True,
                       "guard": True, "verbatim": False, "config_include": [],
-                      "multi_subscript": False, "guard_pasted": False}
+                      "multi_subscript": False, "guard_pasted": False, "include_search": []}
+# include_search: extra directories (relative to a header rule's `src`) searched for quoted includes
+# that are neither next to the including file nor registered by that name, like an upstream `-I`
+# (apriltag's C sources include "zarray.h" for include/common/zarray.h).
 
 # Section 7.1: header that carries the configuration vendored headers need (Eigen limits, Sleipnir
 # switches). The `config_include` transform (list of regexes on the destination path) inserts it
@@ -462,11 +468,14 @@ _INC_LINE = re.compile(r'^(#[ \t]*(?:include|include_next|import)[ \t]*)([<"])([
 _HAS_INC = re.compile(r'(__has_include(?:_next)?[ \t]*\([ \t]*)([<"])([^>"]+)([>"])')
 
 
-def map_include(ctx: Ctx, up_file: str, name: str, quoted: bool) -> str:
+def map_include(ctx: Ctx, up_file: str, name: str, quoted: bool, search=()) -> str:
     if quoted and (ctx.up / os.path.dirname(up_file) / name).is_file():
         return name  # relative include next to the file: copied with the same layout
     if name in ctx.include_map:
         return ctx.include_map[name]
+    for d in search if quoted else ():
+        if f"{d}/{name}" in ctx.include_map:
+            return ctx.include_map[f"{d}/{name}"]
     if name.startswith("wpi/"):
         return rename_path(name)
     if name in CXX_SHIM_HEADERS:
@@ -512,7 +521,8 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
         if kind == "include":
             m = _INC_LINE.match(s)
             if m:
-                name = map_include(ctx, up_file, m.group(3), m.group(2) == '"')
+                name = map_include(ctx, up_file, m.group(3), m.group(2) == '"',
+                                   tr["include_search"])
                 if tr["cxx23"] and m.group(3) in CXX_SHIM_HEADERS:
                     name = CXX_SHIM_HEADERS[m.group(3)]
                 t[1] = m.group(1) + m.group(2) + name + m.group(4) + m.group(5)
@@ -545,7 +555,8 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
                     k += 1
                 m = re.match(r'^\s*([<"])([^>"]+)([>"])\s*$', buf)
                 if m:
-                    name = map_include(ctx, up_file, m.group(2), m.group(1) == '"')
+                    name = map_include(ctx, up_file, m.group(2), m.group(1) == '"',
+                                   tr["include_search"])
                     if tr["cxx23"] and m.group(2) in CXX_SHIM_HEADERS:
                         name = CXX_SHIM_HEADERS[m.group(2)]
                     toks[j + 1][1] = m.group(1) + name + m.group(3)
@@ -914,7 +925,11 @@ def generate(up: Path, mods: dict[str, Module], selected: list[str], macros: set
                     text = raw.decode("utf-8")
                 except UnicodeDecodeError:
                     text = None
-                if text is None or mod.transforms["verbatim"]:
+                if rule.kind == "resource":
+                    dest = f"{dest}.cpp"
+                    out_bytes = resource_source(raw, up_file, rule.resource or {},
+                                                mod.transforms["rename"]).encode("utf-8")
+                elif text is None or mod.transforms["verbatim"]:
                     out_bytes = raw
                 else:
                     out_bytes = transform(ctx, mod, up_file, dest, text).encode("utf-8")
@@ -937,6 +952,39 @@ def generate(up: Path, mods: dict[str, Module], selected: list[str], macros: set
                 guard_header(stage / dest, dest, macros, affixes)
         produced[name] = sorted(files)
     return produced
+
+
+def resource_source(raw: bytes, up_file: str, res: dict, rename: bool) -> str:
+    """Rule kind "resource": the C++ source upstream generates at build time from a resource file
+    (cmake/scripts/GenResource.cmake): the bytes as a static array, an extern "C"
+    `<prefix>GetResource_<name>(size_t*)` and `<namespace>::GetResource_<name>()` returning a
+    std::string_view. Same symbols and contents; 16 bytes per line."""
+    func = "GetResource_" + re.sub(r"[^a-zA-Z0-9]", "_", os.path.basename(up_file))
+    ns = res.get("namespace", "")
+    if rename:
+        ns = re.sub(r"^(::)?wpi\b", r"\1prosdk", ns)
+    n = len(raw)
+    rows = [" ".join(f"0x{b:02x}," for b in raw[i:i + 16]) for i in range(0, n, 16)]
+    out = [
+        f"// Generated by tools/upstream/wpilib.py from {up_file}",
+        "// (upstream generates it at build time with cmake/scripts/GenResource.cmake). Do not edit.",
+        "#include <stddef.h>",
+        "#include <string_view>",
+        'extern "C" {',
+        "static const unsigned char contents[] = {",
+        *(f"    {r}" for r in rows),
+        "};",
+        f"const unsigned char* {res.get('prefix', '')}{func}(size_t* len) {{",
+        f"  *len = {n};",
+        "  return contents;",
+        "}",
+        "}",
+    ]
+    body = [f"std::string_view {func}() {{",
+            f"  return std::string_view(reinterpret_cast<const char*>(contents), {n});",
+            "}"]
+    out += ([f"namespace {ns} {{", *body, "}"] if ns else body)
+    return "\n".join(out) + "\n"
 
 
 def apply_patches(module: str, stage: Path) -> None:

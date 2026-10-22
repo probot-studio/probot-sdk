@@ -52,6 +52,12 @@ WPILib wpilibc            BSD 3-Clause (WPILib)                src/prosdk/{backe
                                                                src/prosdk/impl/wpilibc, test/wpilibc
 WPILib commandsv2         BSD 3-Clause (WPILib)                src/prosdk/commands2,
                                                                src/prosdk/impl/commandsv2, test/commandsv2
+WPILib fields             BSD 3-Clause (WPILib)                src/prosdk/fields, src/prosdk/impl/fields
+                                                               (incl. the field JSON data), test/fields
+WPILib apriltag           BSD 3-Clause (WPILib)                src/prosdk/apriltag,
+                                                               src/prosdk/impl/apriltag/cpp, test/apriltag
+AprilTag (modified        BSD 2-Clause (The Regents of The     src/prosdk/thirdparty/apriltag,
+by WPILib)                University of Michigan)              src/prosdk/impl/apriltag/thirdparty
 Eigen 5.0.1               MPL 2.0 (file-level; see             src/prosdk/thirdparty/eigen
                           licenses/eigen/COPYING.MPL2)
 GCEM                      Apache 2.0 (kthohr)                  src/prosdk/thirdparty/gcem

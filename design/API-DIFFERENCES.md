@@ -107,6 +107,13 @@ spelled in a sketch, because the Xtensa header `xtensa/config/specreg.h` (includ
 | `prosdk::cmd::NetworkButton` | re-implemented over tunables instead of an NT boolean topic: `NetworkButton(path)` and `NetworkButton(table, field)` (path `table/field`) publish one `Tunable<bool>` per normalized path, shared by every button on it and removed with the last one (on the Driver Station a writable boolean under `/Tunables/<path>`). The trigger is true while the value is true and a Driver Station is attached (upstream: while NetworkTables is connected). The constructors taking `nt::BooleanTopic`, `nt::BooleanSubscriber`, `nt::NetworkTable` and `nt::NetworkTableInstance` are removed | `commandsv2/0003` |
 | `CommandScheduler` and `Command` on the Driver Station | API unchanged: `telemetry::Log(name, scheduler)` and `tunables::Publish(name, scheduler)` go through the probot-core dashboard backends (`.type` `Scheduler`: `Names`, `Ids`, writable `Cancel`); commands publish `.type` `Command` (`name`, `running`). The Driver Station has a `Command` widget but no `Scheduler` widget yet (design/core-requests.md R5) | none |
 | Upstream tests `CommandScheduleTest NetworkTablesTunableCancelClearsValue`, `CommandTunableButtonTest NetworkTablesLifecycleMatchesGlassRunCancel`, `NetworkButtonTest` | the first two read the NT tunable backend (ntcore is not ported) and are removed; the same flows on the Driver Station backend are tested in `test/prosdk/commands2/DashboardCommandsTest.cpp`. `NetworkButtonTest` is rewritten over a mock tunable backend | `commandsv2/0004`, `commandsv2/0003` |
+| `AprilTagFieldLayout`, `AprilTagFields` | do not exist at the pinned upstream (b68effca): WPILib 2027 replaced them with the fields library, ported as `prosdk::fields` (`Field`, `FieldTag`, `FieldImage`, `GetField(FieldId)`, `GetFields()`, `GetFieldName()`, `FieldId::DEFAULT_FIELD` = 2026 Rebuilt Welded; `Field::GetTagPose(id)`, `GetTags()`, `GetOrigin()`, `Serialize(path)`) | none |
+| Built-in field files (`prosdk::fields::GetResource_<field>_json()`, extern "C" `FIELDSGetResource_<field>_json(size_t*)`) | generated when vendoring (`wpilib.py` rule kind `resource`, `src/prosdk/impl/fields/resources/*.cpp`) instead of at build time by `cmake/scripts/GenResource.cmake`; same symbols and contents. Const arrays in flash rodata: the JSON and tag arrays of all 18 fields are 70,239 bytes in a sketch that calls `GetField` (it switches over every `FieldId`, so all of them link in) | `wpilib.py` |
+| `prosdk::fields::Field(std::string_view path)` | reads the file with `prosdk::util::raw_fd_istream` instead of `MemoryBuffer::GetFile` (`MemoryBuffer` is not vendored, it maps files with mmap); same errors (`Cannot open file: ...`, JSON parse errors). On the robot the path is on a mounted file system (e.g. `/littlefs/deploy/...`) | `fields/0001` |
+| `prosdk::fields::GetFieldImages()`, `GetFieldImage(path)` | always empty (the documented "not available" result): the field images are not vendored (section 4). Image metadata (`Field::GetImage()`: path, corners, size) is kept. The per-year headers `prosdk/fields/frc/*.hpp`, `ftc/*.hpp` still declare their `GetResource_*_png()` / `_jpg()`, which are defined nowhere (as upstream without its `fieldimages` library): calling one is a link error | hand-written `src/prosdk/platform/FieldImages.cpp` |
+| `prosdk::apriltag::AprilTagDetector::Detect()` | with `Config::numThreads` > 1 the C library's worker threads (`pthread_create`) start through `ScopedThreadConfig` (name `apriltag`, stack `PROSDK_APRILTAG_THREAD_STACK_SIZE` = 8192, prosdk thread priority and core). The default `numThreads` is 1 (no threads), as upstream. Heap use during detection is not measured on the robot (no camera on the kit): the union-find alone takes 8 bytes per pixel of the decimated image (about 150 KB for 320x240 at the default `quadDecimate` 2, about 600 KB without decimation), so camera robots need PSRAM or decimation | `apriltag/0001` |
+| AprilTag C library `pjpeg-idct.c` | none (build fix: the IDCT helpers take `int32_t*` instead of `int*`; `int32_t` is `long` on Xtensa) | `apriltag/0002` |
+| Upstream fields and apriltag tests | vendored unchanged (`test/fields`, `test/apriltag`); prosdk adds `test/prosdk/FieldsAprilTagTest.cpp` (default field from the compiled-in resources, no field images, file round trip, detection and pose of a drawn tag36h11 tag) | none |
 
 ## 4. Excluded files (vendored modules)
 
@@ -152,6 +159,11 @@ spelled in a sketch, because the Xtensa header `xtensa/config/specreg.h` (includ
 | wpilibc (tests) | `wpilibc/src/test/native/cpp/event/NetworkBooleanEventTest.cpp` | NetworkBooleanEvent is not vendored |
 | wpilibc (tests) | `wpilibc/src/test/native/cpp/UnitNetworkTablesTest.cpp` | unit-typed NT topics (ntcore is not ported) |
 | wpilibc (tests) | `wpilibc/src/test/native/cpp/hardware/ExpansionHubMotorTest.cpp` | ExpansionHub is not vendored |
+| fields | `fields/src/main/native/resources/org/wpilib/fields/**/*.png`, `**/*.jpg` | field images (PNG/JPG, 9.3 MB, about 55 MB as a C array): upstream builds them only into the optional `fieldimages` library (`WPILIB_WITH_GUI`); the robot has no display and the flash has no room. `GetFieldImages()`/`GetFieldImage()` report no image (section 3) |
+| fields | `fields/src/generated/main/native/cpp/fieldimages/field_images.cpp` | registry of the field images (not vendored); replaced by `src/prosdk/platform/FieldImages.cpp` |
+| apriltag | `apriltag/src/main/native/include/wpi/apriltag/AprilTagDetector_cv.hpp` | OpenCV `cv::Mat` adapter; OpenCV is not available on the MCU |
+| apriltag | `apriltag/src/main/native/include/wpi/apriltag/AprilTagImageGenerator.hpp`, `cpp/AprilTag.cpp` | tag image generator: returns a wpiutil `RawFrame`, the cscore camera frame type, which is not vendored (cscore is not ported); printing tags is a desktop task |
+| apriltag | `apriltag/src/main/native/cpp/jni/*` | JNI (no JVM on the MCU) |
 
 Whole upstream trees not vendored:
 
@@ -187,6 +199,11 @@ Whole upstream trees not vendored:
 | `commandsv2/src/main/python`, `commandsv2/src/test/python` | Python bindings (RobotPy commands2) and tests |
 | `commandsv2/src/test/native/BUILD.bazel` | Bazel build file |
 | `commandsv2/src/dev` | upstream developer scratch executable |
+| `fields/src/generate`, `fields/generate_fields.py`, `fields/convert_apriltag_layouts.py` | Jinja templates, generator input and the official AprilTag CSVs with their converters; their output (`fields/src/generated` and the field JSON files) is committed upstream and vendored instead |
+| `fields/src/test/resources`, `apriltag/src/test/resources` | custom layout, field image and tag image files used only by the Java tests |
+| `fields/src/main/java`, `fields/src/main/python`, `apriltag/src/main/java`, `apriltag/src/main/python` | Java API and Python bindings |
+| `apriltag/src/dev` | desktop development executable |
+| `apriltag/AprilTag.json` | vendordep descriptor for the desktop/roboRIO build system |
 
 The source of truth for these lists is the module data in `tools/upstream/modules/*.py`; this table is
 updated with it.
@@ -194,7 +211,10 @@ updated with it.
 Vendored but not compiled on their own by the header check (`tools/build/header_check.py`): Eigen's
 internal headers (`Eigen/src/**`, IWYU-private, they error unless included through their module header)
 and gcem's internal headers (`gcem_incl/*`, they need declarations that only `gcem.hpp` provides). Both
-are checked through the module headers that include them.
+are checked through the module headers that include them. The AprilTag C library's
+`common/doubles.h`, `common/floats.h` (C-only: their static inline functions convert `void*`
+implicitly, which is invalid C++; nothing includes them) and `common/doubles_floats_impl.h` (a C
+template fragment that needs `TNAME` from those two) are not compiled as C++ either.
 
 ## 5. Modules not ported (design/PORT.md section 10)
 
@@ -218,5 +238,7 @@ wpilibc (framework, opmodes, Driver Station and the generated HID classes, event
 LED, system, sysid, preferences, simulation, smartdashboard), with NetworkTables removed by the
 `wpilibc/*` patches and the robot host hooks in `prosdk/platform/RobotHost.hpp`. The robot host
 (`PROSDK_ROBOT_MAIN`, hosted loop on probot-core, `wpilibc/0010`) runs robot classes on the robot. commandsv2 (the
-command-based framework, `commandsv2/*` patches) is vendored on top of wpilibc. Later waves add their
+command-based framework, `commandsv2/*` patches) is vendored on top of wpilibc. fields (field metadata and the built-in AprilTag
+layouts, `fields/0001`) and apriltag (detector, pose estimator and the AprilTag C library,
+`apriltag/*`) are vendored on wpimath. Later waves add their
 renames and exclusions here.

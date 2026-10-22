@@ -1,0 +1,39 @@
+diff --git a/src/prosdk/impl/fields/cpp/Field.cpp b/src/prosdk/impl/fields/cpp/Field.cpp
+index 49579f0..153455d 100644
+--- a/src/prosdk/impl/fields/cpp/Field.cpp
++++ b/src/prosdk/impl/fields/cpp/Field.cpp
+@@ -14,23 +14,28 @@
+ 
+ #include "prosdk/units/angle.hpp"
+ #include "prosdk/units/length.hpp"
+-#include "prosdk/util/MemoryBuffer.hpp"
+ #include "prosdk/util/json.hpp"
++#include "prosdk/util/raw_istream.hpp"
+ #include "prosdk/util/raw_ostream.hpp"
+ 
+ using namespace prosdk::fields;
+ 
+ Field::Field(std::string_view path) {
+-  auto fileBuffer = prosdk::util::MemoryBuffer::GetFile(path);
+-  if (!fileBuffer) {
++  // prosdk: MemoryBuffer (mmap) is not vendored; read the file with raw_fd_istream
++  std::error_code ec;
++  prosdk::util::raw_fd_istream is{path, ec};
++  if (ec) {
+     throw std::runtime_error(std::format("Cannot open file: {}", path));
+   }
+ 
+-  auto buf = fileBuffer.value()->GetCharBuffer();
+-  m_json.assign(buf.begin(), buf.end());
++  std::string buf;
++  while (!is.has_error()) {
++    is.readinto(buf, 4096);  // appends what was read; the error flag marks the end
++  }
++  m_json = buf;
+   auto json = prosdk::util::json::parse_or_throw(m_json);
+   *this = json.get<Field>();
+-  m_json.assign(buf.begin(), buf.end());
++  m_json = std::move(buf);
+ }
+ 
+ Field::Field(std::string_view name, std::string_view season,

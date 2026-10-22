@@ -252,7 +252,20 @@ struct, protobuf, json), units, telemetry, tunables, datalog writer side, hal (c
 sim backend for host), wpilibc (framework incl. TimedRobot/OpModeRobot, driverstation incl. all
 controller classes, hardware, motor controllers from `drivers/`, simulation classes, system, event,
 drive, LED, Alert, Preferences on NVS, sysid log), commandsv2 (all incl. generated HID wrappers and
-SysIdRoutine), GoBildaPinpoint and other `drivers/` devices that fit the hardware.
+SysIdRoutine), GoBildaPinpoint and other `drivers/` devices that fit the hardware, fields (field metadata and built-in AprilTag layouts, the 2027
+successor of `AprilTagFieldLayout`) and apriltag (detector, pose estimator, AprilTag C library).
+
+fields and apriltag on the ESP32, measured with `arduino-cli compile` (huge_app) of one TimedRobot
+sketch in four variants (flash = "Sketch uses", RAM = static "Global variables"): empty robot 1,864,136 B
+flash / 65,908 B RAM; with `AprilTagPoseEstimator::Estimate` +137,980 B flash, +0 RAM; with
+`GetField(FieldId::DEFAULT_FIELD)` and `GetTagPose` +79,724 B flash, +0 RAM (all 18 fields link in; their
+JSON and tag arrays are 70,239 B of flash rodata, the rest is JSON parsing); with `AprilTagDetector`
+(`AddFamily("tag36h11")`, `Detect`) +50,880 B flash, +4,928 B RAM (the C library's non-const tag code
+tables: tag36h11 4,696 B, tag16h5 240 B). **Decision: the detector ships.** It costs 1.6 % of the
+huge_app partition, only sketches that call it pay for it (archive linking), and a camera board can pass
+grayscale frames to `Detect()` although the kit has no camera. Detection heap is not measured (no camera;
+estimate in `design/API-DIFFERENCES.md` section 3). The field images are not vendored (9.3 MB; upstream
+builds them only for its GUI). `examples/AprilTagFieldPose`: 2,102,184 B flash (66 %), 70,836 B RAM.
 
 Re-implemented for this platform: `NetworkButton` over tunables; DataLog sink to flash/SD and to the DS;
 telemetry and tunables backends over probot-core; Servo; prosdk drivers carried over from the old SDK

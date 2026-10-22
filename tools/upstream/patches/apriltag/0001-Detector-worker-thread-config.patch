@@ -1,0 +1,36 @@
+diff --git a/src/prosdk/impl/apriltag/cpp/AprilTagDetector.cpp b/src/prosdk/impl/apriltag/cpp/AprilTagDetector.cpp
+index d8e7c4d..19addd4 100644
+--- a/src/prosdk/impl/apriltag/cpp/AprilTagDetector.cpp
++++ b/src/prosdk/impl/apriltag/cpp/AprilTagDetector.cpp
+@@ -7,6 +7,8 @@
+ #include <cmath>
+ #include <utility>
+ 
++#include "prosdk/platform/Thread.hpp"
++
+ #ifdef _WIN32
+ #pragma warning(disable : 4200)
+ #elif defined(__clang__)
+@@ -21,6 +23,11 @@
+ 
+ using namespace prosdk::apriltag;
+ 
++// prosdk: stack of the detector's worker threads (Config::numThreads > 1)
++#ifndef PROSDK_APRILTAG_THREAD_STACK_SIZE
++#define PROSDK_APRILTAG_THREAD_STACK_SIZE 8192
++#endif
++
+ AprilTagDetector::Results::Results(void* impl, const private_init&)
+     : span{reinterpret_cast<AprilTagDetection**>(
+                static_cast<zarray_t*>(impl)->data),
+@@ -144,6 +151,10 @@ void AprilTagDetector::ClearFamilies() {
+ AprilTagDetector::Results AprilTagDetector::Detect(int width, int height,
+                                                    int stride, uint8_t* buf) {
+   image_u8_t img{width, height, stride, buf};
++  // prosdk: the C library starts its worker pool (numThreads pthreads if > 1) inside
++  // apriltag_detector_detect; never with the ESP-IDF pthread defaults (design/PORT.md section 7)
++  prosdk::platform::ScopedThreadConfig threadConfig{
++      {.name = "apriltag", .stackSize = PROSDK_APRILTAG_THREAD_STACK_SIZE}};
+   return {
+       apriltag_detector_detect(static_cast<apriltag_detector_t*>(m_impl), &img),
+       Results::private_init{}};
