@@ -243,13 +243,13 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   table, driving core's hooks on simulated time (disabled -> auto -> teleop -> utility -> e-stop,
   callback order, `AddPeriodic`/timeslice timing, jitter, late pass, opmode selection, halts).
 - **Examples** (`esp32:esp32:esp32s3:PartitionScheme=huge_app`, `tools/build/build.sh examples` after
-  wave 5, 2026-10-22; flash / static RAM):
-  `TimedRobotDifferential` 1938980 / 70740 bytes, `OpModeRobotExample` 1933104 / 70732,
-  `TimesliceRobotExample` 1915364 / 70668, `CommandBasedRobot` (commandsv2: scheduler, drive
+  R9/R10 against probot-core `feat/wall-clock`, 2026-10-22; flash / static RAM):
+  `TimedRobotDifferential` 1946484 / 72196 bytes, `OpModeRobotExample` 1940584 / 72204,
+  `TimesliceRobotExample` 1922844 / 72140, `CommandBasedRobot` (commandsv2: scheduler, drive
   subsystem, `CommandXboxController`, PID command, autonomous `Selectable`, `SysIdRoutine`)
-  2074560 / 73796, `DriversShowcase` (one of each `drivers/` device: Spark, Servo, BTS7960,
+  2082048 / 75316, `DriversShowcase` (one of each `drivers/` device: Spark, Servo, BTS7960,
   VNH5019, PCA9685 with ProHubMotor and a servo, MPU6050, GoBildaPinpoint, ProHub encoders)
-  1991108 / 71308, `AprilTagFieldPose` 2090204 / 69764, `HalSmoke` 1685149 / 71740
+  1998568 / 72828, `AprilTagFieldPose` 2097676 / 71220, `HalSmoke` 1692585 / 73220
   (of 3145728 / 327680). The 63 ported upstream examples: `design/examples.md` (Sizes).
 
 ## 9. Build (incremental, low load)
@@ -290,7 +290,7 @@ tables: tag36h11 4,696 B, tag16h5 240 B). **Decision: the detector ships.** It c
 huge_app partition, only sketches that call it pay for it (archive linking), and a camera board can pass
 grayscale frames to `Detect()` although the kit has no camera. Detection heap is not measured (no camera;
 estimate in `design/API-DIFFERENCES.md` section 3). The field images are not vendored (9.3 MB; upstream
-builds them only for its GUI). `examples/AprilTagFieldPose`: 2,090,204 B flash (66 %), 69,764 B RAM.
+builds them only for its GUI). `examples/AprilTagFieldPose`: 2,097,676 B flash (66 %), 71,220 B RAM.
 
 Re-implemented for this platform: `NetworkButton` and `NetworkBooleanEvent` over tunables
 (`wpilibc/0011`); Preferences on the DS as robust tunables `/Preferences/<key>` written back to NVS

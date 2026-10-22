@@ -260,72 +260,75 @@ ESP32-S3 (`esp32:esp32:esp32s3`, huge_app), compiled with `tools/build/build.sh 
 Flash is "Sketch uses", RAM is "Global variables use" (static RAM; the robot also allocates heap
 at run time).
 
-Measured on 2026-10-22 (after wave 5) against the `src/esp32s3/libprosdk.a` of that day; the
-numbers move with the archive. The huge_app partition gives the sketch 3,145,728 bytes of flash;
-static RAM is out of 327,680 bytes. Every sketch also gets probot-core's WiFi AP and Driver Station.
+Measured on 2026-10-22 (after R9/R10, CoreOps ABI 4) against the `src/esp32s3/libprosdk.a` of
+that day and probot-core `feat/wall-clock` (b46069e); the numbers move with the archive and core.
+The huge_app partition gives the sketch 3,145,728 bytes of flash; static RAM is out of 327,680
+bytes. Every sketch also gets probot-core's WiFi AP and Driver Station.
+The same archive against core `feat/multi-gamepad` (no R9/R10) gives TemplateTimed 1,864,712 /
+69,764: core's R9 console and R10 clock add about 7 KB flash and 1.5 KB static RAM to every sketch.
 
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|
-| ArcadeDriveGamepad | 1,898,560 | 70,100 |
-| ArmSimulation | 1,993,184 | 73,284 |
-| DifferentialDriveBot | 1,964,412 | 71,876 |
-| DifferentialDrivePoseEstimator | 2,086,476 | 74,372 |
-| DriveDistanceOffboard | 1,944,832 | 70,188 |
-| DriverStationDisplayAnsi | 1,867,168 | 69,812 |
-| DriverStationDisplayLines | 1,887,972 | 69,828 |
-| DSGamepadChooser | 1,907,152 | 69,900 |
-| DutyCycleEncoder | 1,873,284 | 70,012 |
-| ElevatorExponentialProfile | 1,866,204 | 69,820 |
-| ElevatorExponentialSimulation | 1,988,544 | 73,284 |
-| ElevatorProfiledPID | 1,934,628 | 70,724 |
-| ElevatorSimulation | 1,998,500 | 73,284 |
-| ElevatorTrapezoidProfile | 1,864,260 | 69,804 |
-| Encoder | 1,877,688 | 70,356 |
-| GettingStarted | 1,899,068 | 70,100 |
-| Gyro | 1,932,692 | 71,228 |
-| MecanumBot | 2,050,120 | 71,876 |
-| MecanumDrive | 1,932,572 | 71,228 |
-| MecanumDrivePoseEstimator | 2,058,840 | 74,436 |
-| Mechanism2d | 1,939,424 | 71,012 |
-| SimpleDifferentialDriveSimulation | 2,280,768 | 74,436 |
-| SnippetAccelerometerCollision | 1,888,492 | 70,900 |
-| SnippetAccelerometerFilter | 1,890,168 | 70,900 |
-| SnippetAddressableLED | 1,869,936 | 72,836 |
-| SnippetADXLAccelerometers | 1,883,064 | 70,868 |
-| SnippetAnalogAccelerometer | 1,870,432 | 69,972 |
-| SnippetAnalogEncoder | 1,871,556 | 69,972 |
-| SnippetAnalogInput | 1,869,680 | 69,972 |
-| SnippetAnalogPotentiometer | 1,870,640 | 69,972 |
-| SnippetDifferentialDrive | 1,899,956 | 70,100 |
-| SnippetDigitalCommunication | 1,861,176 | 69,716 |
-| SnippetDigitalInput | 1,859,576 | 69,724 |
-| SnippetDutyCycleEncoder | 1,872,844 | 70,012 |
-| SnippetDutyCycleInput | 1,870,688 | 69,996 |
-| SnippetEncoder | 1,877,904 | 70,356 |
-| SnippetEncoderDrive | 1,912,480 | 70,692 |
-| SnippetEncoderHoming | 1,908,832 | 70,716 |
-| SnippetEventLoop | 1,928,320 | 70,724 |
-| SnippetFlywheelBangBangController | 1,951,152 | 73,292 |
-| SnippetI2CCommunication | 1,880,396 | 70,876 |
-| SnippetLimitSwitch | 1,894,608 | 70,116 |
-| SnippetMecanumDrive | 1,932,932 | 71,228 |
-| SnippetMotorControl | 1,913,468 | 70,748 |
-| SnippetOnboardIMU | 1,891,248 | 70,900 |
-| SnippetProfiledPIDFeedforward | 1,927,152 | 70,668 |
-| SnippetSelectCommand | 1,906,256 | 69,892 |
-| StateSpaceArm | 2,243,780 | 70,724 |
-| StateSpaceElevator | 2,243,788 | 70,724 |
-| StateSpaceFlywheel | 2,081,896 | 70,740 |
-| StateSpaceFlywheelSysId | 2,081,884 | 70,740 |
-| SwerveBot | 2,109,116 | 71,876 |
-| SwerveDrivePoseEstimator | 2,119,788 | 74,372 |
-| SysIdRoutine | 2,072,780 | 73,612 |
-| TankDriveGamepad | 1,898,380 | 70,100 |
-| TemplateCommandItems | 1,915,856 | 69,892 |
-| TemplateCommandV2 | 1,922,720 | 70,012 |
-| TemplateCommandV2Skeleton | 1,896,868 | 69,892 |
-| TemplateOpMode | 1,863,692 | 69,748 |
-| TemplateTimed | 1,864,256 | 69,764 |
-| TemplateTimedSkeleton | 1,852,276 | 69,764 |
-| TemplateTimeslice | 1,867,484 | 69,764 |
-| TemplateTimesliceSkeleton | 1,855,620 | 69,764 |
+| ArcadeDriveGamepad | 1,906,064 | 71,556 |
+| ArmSimulation | 2,000,648 | 74,756 |
+| DifferentialDriveBot | 1,971,912 | 73,348 |
+| DifferentialDrivePoseEstimator | 2,093,956 | 75,844 |
+| DriveDistanceOffboard | 1,952,336 | 71,660 |
+| DriverStationDisplayAnsi | 1,874,692 | 71,284 |
+| DriverStationDisplayLines | 1,895,472 | 71,284 |
+| DSGamepadChooser | 1,914,608 | 71,356 |
+| DutyCycleEncoder | 1,880,816 | 71,484 |
+| ElevatorExponentialProfile | 1,873,664 | 71,276 |
+| ElevatorExponentialSimulation | 1,996,048 | 74,756 |
+| ElevatorProfiledPID | 1,942,120 | 72,196 |
+| ElevatorSimulation | 2,006,000 | 74,756 |
+| ElevatorTrapezoidProfile | 1,871,756 | 71,276 |
+| Encoder | 1,885,172 | 71,876 |
+| GettingStarted | 1,906,568 | 71,556 |
+| Gyro | 1,940,216 | 72,700 |
+| MecanumBot | 2,057,652 | 73,412 |
+| MecanumDrive | 1,940,100 | 72,700 |
+| MecanumDrivePoseEstimator | 2,066,344 | 75,908 |
+| Mechanism2d | 1,946,940 | 72,484 |
+| SimpleDifferentialDriveSimulation | 2,288,304 | 75,908 |
+| SnippetAccelerometerCollision | 1,895,996 | 72,372 |
+| SnippetAccelerometerFilter | 1,897,684 | 72,356 |
+| SnippetAddressableLED | 1,877,444 | 74,292 |
+| SnippetADXLAccelerometers | 1,890,544 | 72,340 |
+| SnippetAnalogAccelerometer | 1,877,956 | 71,444 |
+| SnippetAnalogEncoder | 1,879,064 | 71,444 |
+| SnippetAnalogInput | 1,877,148 | 71,444 |
+| SnippetAnalogPotentiometer | 1,878,152 | 71,444 |
+| SnippetDifferentialDrive | 1,907,452 | 71,556 |
+| SnippetDigitalCommunication | 1,868,700 | 71,236 |
+| SnippetDigitalInput | 1,867,032 | 71,244 |
+| SnippetDutyCycleEncoder | 1,880,332 | 71,484 |
+| SnippetDutyCycleInput | 1,878,180 | 71,468 |
+| SnippetEncoder | 1,885,424 | 71,876 |
+| SnippetEncoderDrive | 1,919,952 | 72,148 |
+| SnippetEncoderHoming | 1,916,336 | 72,172 |
+| SnippetEventLoop | 1,935,860 | 72,196 |
+| SnippetFlywheelBangBangController | 1,958,640 | 74,764 |
+| SnippetI2CCommunication | 1,887,840 | 72,348 |
+| SnippetLimitSwitch | 1,902,080 | 71,572 |
+| SnippetMecanumDrive | 1,940,468 | 72,700 |
+| SnippetMotorControl | 1,920,940 | 72,204 |
+| SnippetOnboardIMU | 1,898,756 | 72,372 |
+| SnippetProfiledPIDFeedforward | 1,934,640 | 72,140 |
+| SnippetSelectCommand | 1,913,744 | 71,348 |
+| StateSpaceArm | 2,251,272 | 72,260 |
+| StateSpaceElevator | 2,251,280 | 72,260 |
+| StateSpaceFlywheel | 2,089,356 | 72,260 |
+| StateSpaceFlywheelSysId | 2,089,344 | 72,260 |
+| SwerveBot | 2,116,600 | 73,348 |
+| SwerveDrivePoseEstimator | 2,127,292 | 75,908 |
+| SysIdRoutine | 2,080,340 | 75,084 |
+| TankDriveGamepad | 1,905,864 | 71,556 |
+| TemplateCommandItems | 1,923,316 | 71,348 |
+| TemplateCommandV2 | 1,930,184 | 71,468 |
+| TemplateCommandV2Skeleton | 1,904,380 | 71,348 |
+| TemplateOpMode | 1,871,184 | 71,220 |
+| TemplateTimed | 1,871,744 | 71,220 |
+| TemplateTimedSkeleton | 1,859,744 | 71,220 |
+| TemplateTimeslice | 1,874,968 | 71,220 |
+| TemplateTimesliceSkeleton | 1,863,092 | 71,220 |
