@@ -50,6 +50,8 @@ WPILib wpilibc            BSD 3-Clause (WPILib)                src/prosdk/{backe
                                                                preferences,simulation,smartdashboard,
                                                                sysid,system}, src/prosdk/util/SensorUtil.hpp,
                                                                src/prosdk/impl/wpilibc, test/wpilibc
+WPILib commandsv2         BSD 3-Clause (WPILib)                src/prosdk/commands2,
+                                                               src/prosdk/impl/commandsv2, test/commandsv2
 Eigen 5.0.1               MPL 2.0 (file-level; see             src/prosdk/thirdparty/eigen
                           licenses/eigen/COPYING.MPL2)
 GCEM                      Apache 2.0 (kthohr)                  src/prosdk/thirdparty/gcem

@@ -1,0 +1,261 @@
+diff --git a/src/prosdk/commands2/button/NetworkButton.hpp b/src/prosdk/commands2/button/NetworkButton.hpp
+index 2a8e035..9b68c59 100644
+--- a/src/prosdk/commands2/button/NetworkButton.hpp
++++ b/src/prosdk/commands2/button/NetworkButton.hpp
+@@ -4,18 +4,26 @@
+ 
+ #pragma once
+ 
+-#include <memory>
+ #include <string_view>
+ 
+ #include "prosdk/commands2/button/Trigger.hpp"
+-#include "prosdk/nt/BooleanTopic.hpp"
+-#include "prosdk/nt/NetworkTable.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
+ 
+ namespace prosdk::cmd {
+ /**
+  * A Button that uses a NetworkTable boolean field.
+  *
++ * prosdk: there are no NetworkTables. The button is a mutable boolean tunable
++ * (default false) published at the given path when the button is constructed,
++ * so it appears under /Tunables on the Driver Station, which sets and clears
++ * it. The condition is true while a Driver Station is attached and the tunable
++ * is true (upstream: while NetworkTables is connected and the topic is true).
++ * All NetworkButtons with the same path share one tunable; it is removed when
++ * the last of them (including the Trigger copies held by bindings) is
++ * destroyed. Publishing needs a registered tunables backend (the robot program
++ * registers it when the robot class is constructed). The constructors that
++ * take NetworkTables types (BooleanTopic, BooleanSubscriber, NetworkTable,
++ * NetworkTableInstance) are not available.
++ *
+  * This class is provided by the Commands v2 VendorDep
+  */
+ class NetworkButton : public Trigger {
+@@ -23,42 +31,18 @@ class NetworkButton : public Trigger {
+   /**
+    * Creates a NetworkButton that commands can be bound to.
+    *
+-   * @param topic The boolean topic that contains the value.
+-   */
+-  explicit NetworkButton(prosdk::nt::BooleanTopic topic);
+-
+-  /**
+-   * Creates a NetworkButton that commands can be bound to.
++   * prosdk: replaces the BooleanTopic overload.
+    *
+-   * @param sub The boolean subscriber that provides the value.
++   * @param path The tunable path of the value (for example "Buttons/Shoot").
+    */
+-  explicit NetworkButton(prosdk::nt::BooleanSubscriber sub);
++  explicit NetworkButton(std::string_view path);
+ 
+   /**
+    * Creates a NetworkButton that commands can be bound to.
+    *
+-   * @param table The table where the networktable value is located.
+-   * @param field The field that is the value.
+-   */
+-  NetworkButton(std::shared_ptr<prosdk::nt::NetworkTable> table,
+-                std::string_view field);
+-
+-  /**
+-   * Creates a NetworkButton that commands can be bound to.
+-   *
+-   * @param table The table where the networktable value is located.
++   * @param table The table where the value is located (tunable path prefix).
+    * @param field The field that is the value.
+    */
+   NetworkButton(std::string_view table, std::string_view field);
+-
+-  /**
+-   * Creates a NetworkButton that commands can be bound to.
+-   *
+-   * @param inst The NetworkTable instance to use
+-   * @param table The table where the networktable value is located.
+-   * @param field The field that is the value.
+-   */
+-  NetworkButton(prosdk::nt::NetworkTableInstance inst, std::string_view table,
+-                std::string_view field);
+ };
+ }  // namespace prosdk::cmd
+diff --git a/src/prosdk/impl/commandsv2/cpp/button/NetworkButton.cpp b/src/prosdk/impl/commandsv2/cpp/button/NetworkButton.cpp
+index 59b09f9..bfb22c1 100644
+--- a/src/prosdk/impl/commandsv2/cpp/button/NetworkButton.cpp
++++ b/src/prosdk/impl/commandsv2/cpp/button/NetworkButton.cpp
+@@ -4,28 +4,59 @@
+ 
+ #include "prosdk/commands2/button/NetworkButton.hpp"
+ 
++#include <map>
+ #include <memory>
++#include <mutex>
++#include <string>
+ #include <utility>
+ 
++#include "prosdk/driverstation/RobotState.hpp"
++#include "prosdk/tunables/Tunable.hpp"
++#include "prosdk/tunables/Tunables.hpp"
++#include "prosdk/tunables/detail/PathUtil.hpp"
++
+ using namespace prosdk::cmd;
+ 
+-NetworkButton::NetworkButton(prosdk::nt::BooleanTopic topic)
+-    : NetworkButton(topic.Subscribe(false)) {}
++// prosdk: re-implemented over tunables (ntcore is not ported).
++namespace {
++
++// One boolean tunable per path, shared by every NetworkButton (and Trigger
++// copy) with that path.
++using ButtonValue = prosdk::tunables::Tunable<bool>;
++
++std::mutex buttonsMutex;
++std::map<std::string, std::weak_ptr<ButtonValue>, std::less<>> buttons;
++
++std::shared_ptr<ButtonValue> GetButtonValue(std::string_view path) {
++  std::string buf;
++  std::string key{prosdk::tunables::detail::NormalizeName(path, buf)};
++  std::scoped_lock lock{buttonsMutex};
++  auto it = buttons.find(key);
++  if (it != buttons.end()) {
++    if (auto value = it->second.lock()) {
++      return value;
++    }
++  }
++  auto value = std::shared_ptr<ButtonValue>(
++      new ButtonValue{false}, [key](ButtonValue* ptr) {
++        delete ptr;
++        std::scoped_lock lock{buttonsMutex};
++        auto it = buttons.find(key);
++        if (it != buttons.end() && it->second.expired()) {
++          buttons.erase(it);
++        }
++      });
++  buttons.insert_or_assign(key, value);
++  prosdk::tunables::Publish(key, *value);
++  return value;
++}
+ 
+-NetworkButton::NetworkButton(prosdk::nt::BooleanSubscriber sub)
+-    : Trigger(
+-          [sub = std::make_shared<prosdk::nt::BooleanSubscriber>(std::move(sub))] {
+-            return sub->GetTopic().GetInstance().IsConnected() && sub->Get();
+-          }) {}
++}  // namespace
+ 
+-NetworkButton::NetworkButton(std::shared_ptr<prosdk::nt::NetworkTable> table,
+-                             std::string_view field)
+-    : NetworkButton(table->GetBooleanTopic(field)) {}
++NetworkButton::NetworkButton(std::string_view path)
++    : Trigger([value = GetButtonValue(path)] {
++        return prosdk::RobotState::IsDSAttached() && value->Get();
++      }) {}
+ 
+ NetworkButton::NetworkButton(std::string_view table, std::string_view field)
+-    : NetworkButton(prosdk::nt::NetworkTableInstance::GetDefault(), table, field) {
+-}
+-
+-NetworkButton::NetworkButton(prosdk::nt::NetworkTableInstance inst,
+-                             std::string_view table, std::string_view field)
+-    : NetworkButton(inst.GetTable(table), field) {}
++    : NetworkButton(std::string{table}.append("/").append(field)) {}
+diff --git a/test/commandsv2/cpp/button/NetworkButtonTest.cpp b/test/commandsv2/cpp/button/NetworkButtonTest.cpp
+index ff50cc7..2207e9b 100644
+--- a/test/commandsv2/cpp/button/NetworkButtonTest.cpp
++++ b/test/commandsv2/cpp/button/NetworkButtonTest.cpp
+@@ -4,44 +4,84 @@
+ 
+ #include "prosdk/commands2/button/NetworkButton.hpp"
+ 
++#include <memory>
++
+ #include <catch2/catch_test_macros.hpp>
+ 
+ #include "../CommandTestBase.hpp"
+ #include "prosdk/commands2/CommandScheduler.hpp"
+ #include "prosdk/commands2/WaitUntilCommand.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
++#include "prosdk/driverstation/internal/DriverStationBackend.hpp"
++#include "prosdk/simulation/DriverStationSim.hpp"
++#include "prosdk/tunables/MockTunableBackend.hpp"
++#include "prosdk/tunables/TunableRegistry.hpp"
+ 
+ using namespace prosdk::cmd;
+ 
++// prosdk: NetworkButton is a boolean tunable (ntcore is not ported); the
++// dashboard is the mock tunable backend instead of a local NT instance.
+ class NetworkButtonTest : public CommandTestBase {
+  public:
+   NetworkButtonTest() {
+-    inst = prosdk::nt::NetworkTableInstance::Create();
+-    inst.StartLocal();
++    prosdk::tunables::TunableRegistry::Reset();
++    backend = std::make_shared<prosdk::tunables::MockTunableBackend>();
++    prosdk::tunables::TunableRegistry::RegisterBackend("", backend);
+   }
+ 
+-  ~NetworkButtonTest() override {
+-    prosdk::nt::NetworkTableInstance::Destroy(inst);
+-  }
++  ~NetworkButtonTest() override { prosdk::tunables::TunableRegistry::Reset(); }
+ 
+-  prosdk::nt::NetworkTableInstance inst;
++  std::shared_ptr<prosdk::tunables::MockTunableBackend> backend;
+ };
+ 
+ TEST_CASE_METHOD(NetworkButtonTest, "NetworkButtonTest SetNetworkButton",
+                  "[commandsv2][command]") {
+   auto& scheduler = CommandScheduler::GetInstance();
+-  auto pub = inst.GetTable("TestTable")->GetBooleanTopic("Test").Publish();
+   bool finished = false;
+ 
+   WaitUntilCommand command([&finished] { return finished; });
+ 
+-  NetworkButton(inst, "TestTable", "Test").OnTrue(&command);
++  NetworkButton("TestTable", "Test").OnTrue(&command);
+   scheduler.Run();
+   CHECK_FALSE(scheduler.IsScheduled(&command));
+-  pub.Set(true);
++  backend->SetBool("/TestTable/Test", true);
++  prosdk::tunables::TunableRegistry::Update();
+   scheduler.Run();
+   CHECK(scheduler.IsScheduled(&command));
+   finished = true;
+   scheduler.Run();
+   CHECK_FALSE(scheduler.IsScheduled(&command));
+ }
++
++// prosdk: the cases below test the tunables re-implementation.
++TEST_CASE_METHOD(NetworkButtonTest, "NetworkButtonTest SharedPathAndDisconnect",
++                 "[commandsv2][command]") {
++  auto& scheduler = CommandScheduler::GetInstance();
++  NetworkButton a{"/Buttons/Shoot"};
++  NetworkButton b{"Buttons", "Shoot"};
++  CHECK(backend->GetUid("/Buttons/Shoot"));
++  CHECK_FALSE(a.Get());
++  CHECK_FALSE(b.Get());
++
++  backend->SetBool("/Buttons/Shoot", true);
++  prosdk::tunables::TunableRegistry::Update();
++  CHECK(a.Get());
++  CHECK(b.Get());
++
++  // upstream: false while NetworkTables is not connected; here while no
++  // Driver Station is attached (NotifyNewData marks the DS attached again)
++  prosdk::sim::DriverStationSim::SetDsAttached(false);
++  prosdk::internal::DriverStationBackend::RefreshData();
++  CHECK_FALSE(a.Get());
++  prosdk::sim::DriverStationSim::NotifyNewData();
++  CHECK(a.Get());
++  scheduler.Run();
++}
++
++TEST_CASE_METHOD(NetworkButtonTest, "NetworkButtonTest RemovedWithLastButton",
++                 "[commandsv2][command]") {
++  {
++    NetworkButton button{"Buttons/Temp"};
++    CHECK(backend->GetUid("/Buttons/Temp"));
++  }
++  CHECK_FALSE(backend->GetUid("/Buttons/Temp"));
++}

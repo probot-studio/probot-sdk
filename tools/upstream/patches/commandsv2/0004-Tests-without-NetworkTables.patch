@@ -1,0 +1,190 @@
+diff --git a/test/commandsv2/cpp/CommandScheduleTest.cpp b/test/commandsv2/cpp/CommandScheduleTest.cpp
+index 1baad76..51a62ff 100644
+--- a/test/commandsv2/cpp/CommandScheduleTest.cpp
++++ b/test/commandsv2/cpp/CommandScheduleTest.cpp
+@@ -8,12 +8,9 @@
+ #include <vector>
+ 
+ #include "CommandTestBase.hpp"
+-#include "prosdk/backend/NetworkTablesTunableBackend.hpp"
+ #include "prosdk/commands2/FunctionalCommand.hpp"
+ #include "prosdk/commands2/InstantCommand.hpp"
+ #include "prosdk/commands2/RunCommand.hpp"
+-#include "prosdk/nt/IntegerArrayTopic.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
+ #include "prosdk/tunables/MockTunableBackend.hpp"
+ #include "prosdk/tunables/TunableConfig.hpp"
+ #include "prosdk/tunables/TunableRegistry.hpp"
+@@ -23,16 +20,6 @@
+ using namespace prosdk::cmd;
+ class CommandScheduleTest : public CommandTestBase {};
+ 
+-class NetworkTablesTunableTestState {
+- public:
+-  ~NetworkTablesTunableTestState() {
+-    prosdk::tunables::TunableRegistry::Reset();
+-    prosdk::nt::NetworkTableInstance::Destroy(inst);
+-  }
+-
+-  prosdk::nt::NetworkTableInstance inst{prosdk::nt::NetworkTableInstance::Create()};
+-};
+-
+ TEST_CASE_METHOD(CommandScheduleTest, "CommandScheduleTest InstantSchedule",
+                  "[commandsv2][command]") {
+   CommandScheduler scheduler = GetScheduler();
+@@ -226,37 +213,6 @@ TEST_CASE_METHOD(CommandScheduleTest, "CommandScheduleTest TunableCancel",
+   prosdk::tunables::TunableRegistry::Reset();
+ }
+ 
+-TEST_CASE_METHOD(CommandScheduleTest,
+-                 "CommandScheduleTest NetworkTablesTunableCancelClearsValue",
+-                 "[commandsv2][command]") {
+-  CommandScheduler scheduler = GetScheduler();
+-  NetworkTablesTunableTestState ntState;
+-  prosdk::tunables::TunableRegistry::RegisterBackend(
+-      "", std::make_shared<prosdk::backend::NetworkTablesTunableBackend>(
+-              ntState.inst, "/Tunables"));
+-  prosdk::tunables::Publish("Scheduler", scheduler);
+-
+-  auto valueSub =
+-      ntState.inst.GetIntegerArrayTopic("/Tunables/Scheduler/Cancel/value")
+-          .Subscribe({});
+-  CHECK((std::vector<int64_t>{}) == valueSub.Get());
+-
+-  MockCommand command;
+-  scheduler.Schedule(&command);
+-  scheduler.Run();
+-  CHECK(scheduler.IsScheduled(&command));
+-
+-  uintptr_t ptrTmp = reinterpret_cast<uintptr_t>(&command);
+-  int64_t commandId = static_cast<int64_t>(ptrTmp);
+-  std::array<int64_t, 1> cancelIds{commandId};
+-  ntState.inst.GetIntegerArrayTopic("/Tunables/Scheduler/Cancel/tune")
+-      .Publish()
+-      .Set(cancelIds);
+-  ntState.inst.Flush();
+-
+-  prosdk::tunables::TunableRegistry::Update();
+-  CHECK_FALSE(scheduler.IsScheduled(&command));
+-
+-  prosdk::tunables::TunableRegistry::Update();
+-  CHECK((std::vector<int64_t>{}) == valueSub.Get());
+-}
++// prosdk: "CommandScheduleTest NetworkTablesTunableCancelClearsValue" needs the
++// NetworkTables tunable backend (ntcore is not ported). The same behavior on
++// the Driver Station backend: test/prosdk/commands2/DashboardCommandsTest.cpp.
+diff --git a/test/commandsv2/cpp/CommandTunableButtonTest.cpp b/test/commandsv2/cpp/CommandTunableButtonTest.cpp
+index 718c84f..8e6f555 100644
+--- a/test/commandsv2/cpp/CommandTunableButtonTest.cpp
++++ b/test/commandsv2/cpp/CommandTunableButtonTest.cpp
+@@ -5,12 +5,8 @@
+ #include <memory>
+ 
+ #include "CommandTestBase.hpp"
+-#include "prosdk/backend/NetworkTablesTunableBackend.hpp"
+ #include "prosdk/commands2/Commands.hpp"
+ #include "prosdk/commands2/FunctionalCommand.hpp"
+-#include "prosdk/nt/BooleanTopic.hpp"
+-#include "prosdk/nt/NetworkTableInstance.hpp"
+-#include "prosdk/nt/StringTopic.hpp"
+ #include "prosdk/tunables/MockTunableBackend.hpp"
+ #include "prosdk/tunables/TunableConfig.hpp"
+ #include "prosdk/tunables/TunableRegistry.hpp"
+@@ -39,16 +35,6 @@ class CommandTunableButtonTest : public CommandTestBase {
+   std::optional<CommandPtr> m_command;
+ };
+ 
+-class NetworkTablesTunableTestState {
+- public:
+-  ~NetworkTablesTunableTestState() {
+-    prosdk::tunables::TunableRegistry::Reset();
+-    prosdk::nt::NetworkTableInstance::Destroy(inst);
+-  }
+-
+-  prosdk::nt::NetworkTableInstance inst{prosdk::nt::NetworkTableInstance::Create()};
+-};
+-
+ TEST_CASE_METHOD(CommandTunableButtonTest,
+                  "CommandTunableButtonTest trueAndNotScheduledSchedules",
+                  "[commandsv2][command]") {
+@@ -151,76 +137,7 @@ TEST_CASE_METHOD(CommandTunableButtonTest,
+   CHECK(1 == m_cancel);
+ }
+ 
+-TEST_CASE_METHOD(
+-    CommandTestBase,
+-    "CommandTunableButtonTest NetworkTablesLifecycleMatchesGlassRunCancel",
+-    "[commandsv2][command]") {
+-  int initializeCount = 0;
+-  int executeCount = 0;
+-  int interruptedEndCount = 0;
+-  int finishedEndCount = 0;
+-  FunctionalCommand command{[&] { ++initializeCount; }, [&] { ++executeCount; },
+-                            [&](bool interrupted) {
+-                              if (interrupted) {
+-                                ++interruptedEndCount;
+-                              } else {
+-                                ++finishedEndCount;
+-                              }
+-                            },
+-                            [] { return false; }};
+-  command.SetName("Glass Label");
+-  NetworkTablesTunableTestState ntState;
+-  prosdk::tunables::TunableRegistry::RegisterBackend(
+-      "", std::make_shared<prosdk::backend::NetworkTablesTunableBackend>(
+-              ntState.inst, "/Tunables"));
+-  prosdk::tunables::Publish("command", command);
+-
+-  auto name =
+-      ntState.inst.GetStringTopic("/Tunables/command/name").Subscribe("");
+-  CHECK(false ==
+-        ntState.inst.GetTopic("/Tunables/command/name").GetProperty("mutable"));
+-  CHECK("Glass Label" == name.Get());
+-
+-  auto running =
+-      ntState.inst.GetBooleanTopic("/Tunables/command/running").GetEntry(false);
+-  CHECK(true == ntState.inst.GetTopic("/Tunables/command/running")
+-                    .GetProperty("mutable"));
+-  CHECK_FALSE(running.Get());
+-  CHECK_FALSE(command.IsScheduled());
+-
+-  running.Set(true);
+-  ntState.inst.Flush();
+-  prosdk::tunables::TunableRegistry::Update();
+-
+-  CHECK(command.IsScheduled());
+-  CHECK(running.Get());
+-  CHECK(1 == initializeCount);
+-  CHECK(0 == executeCount);
+-  CHECK(0 == interruptedEndCount);
+-  CHECK(0 == finishedEndCount);
+-
+-  CommandScheduler::GetInstance().Run();
+-  CHECK(1 == executeCount);
+-  prosdk::tunables::TunableRegistry::Update();
+-  CHECK(running.Get());
+-
+-  command.SetName("Updated Label");
+-  prosdk::tunables::TunableRegistry::Update();
+-  CHECK("Updated Label" == name.Get());
+-
+-  running.Set(false);
+-  ntState.inst.Flush();
+-  prosdk::tunables::TunableRegistry::Update();
+-
+-  CHECK_FALSE(command.IsScheduled());
+-  CHECK_FALSE(running.Get());
+-  CHECK(1 == initializeCount);
+-  CHECK(1 == executeCount);
+-  CHECK(1 == interruptedEndCount);
+-  CHECK(0 == finishedEndCount);
+-
+-  CommandScheduler::GetInstance().Run();
+-  CHECK(1 == executeCount);
+-  prosdk::tunables::TunableRegistry::Update();
+-  CHECK_FALSE(running.Get());
+-}
++// prosdk: "CommandTunableButtonTest NetworkTablesLifecycleMatchesGlassRunCancel"
++// needs the NetworkTables tunable backend (ntcore is not ported). The same
++// lifecycle on the Driver Station backend:
++// test/prosdk/commands2/DashboardCommandsTest.cpp.

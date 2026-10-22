@@ -206,8 +206,13 @@ Widget child layout confirmed by probot-core (2026-10-22), matches upstream `Sel
   topic at its own path (flag ROBUST), never split into `value`/`tune` sub-topics as the NT backend does.
 - Wire correction (2026-10-22): 'V' = {u32 LE robot millis} then repeated {u16 id, u16 len, bytes}. prosdk uses
   the C++ API only, so this does not affect the backends.
-- PIDController and Alerts widgets are in #28 with the layouts above. R5 remaining: Field2d, Mechanism2d.
-  probot-core continues with R7.
+- PIDController and Alerts widgets are in #28 with the layouts above. R5 remaining: Field2d, Mechanism2d,
+  Scheduler (layout below, added 2026-10-22 with commandsv2). probot-core continues with R7.
+- Scheduler (upstream `CommandScheduler.cpp` `LogTo`/`PublishTunable`): telemetry table `.type`="Scheduler"
+  with `Names` (string[], running command names) and `Ids` (int64[], same order); tunable table
+  `.type`="Scheduler" with `Names` and `Ids` (read-only, TUNABLE) and `Cancel` (int64[], TUNABLE|MUTABLE|ROBUST).
+  Widget: the running commands, each with a cancel button that writes `[id]` to `Cancel` (the robot cancels
+  those ids that are still scheduled and clears `Cancel`). Until it exists the DS shows the plain tree.
 
 ### P1 R7 delivered (2026-10-22): draft PR #29 (branch `feat/opmode-list`, stacked on #28)
 

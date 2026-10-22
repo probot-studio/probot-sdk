@@ -40,6 +40,7 @@ the Java names are the same upper-case words, so there is no other spelling to u
 | `wpi::CompressorConfigType::DISABLED` / `DIGITAL` / `ANALOG` / `HYBRID` | `prosdk::CompressorConfigType::kDisabled` / `kDigital` / `kAnalog` / `kHybrid` | `DISABLED`, `ANALOG` |
 | `Button::CROSS` ... `Button::RIGHT_FUNCTION` of the PlayStation controllers (`DualShock4Controller`, `DualSenseController`, `DualSenseEdgeController`, `NiDsPS4Controller`, `NiDsPS5Controller`) | `Button::kCross`, `kCircle`, `kSquare`, `kTriangle`, `kShare`/`kCreate`, `kPS`, `kOptions`, `kL1`, `kR1`, `kL2`, `kR2`, `kL3`, `kR3`, `kDpadUp`, `kDpadDown`, `kDpadLeft`, `kDpadRight`, `kTouchpad`, `kMicrophone`, `kRightPaddle1`, `kLeftPaddle1`, `kLeftFunction`, `kRightFunction` (only in these five classes; the other controllers keep their `Button` names) | `PS` (Xtensa `specreg.h`) |
 | `BooleanEvent PS(EventLoop*)` of the same five classes | `PSButton(EventLoop*)` (matches `GetPSButton()` / `GetPSButtonPressed()`) | `PS` |
+| `Trigger PS(EventLoop*)` of their command wrappers (`CommandDualShock4Controller`, `CommandDualSenseController`, `CommandDualSenseEdgeController`, `CommandNiDsPS4Controller`, `CommandNiDsPS5Controller`) | `PSButton(EventLoop*)`; the wrappers use the renamed `Button::k...` enumerators of their controllers | `PS` |
 
 Other Arduino macro names used inside vendored headers (internal names, parameters, `F`, `likely`, ...)
 need no rename: each public header is wrapped in `#pragma push_macro` / `#undef` / `#pragma pop_macro` for
@@ -100,6 +101,12 @@ spelled in a sketch, because the Xtensa header `xtensa/config/specreg.h` (includ
 | `RobotBase::GetThreadId()` | ESP32: `std::thread::id{}` (the robot runs on core's user task, a FreeRTOS task without a pthread; ESP-IDF's `pthread_self()` aborts there). Host: upstream | `wpilibc/0010` |
 | `DriverStationDisplay` (`HAL_WriteDisplayAnsi`) | ESP32: frames go to the Driver Station console with ANSI sequences removed; a frame equal to the previous one is not repeated. Host: simulation backend (upstream) | hand-written `src/prosdk/platform/hal/esp32/DriverStation.cpp` |
 | Upstream test `TimedRobotTest` `ConstructorPublishesProgramStartTime`, `ConstructorRegistersTelemetryAndTunableBackends` | replaced by `TimedRobotTest RobotHostHooks` (they read NT topics; ntcore is not ported). The robot tests no longer reset the NT instance | `wpilibc/0004` |
+| `prosdk::cmd::CommandHelper<Base, CRTP>` (command names) | built without RTTI: a command is named after its CRTP class when it is constructed (`prosdk::util::GetTypeName<CRTP>()`, for example `prosdk::cmd::InstantCommand` or a user's `DriveDistance`). Upstream C++ names it in the `Command` constructor with `GetTypeName(*this)`, which there yields the base type (`wpi::cmd::Command`). `SetName()` and `WithName()` work as upstream | `commandsv2/0001` |
+| `prosdk::cmd::Subsystem::GetName()`, `SubsystemBase` default name | the static type name (`wpiutil/0004`): `prosdk::cmd::Subsystem` for a class that implements `Subsystem` directly (upstream: its dynamic type), `prosdk::cmd::SubsystemBase` for a `SubsystemBase` (as upstream, which names it in the base constructor). Name subsystems with `SubsystemBase(name)` or `SetName()` | none |
+| `PrintCommand`, `CommandScheduler` warnings (loop overrun, subsystem registered twice, non-interruptible default command) | written to the platform console (`prosdk::platform::ConsoleWrite`) instead of stdout | `commandsv2/0002` |
+| `prosdk::cmd::NetworkButton` | re-implemented over tunables instead of an NT boolean topic: `NetworkButton(path)` and `NetworkButton(table, field)` (path `table/field`) publish one `Tunable<bool>` per normalized path, shared by every button on it and removed with the last one (on the Driver Station a writable boolean under `/Tunables/<path>`). The trigger is true while the value is true and a Driver Station is attached (upstream: while NetworkTables is connected). The constructors taking `nt::BooleanTopic`, `nt::BooleanSubscriber`, `nt::NetworkTable` and `nt::NetworkTableInstance` are removed | `commandsv2/0003` |
+| `CommandScheduler` and `Command` on the Driver Station | API unchanged: `telemetry::Log(name, scheduler)` and `tunables::Publish(name, scheduler)` go through the probot-core dashboard backends (`.type` `Scheduler`: `Names`, `Ids`, writable `Cancel`); commands publish `.type` `Command` (`name`, `running`). The Driver Station has a `Command` widget but no `Scheduler` widget yet (design/core-requests.md R5) | none |
+| Upstream tests `CommandScheduleTest NetworkTablesTunableCancelClearsValue`, `CommandTunableButtonTest NetworkTablesLifecycleMatchesGlassRunCancel`, `NetworkButtonTest` | the first two read the NT tunable backend (ntcore is not ported) and are removed; the same flows on the Driver Station backend are tested in `test/prosdk/commands2/DashboardCommandsTest.cpp`. `NetworkButtonTest` is rewritten over a mock tunable backend | `commandsv2/0004`, `commandsv2/0003` |
 
 ## 4. Excluded files (vendored modules)
 
@@ -175,6 +182,11 @@ Whole upstream trees not vendored:
 | `wpilibc/src/generate` | Jinja templates of the HID classes; their output (`wpilibc/src/generated`, 15 controllers and 15 `*ControllerSim` classes plus their tests) is committed upstream and vendored instead. `WPILibVersion.cpp.in`: hand-written `src/prosdk/platform/WPILibVersion.cpp` |
 | `wpilibc/src/main/python`, `wpilibc/src/test/python` | Python bindings and tests |
 | `wpilibc/src/dev` | upstream developer scratch executable |
+| `commandsv2/src/generate` | Jinja templates of the `Command*Controller` wrappers; their output (`commandsv2/src/generated`) is committed upstream and vendored instead |
+| `commandsv2/src/main/java`, `commandsv2/src/test/java`, `commandsv2/src/test/resources` | Java API, Java tests and their JUnit service registration (no JVM on the MCU) |
+| `commandsv2/src/main/python`, `commandsv2/src/test/python` | Python bindings (RobotPy commands2) and tests |
+| `commandsv2/src/test/native/BUILD.bazel` | Bazel build file |
+| `commandsv2/src/dev` | upstream developer scratch executable |
 
 The source of truth for these lists is the module data in `tools/upstream/modules/*.py`; this table is
 updated with it.
@@ -205,5 +217,6 @@ and the hand-written ESP32-S3 backend, `design/hal-esp32.md`) and the DataLog wr
 wpilibc (framework, opmodes, Driver Station and the generated HID classes, events, hardware, drive,
 LED, system, sysid, preferences, simulation, smartdashboard), with NetworkTables removed by the
 `wpilibc/*` patches and the robot host hooks in `prosdk/platform/RobotHost.hpp`. The robot host
-(`PROSDK_ROBOT_MAIN`, hosted loop on probot-core, `wpilibc/0010`) runs robot classes on the robot. Later waves
-(commandsv2) add their renames and exclusions here.
+(`PROSDK_ROBOT_MAIN`, hosted loop on probot-core, `wpilibc/0010`) runs robot classes on the robot. commandsv2 (the
+command-based framework, `commandsv2/*` patches) is vendored on top of wpilibc. Later waves add their
+renames and exclusions here.

@@ -1,0 +1,195 @@
+diff --git a/src/prosdk/impl/commandsv2/cpp/CommandScheduler.cpp b/src/prosdk/impl/commandsv2/cpp/CommandScheduler.cpp
+index 98315f5..c26fa12 100644
+--- a/src/prosdk/impl/commandsv2/cpp/CommandScheduler.cpp
++++ b/src/prosdk/impl/commandsv2/cpp/CommandScheduler.cpp
+@@ -4,7 +4,6 @@
+ 
+ #include "prosdk/commands2/CommandScheduler.hpp"
+ 
+-#include <cstdio>
+ #include <memory>
+ #include <string>
+ #include <utility>
+@@ -15,6 +14,7 @@
+ #include "prosdk/driverstation/RobotState.hpp"
+ #include "prosdk/framework/RobotBase.hpp"
+ #include "prosdk/framework/TimedRobot.hpp"
++#include "prosdk/platform/Console.hpp"
+ #include "prosdk/telemetry/TelemetryTable.hpp"
+ #include "prosdk/tunables/TunableConfig.hpp"
+ #include "prosdk/tunables/TunableTable.hpp"
+@@ -64,7 +64,7 @@ static bool ContainsKey(const TMap& map, TKey keyToCheck) {
+ 
+ CommandScheduler::CommandScheduler()
+     : m_impl(new Impl), m_watchdog(prosdk::TimedRobot::DEFAULT_PERIOD, [] {
+-        std::puts("CommandScheduler loop time overrun.");
++        prosdk::platform::ConsoleWrite("CommandScheduler loop time overrun.\n");
+       }) {
+   prosdk::util::ReportUsage("CommandScheduler", "");
+ }
+@@ -231,7 +231,8 @@ void CommandScheduler::Run() {
+ 
+ void CommandScheduler::RegisterSubsystem(Subsystem* subsystem) {
+   if (m_impl->subsystems.find(subsystem) != m_impl->subsystems.end()) {
+-    std::puts("Tried to register an already-registered subsystem");
++    prosdk::platform::ConsoleWrite(
++        "Tried to register an already-registered subsystem\n");
+     return;
+   }
+ 
+@@ -553,10 +554,10 @@ void CommandScheduler::SetDefaultCommandImpl(Subsystem* subsystem,
+                                              std::unique_ptr<Command> command) {
+   if (command->GetInterruptionBehavior() ==
+       Command::InterruptionBehavior::CANCEL_INCOMING) {
+-    std::puts(
++    prosdk::platform::ConsoleWrite(
+         "Registering a non-interruptible default command!\n"
+         "This will likely prevent any other commands from "
+-        "requiring this subsystem.");
++        "requiring this subsystem.\n");
+     // Warn, but allow -- there might be a use case for this.
+   }
+   m_impl->subsystems[subsystem] = std::move(command);
+diff --git a/src/prosdk/impl/commandsv2/cpp/PrintCommand.cpp b/src/prosdk/impl/commandsv2/cpp/PrintCommand.cpp
+index bc34133..3924505 100644
+--- a/src/prosdk/impl/commandsv2/cpp/PrintCommand.cpp
++++ b/src/prosdk/impl/commandsv2/cpp/PrintCommand.cpp
+@@ -6,13 +6,18 @@
+ 
+ #include <string>
+ 
+-#include "prosdk/util/print.hpp"
++#include "prosdk/platform/Console.hpp"
+ 
+ using namespace prosdk::cmd;
+ 
+ PrintCommand::PrintCommand(std::string_view message)
+     : CommandHelper{
+-          [str = std::string(message)] { prosdk::util::print("{}\n", str); }, {}} {
++          // prosdk: to the platform console (Driver Station console on the
++          // robot) instead of stdout
++          [str = std::string(message).append("\n")] {
++            prosdk::platform::ConsoleWrite(str);
++          },
++          {}} {
+ }
+ 
+ bool PrintCommand::RunsWhenDisabled() const {
+diff --git a/test/commandsv2/cpp/PrintCommandTest.cpp b/test/commandsv2/cpp/PrintCommandTest.cpp
+index 3410a5e..e5831f2 100644
+--- a/test/commandsv2/cpp/PrintCommandTest.cpp
++++ b/test/commandsv2/cpp/PrintCommandTest.cpp
+@@ -4,100 +4,44 @@
+ 
+ #include "prosdk/commands2/PrintCommand.hpp"
+ 
+-#include <array>
+-#include <cstdio>
+ #include <regex>
+ #include <string>
+-
+-#ifdef _WIN32
+-#include <io.h>
+-#else
+-#include <unistd.h>
+-#endif
++#include <string_view>
+ 
+ #include "CommandTestBase.hpp"
+ #include "prosdk/commands2/Commands.hpp"
++#include "prosdk/platform/Console.hpp"
+ 
+ using namespace prosdk::cmd;
+ class PrintCommandTest : public CommandTestBase {};
+ 
+ namespace {
+ 
++// prosdk: PrintCommand writes to the platform console instead of stdout, so the
++// test captures the console sink.
+ class StdoutCapture {
+  public:
+   StdoutCapture() {
+-    std::fflush(stdout);
+-    m_file = std::tmpfile();
+-    REQUIRE(m_file != nullptr);
+-    m_originalStdout = Dup(Fileno(stdout));
+-    REQUIRE(m_originalStdout >= 0);
+-    REQUIRE(Dup2(Fileno(m_file), Fileno(stdout)) >= 0);
++    Captured().clear();
++    prosdk::platform::SetConsoleSink(
++        [](std::string_view text) { Captured().append(text); });
+   }
+ 
+   StdoutCapture(const StdoutCapture&) = delete;
+   StdoutCapture& operator=(const StdoutCapture&) = delete;
+ 
+-  ~StdoutCapture() {
+-    if (m_originalStdout >= 0) {
+-      std::fflush(stdout);
+-      Dup2(m_originalStdout, Fileno(stdout));
+-      Close(m_originalStdout);
+-    }
+-    if (m_file) {
+-      std::fclose(m_file);
+-    }
+-  }
++  ~StdoutCapture() { prosdk::platform::SetConsoleSink(nullptr); }
+ 
+   std::string Stop() {
+-    std::fflush(stdout);
+-    REQUIRE(Dup2(m_originalStdout, Fileno(stdout)) >= 0);
+-    Close(m_originalStdout);
+-    m_originalStdout = -1;
+-
+-    std::rewind(m_file);
+-    std::string output;
+-    std::array<char, 1024> buffer;
+-    while (auto count = std::fread(buffer.data(), 1, buffer.size(), m_file)) {
+-      output.append(buffer.data(), count);
+-    }
+-    return output;
++    prosdk::platform::SetConsoleSink(nullptr);
++    return Captured();
+   }
+ 
+  private:
+-  static int Fileno(FILE* file) {
+-#ifdef _WIN32
+-    return _fileno(file);
+-#else
+-    return fileno(file);
+-#endif
++  static std::string& Captured() {
++    static std::string captured;
++    return captured;
+   }
+-
+-  static int Dup(int fd) {
+-#ifdef _WIN32
+-    return _dup(fd);
+-#else
+-    return dup(fd);
+-#endif
+-  }
+-
+-  static int Dup2(int source, int dest) {
+-#ifdef _WIN32
+-    return _dup2(source, dest);
+-#else
+-    return dup2(source, dest);
+-#endif
+-  }
+-
+-  static void Close(int fd) {
+-#ifdef _WIN32
+-    _close(fd);
+-#else
+-    close(fd);
+-#endif
+-  }
+-
+-  FILE* m_file = nullptr;
+-  int m_originalStdout = -1;
+ };
+ 
+ }  // namespace
