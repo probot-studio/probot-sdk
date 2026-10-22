@@ -11,8 +11,11 @@ Device drivers for the Probot kit on top of the prosdk HAL and wpilibc classes. 
 - **Hand-written** (`src/prosdk/drivers/`, tests in `test/prosdk/drivers`, executable
   `prosdk_drivers_tests`): `Servo` (the WPILib 2026 API, removed in 2027) and the drivers of the old
   Probot Lib 0.2.6 (BTS7960, VNH5019, MPU6050, ProHub PCA9685 and encoder stream), rewritten on prosdk
-  classes. They never touch Arduino or probot-core APIs; all hardware access goes through prosdk
-  `PWM`, `DigitalOutput`, `I2C` and `SerialPort`, so they run unchanged on the host simulation HAL.
+  classes, and the drivers for the Boardoza boards (section "Boardoza boards"). They never touch
+  Arduino or probot-core APIs; all hardware access goes through prosdk classes (`PWM`,
+  `DigitalOutput`, `DigitalInput`, `AnalogInput`, `Encoder`, `I2C`, `SerialPort`, `SPI`) and the
+  platform HAL extensions (SPI, timed DIO, pulse I/O, six-step; `design/hal-esp32.md`), so they
+  run unchanged on the host simulation HAL.
 
 Every motor driver is a `MotorController` with `MotorSafety` (`Feed()` on every `SetThrottle()`),
 inversion, `GetDescription()` and telemetry (`TelemetryLoggable`, type "Motor Controller", entry
@@ -31,6 +34,10 @@ Example: `examples/DriversShowcase` (one of each driver in a TimedRobot).
   is not enabled, every pin driven low by the lock-free emergency-stop callback.
 - I2C devices are not gated by the HAL (I2C is never gated). The PCA9685 driver gates itself
   (section "PCA9685"); the emergency stop has a limitation there.
+- SPI is not gated either. Pulse transmitters (`PulseTransmitter`, IR, PYD1598 SERIN) are not
+  gated while disabled, like LED strips; the emergency stop drives their pins low. The DRV2605L
+  haptic driver and the GP8403 DAC are I2C outputs and are not gated: they set safe outputs at
+  construction and in the destructor. The DRV8317H coasts while the gate is closed.
 
 ## Digital PWM (ESP32 HAL)
 
@@ -49,7 +56,12 @@ implements on the LEDC peripheral (`src/prosdk/platform/hal/esp32/DIO.cpp`):
 - PPS mode and `DigitalOutput::Pulse` are not implemented (`HAL_HANDLE_ERROR`).
 
 Budget: one BTS7960 uses 2 generators (`PWM_ON_INPUTS`) or 1 (`PWM_ON_ENABLE`), one VNH5019 uses 1.
-Six generators drive at most three BTS7960 in the default wiring, or six VNH5019.
+Of the Boardoza drivers, `TwoPinHBridge` uses 2 per motor (the dual L9110S board 4), `VNH7070AS`
+and `DRV8307` 1 each; `DRV8317H` uses MCPWM instead. Six generators drive at most three BTS7960
+in the default wiring, six VNH5019, or three two-pin H-bridge motors. Every one of these drivers
+sets 20 kHz (the VNH7070AS maximum, inside the DRV8307's 16-50 kHz), so mixing them keeps one
+rate; any other `SetPWMRate` call changes the rate of every motor. The full budget of shared
+units is in `design/boardoza.md`.
 
 ## Servo
 
@@ -175,6 +187,36 @@ As upstream WPILib 2027. The PWM motor controllers run on prosdk `PWM` (MCPWM, g
 `design/hal-esp32.md` for the PWM channel limits. `GoBildaPinpoint` talks I2C (default address 0x31)
 and needs its port's pins set, for example by `prohub::ConfigurePins()` when it shares the ProHub bus.
 
+## Boardoza boards
+
+Drivers for the Boardoza breakout boards. The board index, the shared resource budget and the
+5 V hazards are in `design/boardoza.md`; each package document gives the wiring, API, behaviour
+and what is verified. None of them has been tested on hardware.
+
+| Package | Classes (`src/prosdk/drivers/...`) |
+|---|---|
+| [F1](boardoza/F1-spi.md) | `SPI` (bus/) |
+| [F3](boardoza/F3-timed-io.md) | `DigitalShift`, `WriteWaveform`, `PulseTransmitter`, `PulseCapture` (bus/) |
+| [P1](boardoza/P1-climate.md) | `LM75A`, `HIH8000`, `ENS210`, `MS5611`, `DPS310`, `BME688` (environment/) |
+| [P2](boardoza/P2-light-thermal.md) | `OPT3001`, `OPT4048` (light/), `CaliPile`, `MLX90640`, `MLX90641` (thermal/) |
+| [P3](boardoza/P3-imu.md) | `BNO055`, `BMI088`, `LSM303AGR` (imu/) |
+| [P4](boardoza/P4-tof.md) | `VL53L7CX` (range/) |
+| [P5](boardoza/P5-i2c-misc.md) | `DRV2605L` (haptic/), `PCF8563` (rtc/), `GP8403` (dac/), `I2CSwitch` (bus/), `NT3H2111` (memory/) |
+| [P6](boardoza/P6-loadcell.md) | `NAU7802`, `HX711`, `LoadCell` (adc/) |
+| [P7](boardoza/P7-gnss.md) | `UbloxGnss`, `NmeaGnss`, `GnssFix`, `nmea::`, `ubx::` (gnss/) |
+| [P8](boardoza/P8-motors.md) | `TwoPinHBridge` (`L9110S`, `BA6208`), `VNH7070AS`, `DRV8307` (motor/) |
+| [P9](boardoza/P9-storage.md) | `W25QFlash`, `W25NFlash` (memory/); `platform::MountSdCard` (`src/prosdk/platform/SdCard.hpp`) |
+| [P10](boardoza/P10-tmag-leds.md) | `TMAG5170` (magnetic/), `ClockedAddressableLED` (led/) |
+| [P11](boardoza/P11-lora.md) | `SX126x` (radio/) |
+| [P12](boardoza/P12-pulse.md) | `IRTransceiver`, `OokReceiver` (radio/), `PYD1598` (sensor/) |
+| [P13](boardoza/P13-eve.md) | `FT8xx`, `ft8xx::` panel presets (display/) |
+| [P14](boardoza/P14-existing.md) | `AnalogCurrentSensor` (analog/); the boards that existing classes drive |
+| [P15](boardoza/P15-drv8317h.md) | `DRV8317H` (motor/) |
+
+Third-party code: the Melexis MLX90640/41 API (`thermal/melexis/`, Apache-2.0) and the ST VL53L7CX
+ULD (`range/st/`, BSD-3-Clause), listed in `NOTICE`. The sim I2C changes that the I2C driver
+tests rely on (device address, per-address NACK) are [F2](boardoza/F2-sim-i2c.md).
+
 ## Tests
 
 - `drivers_tests`: the upstream tests (PWM motor controller pulse ranges, Pinpoint register
@@ -184,3 +226,11 @@ and needs its port's pins set, for example by `prohub::ConfigurePins()` when it 
   wirings, brake/coast, inversion, disable), VNH5019 (direction, brake, EN pins), MPU6050 (fake
   register file: configuration, calibration, yaw integration on simulated time, tilt), ProHub
   encoders (frame parsing, resync, CRC errors, timeout, per-channel offset/reverse/rate).
+  Boardoza (one `<Class>Test.cpp` each, on `FakeI2CBus`, `FakeSPIDevice` or the DIO/analog/pulse
+  sims): `FakeI2CBus` itself, SPI, DigitalShift, PulseIO; LM75A, HIH8000, ENS210, MS5611, DPS310,
+  BME688; OPT3001, OPT4048, CaliPile, MLX90640, MLX90641; BNO055, BMI088, LSM303AGR; VL53L7CX;
+  DRV2605L, PCF8563, GP8403, I2CSwitch, NT3H2111; NAU7802, HX711, LoadCell; Nmea, Ubx,
+  UbloxGnss, NmeaGnss; TwoPinHBridge, VNH7070AS, DRV8307, DRV8317H; W25QFlash, W25NFlash;
+  TMAG5170, ClockedAddressableLED; SX126x; IRTransceiver, OokReceiver, PYD1598; FT8xx;
+  AnalogCurrentSensor. These were syntax-checked only when they were added; they have not yet
+  been built or run.

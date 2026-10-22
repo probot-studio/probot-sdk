@@ -13,7 +13,8 @@ Driver Station (design/PORT.md section 8).
 ## Channel model
 
 - **Channel = GPIO number** for every pin API: DIO, PWM, Counter, Encoder, DutyCycle,
-  AnalogInput, AddressableLED. There are no fixed headers like the roboRIO's DIO 0-9.
+  AnalogInput, AddressableLED, and the prosdk extensions (SPI, timed DIO, pulse I/O, six-step).
+  There are no fixed headers like the roboRIO's DIO 0-9.
 - One table (`smartIoHandles`, a `DigitalHandleResource` indexed by GPIO, as systemcore's
   SmartIo) gives each pin exactly one owner. Allocating a pin twice fails with
   `HAL_RESOURCE_IS_ALLOCATED` and the previous allocation location.
@@ -30,7 +31,8 @@ Driver Station (design/PORT.md section 8).
     `Wire`, `Serial1`, `ledcAttach`, `analogRead` outside the HAL);
   - is the RX/TX pin of a serial port the HAL opened or the TX/RX pin of the started CAN bus:
     these claim their pins in `smartIoHandles` (`ClaimPin`, the owner shows in the error message)
-    and release them on close (serial) or never (CAN runs until reboot).
+    and release them on close (serial) or never (CAN runs until reboot). SPI bus and chip-select
+    pins, the SD card's chip select, pulse I/O pins and six-step pins are claimed the same way.
 - Free/Clean releases everything the HAL created: the hardware unit (MCPWM timer/generator, PCNT
   unit, capture channel, RMT channel, UART driver, TWAI driver), the Arduino peripheral-manager
   attachment, and the pin, which returns to `gpio_reset_pin` state (input with pull-up). After an
@@ -48,12 +50,16 @@ Driver Station (design/PORT.md section 8).
 | Counters + encoders | 4 together | 4 PCNT units | one unit each |
 | Duty-cycle inputs | 6 | 2 MCPWM groups x 3 capture channels | |
 | Analog inputs | 10 | ADC1, GPIO 1-10 | ADC2 refused (WiFi) |
-| Addressable LED outputs | 3 | RMT TX channels (4; core's status LED uses one) | 1024 LEDs shared buffer |
+| Addressable LED outputs + pulse transmitters | 3 together | RMT TX channels (4; core's status LED uses one) | 1024 LEDs shared buffer; one counter (`rmt::AcquireTxChannel`) for both kinds |
+| Pulse capture inputs | 4 | RMT RX channels | |
 | I2C ports | 2 | I2C controllers 0 and 1 | port 0 = `Wire`'s bus |
 | Serial ports | 2 | UART1 (kOnboard), UART2 (kMXP) | USB ports not available |
 | CAN buses | 1 | TWAI | external transceiver, classic CAN |
+| SPI buses | 2 | SPI2 (`kPort0`), SPI3 (`kPort1`); SPI0/1 are the flash | no default pins (`SetSPIPins`) |
+| SPI chip selects | 6 + 3 | hardware CS of SPI2 and SPI3 | a device without chip select takes the whole bus |
+| Six-step motors | 2 | 1 MCPWM timer/operator pair each | each motor leaves 2 fewer of the 12 PWM outputs |
 | Notifiers | unlimited | one thread, software alarms | |
-| Interrupts | 0 | | WPILib 2027 has no interrupt HAL |
+| Interrupts | 0 | | WPILib 2027 has no interrupt HAL; only the six-step extension uses GPIO interrupts (the GPIO ISR service) |
 | Digital PWM generators | 6 | LEDC, on DIO outputs | one rate for all, 5 Hz to 40 kHz; gated |
 | DIO pulses | 0 | | stubs (systemcore does not implement them either) |
 | CTRE PCM, REV PH, PDP/PDH | 0 | | not supported (below) |
@@ -67,17 +73,24 @@ Driver Station (design/PORT.md section 8).
   `prosdk-gate` esp_timer, so outputs stop within about 10 ms of a disable even if the user loop
   hangs. Pulse values set while disabled are kept and apply on the next enable.
   Digital PWM generators (DIO) are gated the same way: their duty is 0 while the gate is
-  closed (the value set is kept).
+  closed (the value set is kept). Six-step motors coast while the gate is closed.
 - **Emergency stop**: core deletes the user task and calls the framework e-stop hook on a fresh
-  task. The backend's callback is lock-free: every HAL output pin (PWM, DIO outputs, LED data
-  lines) is routed back to plain GPIO and driven low, then CAN periodic frames are stopped. After
+  task. The backend's callback is lock-free except for the six-step step: `sixstep::OnEmergencyStop`
+  runs first, takes the Hall interrupt's spinlock (held by every holder for a few register writes
+  only), coasts every six-step motor and latches a flag so that neither the interrupt nor a
+  setter drives a phase again. Then every HAL output pin (PWM, DIO outputs, LED data lines, pulse
+  transmitter pins, six-step phase pins) is routed back to plain GPIO and driven low, then CAN
+  periodic frames are stopped. New pulse transmitters, pulse trains and six-step motors are
+  refused afterwards (`HAL_INCOMPATIBLE_STATE`). After
   that, new PWM/DIO-output/LED allocations and PWM period changes (they recreate the MCPWM
   generator, which would reconnect the pin) fail with `HAL_INCOMPATIBLE_STATE`, PWM outputs stay
   forced low whatever their pulse value, and DIO writes are ignored until reboot (a write racing
   the e-stop is undone). Deviation from the roboRIO: DIO outputs are also driven low (the roboRIO
   keeps DIO values on disable); "every HAL output" stops on an e-stop.
 - **Not gated**: DIO output levels while merely disabled (as on the roboRIO), LED strips (they show
-  robot state), I2C, serial and CAN. CAN TX is never forced low: a dominant TX line jams the bus;
+  robot state), pulse transmitters while merely disabled (an IR command or a sensor configuration
+  word is not an actuator output), I2C, SPI, serial and CAN. Neither the gate nor the emergency
+  stop stops SPI; no Boardoza SPI board drives an actuator. CAN TX is never forced low: a dominant TX line jams the bus;
   after an e-stop periodic frames stop and new sends fail with
   `HAL_ERR_CANSessionMux_NotAllowed`.
 - **Brownout** is reported only (`HAL_GetBrownedOut`); outputs are not cut by hardware as on the
@@ -161,6 +174,31 @@ Driver Station (design/PORT.md section 8).
   repeated start.
 - The HAL deinitializes a controller on the last close only if it started it.
 
+### SPI (SPI.cpp)
+- `prosdk::platform::hal` C++ API (`prosdk/platform/hal/SPI.hpp`: `OpenSpiDevice`,
+  `ConfigureSpiDevice`, `SpiTransfer`, `CloseSpiDevice`) behind `prosdk::SPI`; WPILib 2027 has
+  no SPI HAL. Bus 0 = SPI2, bus 1 = SPI3; pins from `prosdk::platform::SetSPIPins(bus, sck,
+  mosi, miso)` (no defaults; `miso` -1 for a transmit-only bus).
+- The bus starts lazily on its first device (no `Initialize*` hook): `spi_bus_initialize` with
+  `SPI_DMA_CH_AUTO` and `max_transfer_sz` 4092, then one `spi_bus_add_device` per device
+  (`queue_size` 1). The bus is freed when its last user leaves.
+- Bus and CS pins are claimed with `ClaimPin` (handle type `VENDOR`). Chip select is the
+  peripheral's hardware CS: 6 on SPI2, 3 on SPI3. A device without chip select must be alone on
+  its bus: opening it on a bus with any user fails, and so does the reverse.
+- Transfers are full duplex and serialized by one mutex per bus. Pieces of at most 64 bytes are
+  polled, longer ones use the interrupt and DMA, and a segment over 4092 bytes is split. A
+  transaction of several pieces acquires the bus and keeps CS active
+  (`SPI_TRANS_CS_KEEP_ACTIVE`) until its last piece. Segments without transmit data send from a
+  4092-byte DMA-capable zero buffer, allocated once. A transmit-only bus adds its devices with
+  `SPI_DEVICE_NO_DUMMY`.
+- Not gated (see Output safety).
+- **SD card** (`prosdk::platform::MountSdCard`, `src/prosdk/platform/SdCard.cpp`): the card joins
+  a bus through `detail::RetainSpiBus` (`esp32/SpiInternal.hpp`) and counts as one bus user,
+  claims its chip select (`ClaimPin`, `VENDOR`, owner "SD card"), enables the MISO pull-up and
+  lets `esp_vfs_fat_sdspi_mount` add its device. It stays mounted until the program ends. Mount it
+  before other devices on the same bus talk. `RetainSpiBus` is refused on a bus that has a
+  device without chip select. Details: `design/boardoza/P9-storage.md`.
+
 ### Serial (SerialPort.cpp)
 - kOnboard = UART1 (default RX 15 / TX 16), kMXP = UART2 (no default pins:
   `prosdk::platform::SetSerialPins(1, rx, tx)`). kUSB1/kUSB2: `HAL_SERIAL_PORT_NOT_FOUND`
@@ -188,6 +226,51 @@ Driver Station (design/PORT.md section 8).
   are not part of the Probot kit.
 - `HAL_CAN_GetCANStatus`: TX/RX error counters, bus-off count, TX-full count; bus utilization is
   not measured (0).
+
+### Timed DIO (BitBang.cpp)
+- `prosdk/platform/hal/BitBang.hpp`: `ShiftIn(clockGpio, dataGpio, bits, highNs, lowNs, ...)`
+  and `WriteWaveform(gpio, spans, ...)`, behind `prosdk::DigitalShift` and
+  `prosdk::WriteWaveform`. The pins are GPIO numbers of allocated DIOs in the right direction
+  (wpilibc does not expose DIO handles).
+- Pin access through `gpio_ll` registers, waits are busy loops on the CPU cycle counter. A
+  critical section masks interrupts for each clock-high phase of `ShiftIn` (at most 20 us) and
+  for each whole `WriteWaveform` (at most 20 us); low phases run with interrupts enabled. The
+  caller's thread busy-waits for the whole call.
+- Emergency stop: nothing is written afterwards; a clock high that raced it is driven low again
+  and the call fails.
+
+### Pulse I/O (PulseIO.cpp)
+- `prosdk/platform/hal/PulseIO.hpp`: `OpenPulseTx`, `SendPulses`, `WaitPulsesSent`,
+  `OpenPulseRx(gpio, glitchUs, idleUs, ...)`, `ReadPulses`, `GetDroppedPulses`, `ClosePulse`,
+  behind `prosdk::PulseTransmitter` and `prosdk::PulseCapture`.
+- TX: one RMT TX channel per transmitter (from the 3 shared with addressable LEDs), 1 MHz
+  resolution, 48-symbol block, queue depth 1, copy encoder; optional carrier from the RMT
+  (`rmt_apply_carrier`, 2 kHz-1 MHz). The pin is registered as a HAL output pin, so the
+  emergency stop drives it low. Not gated while disabled.
+- RX: one RMT RX channel per capture (4), 1 MHz resolution, 96-symbol buffer with partial
+  receive; the glitch filter and idle time map to `signal_range_min_ns` / `signal_range_max_ns`.
+  The receive-done interrupt copies symbols into a lock-free 256-pulse ring and re-arms the
+  receiver. The 4 capture slots are static (about 5.5 KiB) and never freed, so a late interrupt
+  cannot touch freed memory.
+- Details: `design/boardoza/F3-timed-io.md`.
+
+### Six-step commutation (SixStep.cpp)
+- `prosdk/platform/hal/SixStep.hpp`: `OpenSixStep(pins, pwmHz, ...)`, `SetSixStepTable`,
+  `SetSixStepOutput(duty, brake)`, `GetSixStepFeedback`, `CloseSixStep`, behind
+  `prosdk::DRV8317H` (3x PWM mode: INHx carries the PWM, INLx enables a phase). At most 2 motors
+  (`kMaxSixStepMotors`), PWM 1-100 kHz.
+- PWM: one MCPWM timer (10 MHz) with one operator, comparator and generator per motor, taken from
+  the pairs the servo PWM outputs use. The generator's output signal is routed through the GPIO
+  matrix to the INHx of the switching phase; the other INHx pins are held low.
+- Commutation: a GPIO interrupt (the GPIO ISR service, shared with Arduino `attachInterrupt`) on
+  every edge of the 3 Hall pins reads the Halls, looks up a precomputed table and writes up to 6
+  GPIO registers, in an order where every intermediate state is Hi-Z or a subset of the target.
+  The duty and mode setters re-read the Halls, which recovers a missed edge at standstill.
+- Gate: the motor coasts while the output gate is closed (applied from the 10 ms gate timer and
+  `UpdateOutputGate`). Emergency stop: see Output safety. Close: the motor coasts, the MCPWM
+  objects are deleted and the pins are reset with a pull-down (a pull-up would turn a high side
+  on in 3x mode).
+- Details: `design/boardoza/P15-drv8317h.md`.
 
 ### Driver Station (DriverStation.cpp)
 - The Driver Station is probot-core's browser Driver Station; the backend reads it through the
@@ -289,8 +372,10 @@ Driver Station (design/PORT.md section 8).
 ## Completeness
 
 `tools/build/hal_link_test.py --out DIR --compile` generates a sketch that takes the address of
-all 731 functions in `design/hal-esp32-functions.txt` (695 backend + 36 common) and uses
+all 733 functions in `design/hal-esp32-functions.txt` (697 backend + 36 common) and uses
 `GetDefaultDriverStationImpl` and both `SimDevice` constructors, then links it with probot-core
 (huge_app partition). A missing definition is an `undefined reference` link error.
 `examples/HalSmoke` exercises DIO, PWM, Encoder, AnalogInput, AddressableLED and Notifier
-through the HAL C API on hardware.
+through the HAL C API on hardware. The prosdk C++ extensions (SPI, timed DIO, pulse I/O,
+six-step) are not in that list; they are covered by the host tests of the classes that use them
+and by the Boardoza examples, and none has run on hardware yet.

@@ -167,7 +167,8 @@ endif()
 # (the same directories as HAND_WRITTEN_GLOBS in header_check.py)
 file(GLOB _hand_headers CONFIGURE_DEPENDS "${PROSDK_ROOT}/src/prosdk.h"
   "${PROSDK_ROOT}/src/prosdk/cxx/*.hpp" "${PROSDK_ROOT}/src/prosdk/platform/*.hpp"
-  "${PROSDK_ROOT}/src/prosdk/platform/dashboard/*.hpp" "${PROSDK_ROOT}/src/prosdk/platform/hal/*.hpp")
+  "${PROSDK_ROOT}/src/prosdk/platform/dashboard/*.hpp" "${PROSDK_ROOT}/src/prosdk/platform/hal/*.hpp"
+  "${PROSDK_ROOT}/src/prosdk/simulation/PulseIOSim.hpp" "${PROSDK_ROOT}/src/prosdk/simulation/SpiSim.hpp")
 file(GLOB_RECURSE _hand_driver_headers CONFIGURE_DEPENDS "${PROSDK_ROOT}/src/prosdk/drivers/*.hpp")
 string(REPLACE "\n" ";" _hc_sources "${_hc_sources}")
 add_library(header_check OBJECT EXCLUDE_FROM_ALL ${_hc_sources})

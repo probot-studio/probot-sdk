@@ -12,7 +12,8 @@ refreshes the ids once the ports follow upstream (design/PORT.md section 2).
 
 The hand-written prosdk examples that existed before this port (HalSmoke, TimedRobotDifferential,
 OpModeRobotExample, TimesliceRobotExample, CommandBasedRobot, DriversShowcase, AprilTagFieldPose)
-are unchanged.
+are unchanged. The nine Boardoza examples were added later (section "Boardoza examples"). All
+hand-written examples are listed under `"handwritten"` in `tools/upstream/examples.json`.
 
 ## Porting rules
 
@@ -253,6 +254,28 @@ Upstream has five example tests: three in `wpilibcExamples/src/test/cpp/examples
     simulator has alliance and match data, so the snippet tests check them although the probot
     Driver Station sends none.
 - **UnitTest** is not ported, because the example is not ported (pneumatics).
+
+## Boardoza examples
+
+Hand-written `TimedRobot` sketches for the Boardoza boards (`design/boardoza.md`), with no upstream
+counterpart. Each `.ino` header gives the boards, the power rule (the ESP32-S3 pins are not 5 V
+tolerant), the wiring as GPIO numbers and the package document. Readings go to the Driver Station
+(`/Telemetry`). The pins differ from the upstream pin map above, because I2C port 1 and SPI need
+pins of their own. None of them has run on hardware.
+
+| Example | Boards and classes | Bus and pins |
+|---|---|---|
+| BoardozaClimate | LM75ADP, HIH8131, TH09C, MS5611, HP303B, BME688 (`LM75A`, `HIH8000`, `ENS210`, `MS5611`, `DPS310`, `BME688`) | I2C port 1, SDA 17 / SCL 18, 100 kHz; BME688 on port 0 (`Wire`'s bus), since only two barometers fit on one port |
+| BoardozaThermalCamera | MLX90640 (`MLX90640`; the MLX90641 works the same way) | I2C port 1, SDA 17 / SCL 18, 400 kHz |
+| BoardozaMultizoneToF | VL53L7CX-1..4 (`VL53L7CX`, 8x8 at 15 Hz) | I2C port 1, SDA 17 / SCL 18, 400 kHz |
+| BoardozaLoadCell | NAU7802, HX711 (`NAU7802`, `HX711`, `LoadCell`) | I2C port 1, SDA 17 / SCL 18, 400 kHz; HX711 DAT 4, CLK 5 |
+| BoardozaGnss | SAM-M8Q or SAM-M10Q (`UbloxGnss` on I2C), GP-02 (`NmeaGnss`) | I2C port 1, SDA 17 / SCL 18, 100 kHz; serial `kOnboard`, RX 15 / TX 16 |
+| BoardozaSdLog | MicroSD (`platform::MountSdCard`, DataLogManager to `/sd/logs`) | SPI bus 0: SCK 12, MOSI 11, MISO 13, CS 10 |
+| BoardozaRotaryArgb | Rotary Encoder ARGB (`ClockedAddressableLED`, `Encoder`, `DigitalInput`) | SPI bus 1 alone: SCK 39, MOSI 40; encoder A 41 / B 42; button 38 |
+| BoardozaLoRa | E22-900M22S (`SX126x`). Regulatory: 868.1 MHz, 14 dBm, at most 1 % duty cycle (EU 868.0-868.6 MHz sub-band); check local rules before changing them | SPI bus 0: SCK 12, MOSI 11, MISO 13, CS 10; BUSY 4, DIO1 5, NRST 6, RXEN 7, TXEN 15 |
+| BoardozaEveDisplay | FT810 or FT800 board and bundles (`FT8xx`, `ft8xx::kBoardozaFT810Bundle`) | SPI bus 0: SCK 12, MOSI 11, MISO 13, CS 10; PD 4, INT 5 |
+
+They have been syntax-checked only: no arduino-cli build and no size measurement yet.
 
 ## Sizes
 

@@ -19,9 +19,14 @@ GENERATED = ROOT / "tools" / "upstream" / "generated.txt"
 HEADER_EXTS = {".h", ".hpp", ""}  # "" = extensionless C++ headers (util/scope)
 # Not listed: src/prosdk/platform/hal/esp32/ (backend-internal headers of the archive build) and
 # src/prosdk/probot/ (sketch side; needs <probot.h>, checked by the sketch compiles).
+# The two simulation/ headers are hand-written files in the otherwise vendored wpilibc folder.
+# Not listed: the third-party C headers under src/prosdk/drivers (*.h: the Melexis API, the ST
+# VL53L7CX ULD and its platform.h), which are compiled through the driver sources that include
+# them, and src/prosdk/platform/hal/esp32/*.hpp (backend-internal, target only).
 HAND_WRITTEN_GLOBS = ["src/prosdk.h", "src/prosdk/cxx/*.hpp", "src/prosdk/platform/*.hpp",
                       "src/prosdk/platform/dashboard/*.hpp", "src/prosdk/platform/hal/*.hpp",
-                      "src/prosdk/drivers/**/*.hpp"]
+                      "src/prosdk/drivers/**/*.hpp", "src/prosdk/simulation/PulseIOSim.hpp",
+                      "src/prosdk/simulation/SpiSim.hpp"]
 
 # Headers that are not meant to be compiled on their own (path -> reason).
 NOT_STANDALONE: dict[str, str] = {

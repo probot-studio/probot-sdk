@@ -8,6 +8,15 @@ Question: where do the 1.95 MB (`TimedRobotDifferential`) and 2.14 MB (`CommandB
 go, why did the wave-3 robot examples grow by 19-36 KB in wave 4, and what can be removed without
 removing API or features and without a global flag change that recompiles the whole archive?
 
+**Not re-measured after the Boardoza drivers.** The numbers below predate the Boardoza packages
+(`design/boardoza.md`), which added about 40 hand-written driver classes, four platform HAL
+extensions (SPI, timed DIO, pulse I/O, six-step) and two vendored C libraries to the archive. A
+sketch pays only for what it links, but some sketches will grow noticeably: one that uses
+`VL53L7CX` links the ST firmware image (about 84 KiB of flash), and the Melexis API (`MLX90640`,
+`MLX90641`) and `FT8xx` add their own code and tables. The archive size, a sketch per new example
+and the unchanged robot examples (to confirm that unused drivers cost nothing) need a build and a
+new measurement with the method below; none was done when the drivers were added.
+
 ## 1. Method
 
 - Baseline archive: `src/esp32s3/libprosdk.a` built from `dddef2f` (2026-10-22 09:21, md5
