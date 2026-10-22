@@ -1,0 +1,101 @@
+diff --git a/src/prosdk/impl/wpimath/cpp/random/Normal.cpp b/src/prosdk/impl/wpimath/cpp/random/Normal.cpp
+index b1ebb88..68b6909 100644
+--- a/src/prosdk/impl/wpimath/cpp/random/Normal.cpp
++++ b/src/prosdk/impl/wpimath/cpp/random/Normal.cpp
+@@ -10,11 +10,13 @@
+ 
+ #include <prosdk/thirdparty/eigen/Eigen/Core>
+ 
++#include "prosdk/platform/Random.hpp"
++
+ namespace prosdk::math {
+ 
+ Eigen::VectorXd Normal(const std::span<const double> stdDevs) {
+-  std::random_device rd;
+-  std::mt19937 gen{rd()};
++  // prosdk: one shared engine seeded once (no per-call random_device + mt19937 on the stack)
++  prosdk::platform::RandomEngine gen;
+ 
+   Eigen::VectorXd result{stdDevs.size()};
+   for (size_t i = 0; i < stdDevs.size(); ++i) {
+diff --git a/src/prosdk/math/optimization/SimulatedAnnealing.hpp b/src/prosdk/math/optimization/SimulatedAnnealing.hpp
+index b7a34ac..274bd0c 100644
+--- a/src/prosdk/math/optimization/SimulatedAnnealing.hpp
++++ b/src/prosdk/math/optimization/SimulatedAnnealing.hpp
+@@ -9,6 +9,8 @@
+ #include <limits>
+ #include <random>
+ 
++#include "prosdk/platform/Random.hpp"
++
+ namespace prosdk::math {
+ 
+ /**
+@@ -58,8 +60,8 @@ class SimulatedAnnealing {
+     State minState = initialGuess;
+     double minCost = std::numeric_limits<double>::infinity();
+ 
+-    std::random_device rd;
+-    std::mt19937 gen{rd()};
++    // prosdk: one shared engine seeded once (no per-call random_device + mt19937 on the stack)
++    prosdk::platform::RandomEngine gen;
+     std::uniform_real_distribution<> distr{0.0, 1.0};
+ 
+     State state = initialGuess;
+diff --git a/src/prosdk/math/path/TravelingSalesman.hpp b/src/prosdk/math/path/TravelingSalesman.hpp
+index e97c52f..8c4dab3 100644
+--- a/src/prosdk/math/path/TravelingSalesman.hpp
++++ b/src/prosdk/math/path/TravelingSalesman.hpp
+@@ -17,6 +17,7 @@
+ #include "prosdk/math/geometry/Pose2d.hpp"
+ #include "prosdk/math/linalg/EigenCore.hpp"
+ #include "prosdk/math/optimization/SimulatedAnnealing.hpp"
++#include "prosdk/platform/Random.hpp"
+ #include "prosdk/units/math.hpp"
+ #include "prosdk/util/array.hpp"
+ 
+@@ -159,8 +160,8 @@ class TravelingSalesman {
+       const Eigen::Vector<double, Poses>& state) {
+     Eigen::Vector<double, Poses> proposedState = state;
+ 
+-    std::random_device rd;
+-    std::mt19937 gen{rd()};
++    // prosdk: one shared engine seeded once (no per-call random_device + mt19937 on the stack)
++    prosdk::platform::RandomEngine gen;
+     std::uniform_int_distribution<> distr{0,
+                                           static_cast<int>(state.rows()) - 1};
+ 
+diff --git a/src/prosdk/math/random/Normal.hpp b/src/prosdk/math/random/Normal.hpp
+index 3397161..aee2d3e 100644
+--- a/src/prosdk/math/random/Normal.hpp
++++ b/src/prosdk/math/random/Normal.hpp
+@@ -12,6 +12,7 @@
+ 
+ #include <prosdk/thirdparty/eigen/Eigen/Core>
+ 
++#include "prosdk/platform/Random.hpp"
+ #include "prosdk/util/Algorithm.hpp"
+ #include "prosdk/util/SymbolExports.hpp"
+ 
+@@ -27,8 +28,8 @@ namespace prosdk::math {
+  */
+ template <std::same_as<double>... Ts>
+ Eigen::Vector<double, sizeof...(Ts)> Normal(Ts... stdDevs) {
+-  std::random_device rd;
+-  std::mt19937 gen{rd()};
++  // prosdk: one shared engine seeded once (no per-call random_device + mt19937 on the stack)
++  prosdk::platform::RandomEngine gen;
+ 
+   Eigen::Vector<double, sizeof...(Ts)> result;
+   prosdk::util::for_each(
+@@ -56,8 +57,8 @@ Eigen::Vector<double, sizeof...(Ts)> Normal(Ts... stdDevs) {
+  */
+ template <int N>
+ Eigen::Vector<double, N> Normal(const std::array<double, N>& stdDevs) {
+-  std::random_device rd;
+-  std::mt19937 gen{rd()};
++  // prosdk: one shared engine seeded once (no per-call random_device + mt19937 on the stack)
++  prosdk::platform::RandomEngine gen;
+ 
+   Eigen::Vector<double, N> result;
+   for (size_t i = 0; i < stdDevs.size(); ++i) {

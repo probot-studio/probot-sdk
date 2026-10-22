@@ -15,6 +15,8 @@ tools/upstream/generated.txt. The license texts are in licenses/:
   licenses/wpilib/ThirdPartyNotices.txt   WPILib third-party notices with the full license text
                                           of every component listed below except Catch2
   licenses/Catch2-LICENSE.txt             Boost Software License 1.0
+  licenses/eigen/COPYING.*                Eigen's license files as shipped with Eigen (Eigen is built
+                                          with EIGEN_MPL2_ONLY, so only MPL 2.0 code is compiled)
 
 Component                 License                              Location in prosdk
 ---------                 -------                              ------------------
@@ -37,8 +39,23 @@ hat-trie                  MIT (Thibaut Goetghebuer-Planchon)   src/prosdk/util/a
                                                                src/prosdk/util/htrie_*.hpp
 nanopb (modified)         zlib (Petteri Aimonen)               src/prosdk/thirdparty/nanopb,
                                                                src/prosdk/impl/wpiutil/thirdparty/nanopb
-V8 export-template        BSD 3-Clause (V8 project authors)    src/prosdk/util/SymbolExports.hpp
+V8 export-template        BSD 3-Clause (V8 project authors)    src/prosdk/util/SymbolExports.hpp,
+                                                               src/prosdk/thirdparty/sleipnir/sleipnir/util/
+                                                               symbol_exports.hpp
+WPILib wpimath            BSD 3-Clause (WPILib)                src/prosdk/math, src/prosdk/units,
+                                                               src/prosdk/generated/wpimath,
+                                                               src/prosdk/impl/wpimath, test/wpimath
+Eigen 5.0.1               MPL 2.0 (file-level; see             src/prosdk/thirdparty/eigen
+                          licenses/eigen/COPYING.MPL2)
+GCEM                      Apache 2.0 (kthohr)                  src/prosdk/thirdparty/gcem
+Sleipnir                  BSD 3-Clause (Sleipnir contributors) src/prosdk/thirdparty/sleipnir,
+                                                               src/prosdk/impl/sleipnir
 Catch2 (tests only)       Boost Software License 1.0           test/thirdparty/catch2
+
+Eigen source files are covered by MPL 2.0 at file level: the files under src/prosdk/thirdparty/eigen
+are vendored unmodified apart from the include-path rewrite, the Arduino macro guard, the
+configuration include (tools/upstream/wpilib.py) and the patches in tools/upstream/patches/eigen,
+and their source is this repository.
 
 Hand-written prosdk code (src/prosdk.h, src/prosdk/cxx, src/prosdk/platform, tools/, test/prosdk)
 is under the prosdk license (LICENSE, LICENSE-commercial).

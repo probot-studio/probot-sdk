@@ -1,0 +1,36 @@
+diff --git a/src/prosdk/math/estimator/PoseEstimator.hpp b/src/prosdk/math/estimator/PoseEstimator.hpp
+index 1469714..9925890 100644
+--- a/src/prosdk/math/estimator/PoseEstimator.hpp
++++ b/src/prosdk/math/estimator/PoseEstimator.hpp
+@@ -247,8 +247,11 @@ class WPILIB_DLLEXPORT PoseEstimator {
+     auto odometryEstimate = m_odometryPoseBuffer.Sample(timestamp);
+ 
+     // Step 5: Apply the vision compensation to the odometry pose.
+-    return odometryEstimate.transform(
+-        [&](const auto& o) { return visionUpdate.Compensate(o); });
++    // prosdk: no std::optional::transform (C++23; gnu++20 here)
++    if (!odometryEstimate) {
++      return std::nullopt;
++    }
++    return visionUpdate.Compensate(*odometryEstimate);
+   }
+ 
+   /**
+diff --git a/src/prosdk/math/estimator/PoseEstimator3d.hpp b/src/prosdk/math/estimator/PoseEstimator3d.hpp
+index 161492b..2f37f04 100644
+--- a/src/prosdk/math/estimator/PoseEstimator3d.hpp
++++ b/src/prosdk/math/estimator/PoseEstimator3d.hpp
+@@ -255,8 +255,11 @@ class WPILIB_DLLEXPORT PoseEstimator3d {
+     auto odometryEstimate = m_odometryPoseBuffer.Sample(timestamp);
+ 
+     // Step 5: Apply the vision compensation to the odometry pose.
+-    return odometryEstimate.transform(
+-        [&](const auto& o) { return visionUpdate.Compensate(o); });
++    // prosdk: no std::optional::transform (C++23; gnu++20 here)
++    if (!odometryEstimate) {
++      return std::nullopt;
++    }
++    return visionUpdate.Compensate(*odometryEstimate);
+   }
+ 
+   /**

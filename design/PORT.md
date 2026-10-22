@@ -108,6 +108,11 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `std::invoke_r`, `std::unreachable`, and whatever else the gnu++20 build reports.
 - `if consteval` is accepted by GCC 14 in C++20 mode as an extension; it stays.
 - If a C++23 *language* feature that GCC 14 rejects in C++20 mode appears, patch it at the use site.
+- Multidimensional subscript (`m[i, j]`, C++23) is the exception: gnu++20 does not reject the use, it
+  compiles it as a comma expression (`m[j]`), and rejects only multi-parameter `operator[]` declarations.
+  Sleipnir and wpimath use it throughout, so the script rewrites it (`multi_subscript` transform:
+  `m[i, j]` -> `m(i, j)`, `operator[](a, b)` -> `operator()(a, b)`); the header check shows no
+  `-Wcomma-subscript` warning afterwards.
 - Fallback, only if the shim approach proves unworkable: build everything as gnu++23 and ship `build_opt.h`
   with `-std=gnu++2b` in every example. This needs a written reason in this file before it is taken.
 
@@ -134,7 +139,9 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
 - Sleipnir: no 16384-block thread-local pool on ESP32 (use plain allocation or a small pool);
   `SLEIPNIR_DISABLE_DIAGNOSTICS`.
 - `<random>`: one shared engine seeded from `esp_random()`; no per-call `random_device` + `mt19937` on the stack.
-- Eigen: `EIGEN_STACK_ALLOCATION_LIMIT=4096`, `EIGEN_NO_IO`, `EIGEN_MPL2_ONLY`.
+- Eigen: `EIGEN_STACK_ALLOCATION_LIMIT=4096` (runtime alloca of dynamic temporaries), a separate
+  compile-time cap of 8192 for fixed-size objects (`PROSDK_EIGEN_FIXED_SIZE_STACK_LIMIT`, patch
+  `eigen/0001`; Sleipnir's `slp::solve` needs 4608 bytes), `EIGEN_NO_IO`, `EIGEN_MPL2_ONLY`.
 - Memory-heavy defaults are scaled for the MCU and configurable by macro (DataLog buffers, and so on).
 
 ### 7.1 Sketch and archive must agree
@@ -145,7 +152,10 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   Eigen or Sleipnir. The header check compiles every public header exactly as a sketch TU does.
 - Flash: probot-core alone is about 1.08 MB, so prosdk sketches need the Huge APP partition scheme
   (3 MB app). Wave 1 measured prosdk's share at about 565 KB for wpiutil + telemetry + tunables, mostly
-  libstdc++ (`std::format`) and header templates. Size is measured after every wave.
+  libstdc++ (`std::format`) and header templates. Wave 2 (wpimath): a smoke sketch using units,
+  geometry, kinematics/odometry, TrapezoidProfile, PID, feedforwards, LQR, KalmanFilter, spline
+  trajectory generation and ArmFeedforward (Sleipnir) links to 1,837,133 B flash / 51,468 B RAM
+  (core alone 1,083,849 / 45,764). Size is measured after every wave.
 
 ## 8. probot-core integration
 

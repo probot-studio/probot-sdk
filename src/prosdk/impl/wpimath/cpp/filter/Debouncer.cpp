@@ -1,0 +1,41 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/math/filter/Debouncer.hpp"
+
+#include "prosdk/math/util/MathShared.hpp"
+#include "prosdk/units/time.hpp"
+
+using namespace prosdk::math;
+
+Debouncer::Debouncer(prosdk::units::second_t debounceTime, DebounceType type)
+    : m_debounceTime(debounceTime), m_debounceType(type) {
+  m_baseline = m_debounceType == DebounceType::FALLING;
+  ResetTimer();
+}
+
+void Debouncer::ResetTimer() {
+  m_prevTime = prosdk::math::MathSharedStore::GetTimestamp();
+}
+
+bool Debouncer::HasElapsed() const {
+  return prosdk::math::MathSharedStore::GetTimestamp() - m_prevTime >=
+         m_debounceTime;
+}
+
+bool Debouncer::Calculate(bool input) {
+  if (input == m_baseline) {
+    ResetTimer();
+  }
+
+  if (HasElapsed()) {
+    if (m_debounceType == DebounceType::BOTH) {
+      m_baseline = input;
+      ResetTimer();
+    }
+    return input;
+  } else {
+    return m_baseline;
+  }
+}

@@ -1,0 +1,34 @@
+diff --git a/src/prosdk/impl/wpimath/cpp/trajectory/DrivetrainSplineTrajectoryGenerator.cpp b/src/prosdk/impl/wpimath/cpp/trajectory/DrivetrainSplineTrajectoryGenerator.cpp
+index 8af3646..a455706 100644
+--- a/src/prosdk/impl/wpimath/cpp/trajectory/DrivetrainSplineTrajectoryGenerator.cpp
++++ b/src/prosdk/impl/wpimath/cpp/trajectory/DrivetrainSplineTrajectoryGenerator.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "prosdk/math/trajectory/DrivetrainSplineTrajectoryGenerator.hpp"
+ 
++#include <format>
+ #include <functional>
+ #include <utility>
+ #include <vector>
+@@ -21,8 +22,8 @@
+ #include "prosdk/math/trajectory/TrajectoryConfig.hpp"
+ #include "prosdk/units/angle.hpp"
+ #include "prosdk/units/curvature.hpp"
++#include "prosdk/platform/Console.hpp"
+ #include "prosdk/units/time.hpp"
+-#include "prosdk/util/print.hpp"
+ 
+ using namespace prosdk::math;
+ 
+@@ -38,8 +39,9 @@ void DrivetrainSplineTrajectoryGenerator::ReportError(const char* error) {
+   if (s_errorFunc) {
+     s_errorFunc(error);
+   } else {
+-    prosdk::util::print(stderr, "DrivetrainSplineTrajectoryGenerator error: {}\n",
+-                     error);
++    // prosdk: platform console (DS console on the robot), never throws
++    prosdk::platform::ConsoleWrite(
++        std::format("DrivetrainSplineTrajectoryGenerator error: {}\n", error));
+   }
+ }
+ 

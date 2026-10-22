@@ -1,0 +1,103 @@
+// Copyright (c) Sleipnir contributors
+
+#pragma once
+
+#include <prosdk/platform/config.hpp>  // prosdk: configuration
+
+#include <functional>
+
+#include <prosdk/thirdparty/eigen/Eigen/Core>
+#include <prosdk/thirdparty/eigen/Eigen/SparseCore>
+
+#include "prosdk/thirdparty/sleipnir/sleipnir/optimization/solver/util/problem_scaling.hpp"
+
+namespace slp {
+
+/// Matrix callbacks for the Newton's method solver.
+///
+/// @tparam Scalar Scalar type.
+template <typename Scalar>
+struct NewtonMatrixCallbacks {
+  /// Type alias for dense vector.
+  using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
+  /// Type alias for sparse matrix.
+  using SparseMatrix = Eigen::SparseMatrix<Scalar>;
+  /// Type alias for sparse vector.
+  using SparseVector = Eigen::SparseVector<Scalar>;
+
+  /// Number of decision variables.
+  int num_decision_variables = 0;
+
+  /// Cost function value f(x) getter.
+  ///
+  /// <table>
+  ///   <tr>
+  ///     <th>Variable</th>
+  ///     <th>Rows</th>
+  ///     <th>Columns</th>
+  ///   </tr>
+  ///   <tr>
+  ///     <td>x</td>
+  ///     <td>num_decision_variables</td>
+  ///     <td>1</td>
+  ///   </tr>
+  ///   <tr>
+  ///     <td>f(x)</td>
+  ///     <td>1</td>
+  ///     <td>1</td>
+  ///   </tr>
+  /// </table>
+  std::function<Scalar(const DenseVector& x)> f;
+
+  /// Cost function gradient ∇f(x) getter.
+  ///
+  /// <table>
+  ///   <tr>
+  ///     <th>Variable</th>
+  ///     <th>Rows</th>
+  ///     <th>Columns</th>
+  ///   </tr>
+  ///   <tr>
+  ///     <td>x</td>
+  ///     <td>num_decision_variables</td>
+  ///     <td>1</td>
+  ///   </tr>
+  ///   <tr>
+  ///     <td>∇f(x)</td>
+  ///     <td>num_decision_variables</td>
+  ///     <td>1</td>
+  ///   </tr>
+  /// </table>
+  std::function<SparseVector(const DenseVector& x)> g;
+
+  /// Lagrangian Hessian ∇ₓₓ²L(x) getter.
+  ///
+  /// L(x) = f(x)
+  ///
+  /// Only the lower triangle is used.
+  ///
+  /// <table>
+  ///   <tr>
+  ///     <th>Variable</th>
+  ///     <th>Rows</th>
+  ///     <th>Columns</th>
+  ///   </tr>
+  ///   <tr>
+  ///     <td>x</td>
+  ///     <td>num_decision_variables</td>
+  ///     <td>1</td>
+  ///   </tr>
+  ///   <tr>
+  ///     <td>∇ₓₓ²L(x)</td>
+  ///     <td>num_decision_variables</td>
+  ///     <td>num_decision_variables</td>
+  ///   </tr>
+  /// </table>
+  std::function<SparseMatrix(const DenseVector& x)> H;
+
+  /// Automatic problem scaling factors. Used to scale the cost and tolerance
+  /// inside the Newton solver.
+  ProblemScaling<Scalar> scaling;
+};
+
+}  // namespace slp

@@ -10,6 +10,7 @@ paths (one per line) for CMake.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -20,6 +21,16 @@ HAND_WRITTEN_GLOBS = ["src/prosdk.h", "src/prosdk/cxx/*.hpp", "src/prosdk/platfo
 
 # Headers that are not meant to be compiled on their own (path -> reason).
 NOT_STANDALONE: dict[str, str] = {
+    "src/prosdk.h":
+        "on the robot it includes <probot.h> from the separate probot-core library, which is not "
+        "on the archive include path; checked by the sketch compiles (examples/HalSmoke)",
+}
+# Same, by pattern (regex on the repo-relative path -> reason).
+NOT_STANDALONE_PATTERNS: dict[str, str] = {
+    r"^src/prosdk/thirdparty/eigen/(unsupported/)?Eigen/src/":
+        "Eigen internal header (IWYU private; errors unless included through its module header)",
+    r"^src/prosdk/thirdparty/gcem/gcem_incl/":
+        "gcem internal header (uses GCLIM, return_t, GCEM_* that only gcem.hpp declares first)",
 }
 
 
@@ -35,7 +46,8 @@ def public_headers() -> list[str]:
     for g in HAND_WRITTEN_GLOBS:
         for p in ROOT.glob(g):
             out.add(p.relative_to(ROOT).as_posix())
-    return sorted(p for p in out if p not in NOT_STANDALONE)
+    return sorted(p for p in out if p not in NOT_STANDALONE
+                  and not any(re.search(rx, p) for rx in NOT_STANDALONE_PATTERNS))
 
 
 def main() -> int:

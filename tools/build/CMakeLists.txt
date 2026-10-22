@@ -43,12 +43,10 @@ endif()
 # Usage requirements shared by every prosdk translation unit of the archive and the host tests.
 add_library(prosdk_options INTERFACE)
 target_link_libraries(prosdk_options INTERFACE prosdk_sketch_options)
+# Eigen and Sleipnir configuration is not passed here: it lives in src/prosdk/platform/config.hpp,
+# which every Eigen module header and Sleipnir header includes first (design/PORT.md 7.1).
 target_compile_definitions(prosdk_options INTERFACE
-  PROSDK_TARGET_HW=${PROSDK_TARGET_HW}
-  EIGEN_STACK_ALLOCATION_LIMIT=4096
-  EIGEN_NO_IO
-  EIGEN_MPL2_ONLY
-  SLEIPNIR_DISABLE_DIAGNOSTICS)
+  PROSDK_TARGET_HW=${PROSDK_TARGET_HW})
 
 # Generated (vendored) files of one module whose repo-relative path matches REGEX.
 file(STRINGS "${PROSDK_GENERATED}" _prosdk_generated REGEX "^[A-Za-z0-9_]+ ")
@@ -100,6 +98,10 @@ include("${CMAKE_CURRENT_LIST_DIR}/modules/telemetry.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/tunables.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/hal.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/modules/datalog.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/modules/eigen.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/modules/gcem.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/modules/sleipnir.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/modules/wpimath.cmake")
 
 # libprosdk.a from every module's objects
 get_property(_modules GLOBAL PROPERTY PROSDK_MODULES)

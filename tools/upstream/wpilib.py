@@ -288,7 +288,77 @@ class Module:
 
 
 DEFAULT_TRANSFORMS = {"rename": True, "fs": False, "cxx23": True, "arduino_renames": True,
-                      "guard": True, "verbatim": False}
+                      "guard": True, "verbatim": False, "config_include": [],
+                      "multi_subscript": False, "guard_pasted": False}
+
+# Section 7.1: header that carries the configuration vendored headers need (Eigen limits, Sleipnir
+# switches). The `config_include` transform (list of regexes on the destination path) inserts it
+# before the first #include of every matching file, so a sketch TU and the archive see the same
+# configuration without -D flags.
+CONFIG_HEADER = "prosdk/platform/config.hpp"
+
+
+# Section 7.1: C++23 multidimensional subscript (P2128). The target language mode is gnu++20, where
+# `m[i, j]` is not an error but a deprecated comma expression that silently means `m[j]`, and a
+# multi-parameter `operator[]` does not compile. The `multi_subscript` transform rewrites every
+# subscript whose top-level contents hold a comma to a call (`m[i, j]` -> `m(i, j)`) and every
+# multi-parameter `operator[](a, b)` declaration to `operator()(a, b)`. Eigen already provides
+# operator()(i, j) with the same meaning; for Sleipnir the rewritten declarations provide it.
+# Lambda introducers, structured bindings and attributes are not subscripts and are left alone.
+_NOT_SUBSCRIPT_BEFORE = {"auto", "return", "co_return", "co_yield", "case", "new", "delete",
+                         "throw", "else", "do", "and", "or", "not", "xor", "bitand", "bitor",
+                         "compl", "and_eq", "or_eq", "xor_eq", "not_eq", "sizeof", "alignof",
+                         "decltype", "noexcept", "requires", "typename", "template", "constexpr",
+                         "const", "volatile", "static", "inline", "mutable"}
+
+
+def _match_close(toks, i: int) -> tuple[int, bool]:
+    """Index of the bracket closing toks[i] and whether a comma appears at its top level."""
+    depth = 0
+    comma = False
+    for k in range(i, len(toks)):
+        kind, s = toks[k]
+        if kind != "punct":
+            continue
+        if s in "([{":
+            depth += 1
+        elif s in ")]}":
+            depth -= 1
+            if depth == 0:
+                return k, comma
+        elif s == "," and depth == 1:
+            comma = True
+    raise SystemExit("error: unbalanced bracket in multi_subscript transform")
+
+
+def rewrite_multi_subscripts(toks) -> int:
+    count = 0
+    for i, t in enumerate(toks):
+        if t[0] != "punct" or t[1] != "[":
+            continue
+        p = _sig(toks, i, -1)
+        nx = _sig(toks, i, 1)
+        prev = _tok(toks, p)
+        if prev[1] == "[" or _tok(toks, nx)[1] == "[":
+            continue  # [[attribute]]
+        if prev[1] == "operator":
+            if _tok(toks, nx)[1] != "]":
+                continue
+            lp = _sig(toks, nx, 1)
+            if _tok(toks, lp)[1] != "(":
+                continue
+            _, comma = _match_close(toks, lp)
+            if comma:
+                t[1], toks[nx][1] = "(", ")"
+                count += 1
+            continue
+        if not (prev[1] in (")", "]") or (prev[0] == "ident" and prev[1] not in _NOT_SUBSCRIPT_BEFORE)):
+            continue
+        close, comma = _match_close(toks, i)
+        if comma:
+            t[1], toks[close][1] = "(", ")"
+            count += 1
+    return count
 
 
 def load_modules() -> dict[str, Module]:
@@ -387,6 +457,9 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
                         while k < len(toks) and toks[k][1] != "}":
                             k += 1
                         enum_ranges.append((j, k, define_file["names"]))
+
+    if tr["multi_subscript"]:
+        rewrite_multi_subscripts(toks)
 
     for i, t in enumerate(toks):
         kind, s = t
@@ -488,6 +561,9 @@ def transform(ctx: Ctx, mod: Module, up_file: str, dest: str, text: str) -> str:
     missing = sorted(h for h in used_shims if h not in defined_shim_headers)
     if missing:
         out = _insert_includes(out, [f"#include <{h}>" for h in missing])
+
+    if any(re.search(rx, dest) for rx in tr["config_include"]):
+        out = _insert_includes(out, [f"#include <{CONFIG_HEADER}>  // prosdk: configuration"])
 
     after = {p: len(re.findall(p, out)) for p in PROTECTED_PATTERNS}
     for p in PROTECTED_PATTERNS:
@@ -594,11 +670,61 @@ def macro_body_hazards(text: str, macros: set[str]) -> dict[str, list[str]]:
     return out
 
 
-def guard_header(path: Path, dest: str, macros: set[str]) -> None:
+_PASTE_RE = re.compile(r"(\w+)\s*##\s*(\w+)")
+Affixes = dict[str, tuple[set[str], set[str]]]
+
+
+def paste_affixes(texts: list[str]) -> Affixes:
+    """Per function-like macro of these headers: the fixed fragments it pastes onto a parameter
+    (`P ## abbreviation` -> prefix "P", `nameSingular ## _t` -> suffix "_t")."""
+    out: Affixes = {}
+    for text in texts:
+        for m in _DEFINE_RE.finditer(text.replace("\\\n", " ")):
+            if not m.group(2):
+                continue
+            params = {x.strip() for x in m.group(2)[1:-1].split(",")}
+            pre, suf = out.setdefault(m.group(1), (set(), set()))
+            for a, b in _PASTE_RE.findall(m.group(3)):
+                if b in params and a not in params:
+                    pre.add(a)
+                elif a in params and b not in params:
+                    suf.add(b)
+    return {k: v for k, v in out.items() if v[0] or v[1]}
+
+
+def pasted_identifiers(text: str, affixes: Affixes) -> set[str]:
+    """Identifiers formed by invoking a pasting macro: affixes x identifier arguments."""
+    toks = [t for t in lex(text) if t[0] not in ("ws", "comment")]
+    out: set[str] = set()
+    for i, t in enumerate(toks):
+        if t[0] != "ident" or t[1] not in affixes or i + 1 >= len(toks) or toks[i + 1][1] != "(":
+            continue
+        pre, suf = affixes[t[1]]
+        depth = 0
+        for k in range(i + 1, len(toks)):
+            s = toks[k][1]
+            if s == "(":
+                depth += 1
+            elif s == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            elif toks[k][0] == "ident":
+                out |= {a + s for a in pre} | {s + b for b in suf}
+    return out
+
+
+def guard_header(path: Path, dest: str, macros: set[str], affixes: Affixes | None = None) -> None:
     """Section 5: wrap a vendored public header in push_macro/undef ... pop_macro for exactly the
-    Arduino macros its tokens use. Runs after the patches, so patches see unguarded text."""
+    Arduino macros its tokens use. Runs after the patches, so patches see unguarded text.
+
+    With `guard_pasted`, identifiers that an invocation of a token-pasting macro of the module
+    forms count as used too: `UNIT_ADD_WITH_METRIC_PREFIXES(..., S, ...)` forms `PS`
+    (petasiemens), an Xtensa special-register macro (xtensa/config/specreg.h)."""
     text = path.read_text()
-    names = sorted(code_identifiers(text) & macros)
+    idents = code_identifiers(text)
+    pasted = pasted_identifiers(text, affixes) if affixes else set()
+    names = sorted((idents | pasted) & macros)
     clash = defined_macros(text) & set(names)
     if clash:
         raise SystemExit(f"error: {dest} defines Arduino macro names {sorted(clash)}; "
@@ -754,9 +880,12 @@ def generate(up: Path, mods: dict[str, Module], selected: list[str], macros: set
                 shutil.copy2(stage / f, unpatched / f)
         apply_patches(name, stage)
         if mod.transforms["guard"]:
-            for dest in files:
-                if dest.startswith("src/") and is_header(dest):
-                    guard_header(stage / dest, dest, macros)
+            headers = [d for d in files if d.startswith("src/") and is_header(d)]
+            affixes: Affixes | None = None
+            if mod.transforms["guard_pasted"]:
+                affixes = paste_affixes([(stage / d).read_text() for d in headers])
+            for dest in headers:
+                guard_header(stage / dest, dest, macros, affixes)
         produced[name] = sorted(files)
     return produced
 

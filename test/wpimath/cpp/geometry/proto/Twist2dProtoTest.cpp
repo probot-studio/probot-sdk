@@ -1,0 +1,28 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include <catch2/catch_test_macros.hpp>
+
+#include "prosdk/math/geometry/Twist2d.hpp"
+#include "prosdk/util/SmallVector.hpp"
+
+using namespace prosdk::math;
+
+namespace {
+
+const Twist2d EXPECTED_DATA = Twist2d{2.29_m, 35.04_m, 35.04_rad};
+}  // namespace
+
+TEST_CASE("Twist2dProtoTest Roundtrip", "[wpimath]") {
+  prosdk::util::ProtobufMessage<decltype(EXPECTED_DATA)> message;
+  prosdk::util::SmallVector<uint8_t, 64> buf;
+
+  REQUIRE(message.Pack(buf, EXPECTED_DATA));
+  auto unpacked_data = message.Unpack(buf);
+  REQUIRE(unpacked_data.has_value());
+
+  CHECK(EXPECTED_DATA.dx.value() == unpacked_data->dx.value());
+  CHECK(EXPECTED_DATA.dy.value() == unpacked_data->dy.value());
+  CHECK(EXPECTED_DATA.dtheta.value() == unpacked_data->dtheta.value());
+}

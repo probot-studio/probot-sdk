@@ -1,0 +1,28 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/math/kinematics/DifferentialDriveOdometry.hpp"
+
+#include <numbers>
+
+#include <catch2/catch_test_macros.hpp>
+
+#include "prosdk/math/TestAssertions.hpp"
+#include "prosdk/units/angle.hpp"
+#include "prosdk/units/length.hpp"
+
+static constexpr double EPSILON = 1E-9;
+
+using namespace prosdk::math;
+
+TEST_CASE("DifferentialDriveOdometryTest EncoderDistances", "[wpimath]") {
+  DifferentialDriveOdometry odometry{45_deg, 0_m, 0_m};
+
+  const auto& pose =
+      odometry.Update(135_deg, 0_m, prosdk::units::meter_t{5 * std::numbers::pi});
+
+  CHECK_NEAR(pose.X().value(), 5.0, EPSILON);
+  CHECK_NEAR(pose.Y().value(), 5.0, EPSILON);
+  CHECK_NEAR(pose.Rotation().Degrees().value(), 90.0, EPSILON);
+}

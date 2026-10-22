@@ -17,6 +17,11 @@ against prosdk after the changes in this file. Every rename and every exclusion 
 | `std::byteswap` | `prosdk::cxx::byteswap` (`<prosdk/cxx/bit.hpp>`) | C++23 |
 | `std::to_underlying`, `std::unreachable` | `prosdk::cxx::...` (`<prosdk/cxx/utility.hpp>`) | C++23 |
 | `std::invoke_r` | `prosdk::cxx::invoke_r` (`<prosdk/cxx/functional.hpp>`) | C++23 |
+| `#include <Eigen/...>`, `<unsupported/Eigen/...>` | `#include <prosdk/thirdparty/eigen/Eigen/...>`, `<prosdk/thirdparty/eigen/unsupported/Eigen/...>` | thirdparty include roots live under `prosdk/thirdparty/` so they cannot collide with other Arduino libraries (for example ArduinoEigen); the C++ namespace stays `Eigen` |
+| `#include <gcem.hpp>` | `#include <prosdk/thirdparty/gcem/gcem.hpp>` | same; namespace stays `gcem` |
+| `#include <sleipnir/...>`, `<gch/small_vector.hpp>` | `#include <prosdk/thirdparty/sleipnir/sleipnir/...>`, `<prosdk/thirdparty/sleipnir/gch/small_vector.hpp>` | same; namespace stays `slp` |
+| `m[i, j]`, `m[rowSlice, colSlice]` (C++23 multidimensional subscript on Sleipnir `VariableMatrix`/`VariableBlock` and Eigen matrices) | `m(i, j)`, `m(rowSlice, colSlice)` | C++23 language feature; the target is gnu++20, where `m[i, j]` silently means `m[j]` (comma operator). Sleipnir's multi-parameter `operator[]` overloads are `operator()` here; single-index `m[i]` is unchanged. Vendored code is rewritten by the `multi_subscript` transform of `tools/upstream/wpilib.py` |
+| `#include "wpimath/protobuf/<file>.npb.h"` | `#include <prosdk/generated/wpimath/protobuf/<file>.npb.h>` | generated nanopb headers under the library include root; the C types keep their `wpi_proto_*` names |
 
 Kept unchanged (wire formats and C ABI): `wpi.proto.*`, `wpi_proto_*`, `struct:<Type>` and `proto:<Type>`
 type strings, `WPI_*` and `HAL_*` C functions, `WPILIB_*` macros.
@@ -34,7 +39,11 @@ the Java names are the same upper-case words, so there is no other spelling to u
 
 Other Arduino macro names used inside vendored headers (internal names, parameters, `F`, `likely`, ...)
 need no rename: each public header is wrapped in `#pragma push_macro` / `#undef` / `#pragma pop_macro` for
-exactly the macros it uses (computed by the script from the installed core headers).
+exactly the macros it uses (computed by the script from the installed core headers). Names formed by token
+pasting in the units macros are covered too (`guard_pasted`). One such name is user-visible and not
+renamed: the abbreviated petasiemens type `prosdk::units::PS` (`P` prefix pasted onto `S`) cannot be
+spelled in a sketch, because the Xtensa header `xtensa/config/specreg.h` (included by Arduino.h) defines
+`PS`; use `prosdk::units::petasiemens_t` or `petasiemens` instead.
 
 ## 3. Behavior differences
 
@@ -56,6 +65,17 @@ exactly the macros it uses (computed by the script from the installed core heade
 | `prosdk::log::DataLog` buffers (`BLOCK_SIZE`, `MAX_BUFFER_COUNT`, `MAX_FREE_COUNT`) | ESP32: 2 KiB blocks, logging pauses at 16 outgoing buffers (32 KiB), 4 free buffers kept (8 KiB). Upstream (kept on the host): 16 KiB, 64 (1 MiB), 16 (256 KiB). Set by `PROSDK_DATALOG_*` in `prosdk/platform/DataLogConfig.hpp`; a different value needs an archive rebuilt with the same `-D` | `datalog/0001` |
 | `DataLog` default message logger | writes `DataLog: ...` lines (info and above) to the platform console instead of stdout/stderr | `datalog/0002` |
 | `prosdk::log::DataLogBackgroundWriter` | writer thread started through `ScopedThreadConfig` (name `datalog`, stack `PROSDK_DATALOG_THREAD_STACK_SIZE` = 6144, prosdk thread priority and core). Minimum free space `PROSDK_DATALOG_MIN_FREE_SPACE`: ESP32 64 KiB, host 5 MiB (upstream). The ESP32 toolchain has no `statvfs`, so `fs::space` fails and the free-space check is skipped (the upstream fallback, free space = unlimited): logging stops only when a write fails, which is reported. `fsync` after each flush on ESP32 (upstream syncs only on Linux/macOS). Random file names use `esp_random()` on ESP32 (no `std::random_device` there) | `datalog/0003` |
+| `prosdk::math::Normal`, `SimulatedAnnealing::Solve`, `TravelingSalesman` (neighbor step) | draw from one shared `std::mt19937` (`prosdk::platform::RandomEngine`, mutex-protected) seeded once from `esp_random()` (ESP32) or `std::random_device` (host), instead of a new `random_device` + `mt19937` (about 5 KB of stack) per call. Same distributions; the sequence differs from upstream, as upstream's is nondeterministic too | `wpimath/0001` |
+| `prosdk::math::MathSharedStore` default (`MathShared` not set) | `ReportError`/`ReportWarning` print `Error: ...` / `Warning: ...` lines to the platform console instead of dropping them; `GetTimestamp()` is `prosdk::util::Now()` as upstream (ESP32: `esp_timer_get_time()`) | `wpimath/0002` |
+| `DrivetrainSplineTrajectoryGenerator` default error function | writes to the platform console instead of `print(stderr)`; `SetErrorHandler` works as upstream | `wpimath/0003` |
+| Sleipnir `EXPORT_TEMPLATE_DECLARE` / `EXPORT_TEMPLATE_DEFINE` (`symbol_exports.hpp`) | fixed to the non-Windows behavior, token-identical to `wpiutil/0001` (the upstream style detection dispatches through `DEFAULT`) | `sleipnir/0001` |
+| Sleipnir expression allocation | ESP32: plain `new`/`delete` instead of the thread-local pool of 16384 blocks (about 800 KB per thread on first use); the pool itself uses 64-block chunks there. Host: upstream pool | `sleipnir/0002` |
+| Sleipnir diagnostics (`Options::diagnostics`, spy files, profiler output) | compiled out (`SLEIPNIR_DISABLE_DIAGNOSTICS`, set in `prosdk/platform/config.hpp`); the option is accepted and ignored | config |
+| Eigen dynamic-size temporaries | `EIGEN_STACK_ALLOCATION_LIMIT` is 4096: temporaries above 4 KiB are heap-allocated instead of using the task stack (upstream default 128 KiB). Set in `prosdk/platform/config.hpp`, which every Eigen module header includes first. Fixed-size objects are checked against a separate compile-time cap, `PROSDK_EIGEN_FIXED_SIZE_STACK_LIMIT` = 8192 (upstream: both 128 KiB), so Sleipnir's `slp::solve` (an 8x8 buffer of `slp::Variable`, 4608 bytes on ESP32) still compiles | config, `eigen/0001` |
+| Eigen stream output (`operator<<` for matrices) | not available (`EIGEN_NO_IO`); format Eigen types with `std::format` (`prosdk/math/fmt/Eigen.hpp`) | config |
+| Eigen non-MPL code | refused at compile time (`EIGEN_MPL2_ONLY`) | config |
+| `PoseEstimator::SampleAt`, `PoseEstimator3d::SampleAt` | none (build fix: `std::optional::transform` is C++23; written as an explicit check) | `wpimath/0004` |
+| Sleipnir `Problem` constraint-type printout | none (build fix: `std::views::zip` is C++23; indexed loop); only reachable with diagnostics, which are compiled out | `sleipnir/0003` |
 
 ## 4. Excluded files (vendored modules)
 
@@ -91,6 +111,7 @@ exactly the macros it uses (computed by the script from the installed core heade
 | datalog | `datalog/src/main/native/cpp/jni/*` | JNI (no JVM on the MCU) |
 | datalog (tests) | `datalog/src/test/native/cpp/DataLogReaderThreadTest.cpp` | DataLogReaderThread is not vendored (upb) |
 | datalog (tests) | `datalog/src/test/native/cpp/FileLoggerTest.cpp` | FileLogger is not vendored (inotify) |
+| wpimath | `wpimath/src/main/native/cpp/jni/*` | JNI (no JVM on the MCU) |
 
 Whole upstream trees not vendored:
 
@@ -109,9 +130,22 @@ Whole upstream trees not vendored:
 | `hal/src/dev` | desktop development executable |
 | `datalog/src/main/java`, `datalog/src/main/python` | Java and Python bindings |
 | `datalog/examples`, `datalog/src/dev` | desktop example programs (printlog, writelog) and development executable |
+| `wpimath/src/main/native/cpp/jni` | JNI (no JVM on the MCU) |
+| `wpimath/src/main/java`, `wpimath/src/generated/main/java`, `wpimath/src/generate` | Java API and its generators |
+| `wpimath/src/main/python`, `wpimath/src/test/python` | Python bindings and their tests |
+| `wpimath/src/test/java` | Java tests |
+| `wpimath/src/dev` | upstream developer scratch executable |
+| `wpimath/src/main/proto` | `.proto` sources; the committed nanopb output (`src/generated/.../wpimath/protobuf`) is vendored instead |
+| `wpimath/docs` | design notes (not code) |
+| `wpimath/src/main/native/thirdparty/eigen/include/BUILD.bazel`, `MODULE.bazel` | Bazel build files |
 
 The source of truth for these lists is the module data in `tools/upstream/modules/*.py`; this table is
 updated with it.
+
+Vendored but not compiled on their own by the header check (`tools/build/header_check.py`): Eigen's
+internal headers (`Eigen/src/**`, IWYU-private, they error unless included through their module header)
+and gcem's internal headers (`gcem_incl/*`, they need declarations that only `gcem.hpp` provides). Both
+are checked through the module headers that include them.
 
 ## 5. Modules not ported (design/PORT.md section 10)
 
@@ -128,5 +162,6 @@ updated with it.
 
 ## 6. Status of this file
 
-Wave 1 (foundation) covers wpiutil, telemetry and tunables. Later waves (wpimath, units, hal, wpilibc,
-commandsv2, datalog) add their renames and exclusions here.
+Wave 1 (foundation) covers wpiutil, telemetry and tunables. Wave 2 adds wpimath (wpi/math, wpi/units,
+struct, protobuf, json), Eigen, gcem and Sleipnir. Later waves (hal, wpilibc, commandsv2, datalog) add
+their renames and exclusions here.

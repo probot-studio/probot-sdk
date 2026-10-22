@@ -1,0 +1,22 @@
+diff --git a/src/prosdk/thirdparty/sleipnir/sleipnir/optimization/problem.hpp b/src/prosdk/thirdparty/sleipnir/sleipnir/optimization/problem.hpp
+index 8affd21..8931c1c 100644
+--- a/src/prosdk/thirdparty/sleipnir/sleipnir/optimization/problem.hpp
++++ b/src/prosdk/thirdparty/sleipnir/sleipnir/optimization/problem.hpp
+@@ -843,11 +843,12 @@ class Problem {
+           for (const auto& constraint : constraints) {
+             ++counts[prosdk::cxx::to_underlying(constraint.type())];
+           }
+-          for (const auto& [count, name] :
+-               std::views::zip(counts, std::array{"empty", "constant", "linear",
+-                                                  "quadratic", "nonlinear"})) {
+-            if (count > 0) {
+-              slp::println("  ↳ {} {}", count, name);
++          // prosdk: indexed loop instead of std::views::zip (C++23; gnu++20 here)
++          constexpr std::array names{"empty", "constant", "linear",
++                                     "quadratic", "nonlinear"};
++          for (size_t i = 0; i < counts.size(); ++i) {
++            if (counts[i] > 0) {
++              slp::println("  ↳ {} {}", counts[i], names[i]);
+             }
+           }
+         };

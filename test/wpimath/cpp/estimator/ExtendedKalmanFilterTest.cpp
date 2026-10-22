@@ -1,0 +1,165 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#include "prosdk/math/estimator/ExtendedKalmanFilter.hpp"
+
+#include <cmath>
+#include <cstddef>
+#include <vector>
+
+#include <prosdk/thirdparty/eigen/Eigen/QR>
+#include <catch2/catch_test_macros.hpp>
+
+#include "prosdk/math/TestAssertions.hpp"
+#include "prosdk/math/geometry/Pose2d.hpp"
+#include "prosdk/math/linalg/EigenCore.hpp"
+#include "prosdk/math/random/Normal.hpp"
+#include "prosdk/math/system/DCMotor.hpp"
+#include "prosdk/math/system/NumericalJacobian.hpp"
+#include "prosdk/math/trajectory/DrivetrainSplineTrajectoryGenerator.hpp"
+#include "prosdk/math/util/StateSpaceUtil.hpp"
+#include "prosdk/units/acceleration.hpp"
+#include "prosdk/units/angle.hpp"
+#include "prosdk/units/base.hpp"
+#include "prosdk/units/length.hpp"
+#include "prosdk/units/mass.hpp"
+#include "prosdk/units/moment_of_inertia.hpp"
+#include "prosdk/units/time.hpp"
+#include "prosdk/units/velocity.hpp"
+#include "prosdk/units/voltage.hpp"
+
+namespace {
+
+prosdk::math::Vectord<5> Dynamics(const prosdk::math::Vectord<5>& x,
+                               const prosdk::math::Vectord<2>& u) {
+  auto motors = prosdk::math::DCMotor::CIM(2);
+
+  // constexpr double Glow = 15.32;       // Low gear ratio
+  constexpr double Ghigh = 7.08;       // High gear ratio
+  constexpr auto rb = 0.8382_m / 2.0;  // Robot radius
+  constexpr auto r = 0.0746125_m;      // Wheel radius
+  constexpr auto m = 63.503_kg;        // Robot mass
+  constexpr auto J = 5.6_kg_sq_m;      // Robot moment of inertia
+
+  auto C1 = -std::pow(Ghigh, 2) * motors.Kt /
+            (motors.Kv * motors.R * prosdk::units::math::pow<2>(r));
+  auto C2 = Ghigh * motors.Kt / (motors.R * r);
+  auto k1 = (1 / m + prosdk::units::math::pow<2>(rb) / J);
+  auto k2 = (1 / m - prosdk::units::math::pow<2>(rb) / J);
+
+  prosdk::units::meters_per_second_t vl{x(3)};
+  prosdk::units::meters_per_second_t vr{x(4)};
+  prosdk::units::volt_t Vl{u(0)};
+  prosdk::units::volt_t Vr{u(1)};
+
+  auto v = 0.5 * (vl + vr);
+  return prosdk::math::Vectord<5>{
+      v.value() * std::cos(x(2)), v.value() * std::sin(x(2)),
+      ((vr - vl) / (2.0 * rb)).value(),
+      k1.value() * ((C1 * vl).value() + (C2 * Vl).value()) +
+          k2.value() * ((C1 * vr).value() + (C2 * Vr).value()),
+      k2.value() * ((C1 * vl).value() + (C2 * Vl).value()) +
+          k1.value() * ((C1 * vr).value() + (C2 * Vr).value())};
+}
+
+prosdk::math::Vectord<3> LocalMeasurementModel(
+    const prosdk::math::Vectord<5>& x,
+    [[maybe_unused]] const prosdk::math::Vectord<2>& u) {
+  return prosdk::math::Vectord<3>{x(2), x(3), x(4)};
+}
+
+prosdk::math::Vectord<5> GlobalMeasurementModel(
+    const prosdk::math::Vectord<5>& x,
+    [[maybe_unused]] const prosdk::math::Vectord<2>& u) {
+  return prosdk::math::Vectord<5>{x(0), x(1), x(2), x(3), x(4)};
+}
+}  // namespace
+
+TEST_CASE("ExtendedKalmanFilterTest Init", "[wpimath]") {
+  constexpr prosdk::units::second_t dt = 5_ms;
+
+  prosdk::math::ExtendedKalmanFilter<5, 2, 3> observer{Dynamics,
+                                                    LocalMeasurementModel,
+                                                    {0.5, 0.5, 10.0, 1.0, 1.0},
+                                                    {0.0001, 0.01, 0.01},
+                                                    dt};
+  prosdk::math::Vectord<2> u{12.0, 12.0};
+  observer.Predict(u, dt);
+
+  auto localY = LocalMeasurementModel(observer.Xhat(), u);
+  observer.Correct(u, localY);
+
+  auto globalY = GlobalMeasurementModel(observer.Xhat(), u);
+  auto R = prosdk::math::CovarianceMatrix(0.01, 0.01, 0.0001, 0.01, 0.01);
+  observer.Correct<5>(u, globalY, GlobalMeasurementModel, R);
+}
+
+TEST_CASE("ExtendedKalmanFilterTest Convergence", "[wpimath]") {
+  constexpr prosdk::units::second_t dt = 5_ms;
+  constexpr auto rb = 0.8382_m / 2.0;  // Robot radius
+
+  prosdk::math::ExtendedKalmanFilter<5, 2, 3> observer{Dynamics,
+                                                    LocalMeasurementModel,
+                                                    {0.5, 0.5, 10.0, 1.0, 1.0},
+                                                    {0.0001, 0.5, 0.5},
+                                                    dt};
+
+  auto waypoints = std::vector<prosdk::math::Pose2d>{
+      prosdk::math::Pose2d{2.75_m, 22.521_m, 0_rad},
+      prosdk::math::Pose2d{24.73_m, 19.68_m, 5.846_rad}};
+  auto trajectory = prosdk::math::DrivetrainSplineTrajectoryGenerator::Generate(
+      waypoints, {8.8_mps, 0.1_mps_sq});
+
+  prosdk::math::Vectord<5> r = prosdk::math::Vectord<5>::Zero();
+  prosdk::math::Vectord<2> u = prosdk::math::Vectord<2>::Zero();
+
+  auto B = prosdk::math::NumericalJacobianU<5, 5, 2>(
+      Dynamics, prosdk::math::Vectord<5>::Zero(), prosdk::math::Vectord<2>::Zero());
+
+  observer.SetXhat(prosdk::math::Vectord<5>{
+      trajectory.Start().pose.Translation().X().value(),
+      trajectory.Start().pose.Translation().Y().value(),
+      trajectory.Start().pose.Rotation().Radians().value(), 0.0, 0.0});
+
+  auto duration = trajectory.Duration();
+  for (size_t i = 0; i < (duration / dt).value(); ++i) {
+    auto ref = trajectory.SampleAt(dt * i);
+    prosdk::units::meters_per_second_t vl =
+        ref.ForwardVelocity() * (1 - (ref.curvature * rb).value());
+    prosdk::units::meters_per_second_t vr =
+        ref.ForwardVelocity() * (1 + (ref.curvature * rb).value());
+
+    prosdk::math::Vectord<5> nextR{
+        ref.pose.Translation().X().value(), ref.pose.Translation().Y().value(),
+        ref.pose.Rotation().Radians().value(), vl.value(), vr.value()};
+
+    auto localY = LocalMeasurementModel(nextR, prosdk::math::Vectord<2>::Zero());
+    observer.Correct(u, localY + prosdk::math::Normal(0.0001, 0.5, 0.5));
+
+    prosdk::math::Vectord<5> rdot = (nextR - r) / dt.value();
+    u = B.householderQr().solve(rdot -
+                                Dynamics(r, prosdk::math::Vectord<2>::Zero()));
+
+    observer.Predict(u, dt);
+
+    r = nextR;
+  }
+
+  auto localY = LocalMeasurementModel(observer.Xhat(), u);
+  observer.Correct(u, localY);
+
+  auto globalY = GlobalMeasurementModel(observer.Xhat(), u);
+  auto R = prosdk::math::CovarianceMatrix(0.01, 0.01, 0.0001, 0.5, 0.5);
+  observer.Correct<5>(u, globalY, GlobalMeasurementModel, R);
+
+  auto finalPosition = trajectory.SampleAt(trajectory.Duration());
+  REQUIRE_NEAR(finalPosition.pose.Translation().X().value(), observer.Xhat(0),
+               1.0);
+  REQUIRE_NEAR(finalPosition.pose.Translation().Y().value(), observer.Xhat(1),
+               1.0);
+  REQUIRE_NEAR(finalPosition.pose.Rotation().Radians().value(),
+               observer.Xhat(2), 1.0);
+  REQUIRE_NEAR(0.0, observer.Xhat(3), 1.0);
+  REQUIRE_NEAR(0.0, observer.Xhat(4), 1.0);
+}

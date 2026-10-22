@@ -1,0 +1,21 @@
+diff --git a/src/prosdk/thirdparty/eigen/Eigen/src/Core/DenseStorage.h b/src/prosdk/thirdparty/eigen/Eigen/src/Core/DenseStorage.h
+index 45c8779..ea5cb68 100644
+--- a/src/prosdk/thirdparty/eigen/Eigen/src/Core/DenseStorage.h
++++ b/src/prosdk/thirdparty/eigen/Eigen/src/Core/DenseStorage.h
+@@ -37,9 +37,14 @@ namespace internal {
+                " **** READ THIS WEB PAGE !!! ****");
+ #endif
+ 
+-#if EIGEN_STACK_ALLOCATION_LIMIT
++// prosdk: fixed-size objects are checked against their own limit (prosdk/platform/config.hpp), so
++// EIGEN_STACK_ALLOCATION_LIMIT can stay small for the runtime alloca of dynamic-size temporaries.
++#ifndef PROSDK_EIGEN_FIXED_SIZE_STACK_LIMIT
++#define PROSDK_EIGEN_FIXED_SIZE_STACK_LIMIT EIGEN_STACK_ALLOCATION_LIMIT
++#endif
++#if PROSDK_EIGEN_FIXED_SIZE_STACK_LIMIT
+ #define EIGEN_MAKE_STACK_ALLOCATION_ASSERT(X) \
+-  EIGEN_STATIC_ASSERT(X <= EIGEN_STACK_ALLOCATION_LIMIT, OBJECT_ALLOCATED_ON_STACK_IS_TOO_BIG)
++  EIGEN_STATIC_ASSERT(X <= PROSDK_EIGEN_FIXED_SIZE_STACK_LIMIT, OBJECT_ALLOCATED_ON_STACK_IS_TOO_BIG)
+ #else
+ #define EIGEN_MAKE_STACK_ALLOCATION_ASSERT(X)
+ #endif
