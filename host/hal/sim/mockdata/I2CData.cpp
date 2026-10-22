@@ -20,6 +20,22 @@ void I2CData::ResetData() {
   initialized.Reset(false);
   read.Reset();
   write.Reset();
+  std::scoped_lock lock(transferMutex);
+  m_lastAddress = -1;
+  m_resultCallback = nullptr;
+  m_resultParam = nullptr;
+}
+
+int32_t I2CData::BeginTransfer(int32_t deviceAddress) {
+  m_lastAddress = deviceAddress;
+  return m_resultCallback ? m_resultCallback(m_resultParam, deviceAddress) : 0;
+}
+
+void I2CData::SetResultCallback(HALSIM_I2CResultCallback callback,
+                                void* param) {
+  std::scoped_lock lock(transferMutex);
+  m_resultCallback = callback;
+  m_resultParam = param;
 }
 
 void I2CData::Write(int32_t deviceAddress, const uint8_t* dataToSend,
@@ -34,6 +50,16 @@ void I2CData::Read(int32_t deviceAddress, uint8_t* buffer, int32_t count) {
 extern "C" {
 void HALSIM_ResetI2CData(int32_t index) {
   SimI2CData[index].ResetData();
+}
+
+int32_t HALSIM_GetI2CLastAddress(int32_t index) {
+  return SimI2CData[index].GetLastAddress();
+}
+
+void HALSIM_SetI2CResultCallback(int32_t index,
+                                 HALSIM_I2CResultCallback callback,
+                                 void* param) {
+  SimI2CData[index].SetResultCallback(callback, param);
 }
 
 #define DEFINE_CAPI(TYPE, CAPINAME, LOWERNAME)                          \

@@ -35,6 +35,12 @@ namespace can {
 [[gnu::weak]] void OnEmergencyStop();
 }  // namespace can
 
+namespace sixstep {
+// Weak references, as for CAN: SixStep.cpp is linked only when the sketch opens a six-step motor.
+[[gnu::weak]] bool ApplyGate(bool enabled, bool blocking);
+[[gnu::weak]] void OnEmergencyStop();
+}  // namespace sixstep
+
 namespace {
 
 constexpr uint64_t Bit(int gpio) {
@@ -55,6 +61,9 @@ esp_timer_handle_t gGateTimer = nullptr;
 // MCPWM, LEDC and RMT signals stop whatever their drivers still do.
 void OnEmergencyStop() {
   gEStop.store(true, std::memory_order_release);
+  if (sixstep::OnEmergencyStop != nullptr) {
+    sixstep::OnEmergencyStop();  // first: its Hall interrupt could re-drive pins after the loop
+  }
   uint64_t pins = gOutputPins.load(std::memory_order_acquire);
   for (int gpio = 0; gpio < kNumSmartIo; ++gpio) {
     if ((pins & Bit(gpio)) != 0) {
@@ -74,6 +83,9 @@ void GateTimerCallback(void*) {
     bool enabled = OutputsEnabled();
     pwm::ApplyGate(enabled, false);
     dio::ApplyGate(enabled, false);
+    if (sixstep::ApplyGate != nullptr) {
+      sixstep::ApplyGate(enabled, false);
+    }
   }
 }
 
@@ -216,6 +228,9 @@ void UpdateOutputGate() {
   bool enabled = OutputsEnabled();
   pwm::ApplyGate(enabled, true);
   dio::ApplyGate(enabled, true);
+  if (sixstep::ApplyGate != nullptr) {
+    sixstep::ApplyGate(enabled, true);
+  }
 }
 
 void Log(std::string_view text, platform::ConsoleLevel level) {

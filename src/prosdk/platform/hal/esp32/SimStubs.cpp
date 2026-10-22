@@ -439,6 +439,15 @@ void HALSIM_RegisterEncoderAllCallbacks(int32_t index,
 extern "C" {
 void HALSIM_ResetI2CData(int32_t index) {}
 
+// prosdk additions (tools/upstream/patches/hal/0004): not in systemcore
+int32_t HALSIM_GetI2CLastAddress(int32_t index) {
+  return -1;
+}
+
+void HALSIM_SetI2CResultCallback(int32_t index,
+                                 HALSIM_I2CResultCallback callback,
+                                 void* param) {}
+
 #define DEFINE_CAPI(TYPE, CAPINAME, RETURN) \
   HAL_SIMDATAVALUE_STUB_CAPI(TYPE, HALSIM, I2C##CAPINAME, RETURN)
 

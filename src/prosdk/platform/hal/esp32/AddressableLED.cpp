@@ -8,8 +8,9 @@
 // slice. HAL_SetAddressableLEDData converts the colors into the strip's wire order, then sends
 // every output with a non-zero length (800 kHz; about 30 us per LED, a full 1024-LED buffer takes
 // about 31 ms). Up to 3 outputs (the ESP32-S3 has 4 RMT TX channels; probot-core's status LED
-// uses one). LED outputs are not gated by the robot state; an emergency stop drives the data line
-// low (the strip keeps its last colors).
+// uses one); the 3 are shared with the pulse transmitters (PulseIO.cpp, rmt::AcquireTxChannel in
+// Esp32Internal.hpp). LED outputs are not gated by the robot state; an emergency stop drives the
+// data line low (the strip keeps its last colors).
 
 #include "prosdk/hal/AddressableLED.h"
 
@@ -50,6 +51,7 @@ struct LedOutput final : PinDriver {
   int32_t length = 0;
   std::unique_ptr<uint8_t[]> tx;  // bytes in flight (the RMT driver reads them asynchronously)
   int32_t txCapacity = 0;
+  bool rmtReserved = false;  // holds one of the shared RMT TX channels (rmt::AcquireTxChannel)
 
   ~LedOutput() override {
     {
@@ -67,6 +69,9 @@ struct LedOutput final : PinDriver {
     }
     if (encoder != nullptr) {
       rmt_del_encoder(encoder);
+    }
+    if (rmtReserved) {
+      rmt::ReleaseTxChannel();
     }
     if (IsValidGpio(gpio)) {
       SetOutputPin(gpio, false);
@@ -220,9 +225,15 @@ HAL_AddressableLEDHandle HAL_InitializeAddressableLED(int32_t channel,
         break;
       }
     }
-    *status = slot < 0 ? MakeError(HAL_NO_AVAILABLE_RESOURCES,
-                                   "AddressableLED: all 3 LED outputs are in use")
-                       : StartOutput(*out);
+    if (slot < 0 || !rmt::AcquireTxChannel()) {
+      *status = MakeError(HAL_NO_AVAILABLE_RESOURCES,
+                          std::format("AddressableLED: all {} RMT TX channels are in use (LED "
+                                      "outputs and pulse transmitters share them)",
+                                      kNumRmtTxChannels));
+    } else {
+      out->rmtReserved = true;
+      *status = StartOutput(*out);
+    }
     if (*status == HAL_SUCCESS) {
       gOutputs[slot] = out.get();
     }

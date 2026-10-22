@@ -1,0 +1,169 @@
+diff --git a/host/hal/sim/I2C.cpp b/host/hal/sim/I2C.cpp
+index 8663bdb..ca768cb 100644
+--- a/host/hal/sim/I2C.cpp
++++ b/host/hal/sim/I2C.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "prosdk/hal/I2C.h"
+ 
++#include <mutex>
++
+ #include "HALInitializer.hpp"
+ #include "mockdata/I2CDataInternal.hpp"
+ 
+@@ -21,19 +23,38 @@ void HAL_InitializeI2C(HAL_I2CPort port, int32_t* status) {
+ int32_t HAL_TransactionI2C(HAL_I2CPort port, int32_t deviceAddress,
+                            const uint8_t* dataToSend, int32_t sendSize,
+                            uint8_t* dataReceived, int32_t receiveSize) {
+-  SimI2CData[port].Write(deviceAddress, dataToSend, sendSize);
+-  SimI2CData[port].Read(deviceAddress, dataReceived, receiveSize);
+-  return 0;
++  // prosdk: per-address result (HALSIM_SetI2CResultCallback). The phases follow the ESP32
++  // backend: nothing to receive is a write only (AddressOnly: one empty write), nothing to send
++  // is a read only.
++  std::scoped_lock lock(SimI2CData[port].transferMutex);
++  int32_t result = SimI2CData[port].BeginTransfer(deviceAddress);
++  if (result >= 0) {
++    if (sendSize > 0 || receiveSize <= 0) {
++      SimI2CData[port].Write(deviceAddress, dataToSend, sendSize);
++    }
++    if (receiveSize > 0) {
++      SimI2CData[port].Read(deviceAddress, dataReceived, receiveSize);
++    }
++  }
++  return result;
+ }
+ int32_t HAL_WriteI2C(HAL_I2CPort port, int32_t deviceAddress,
+                      const uint8_t* dataToSend, int32_t sendSize) {
+-  SimI2CData[port].Write(deviceAddress, dataToSend, sendSize);
+-  return 0;
++  std::scoped_lock lock(SimI2CData[port].transferMutex);
++  int32_t result = SimI2CData[port].BeginTransfer(deviceAddress);
++  if (result >= 0) {
++    SimI2CData[port].Write(deviceAddress, dataToSend, sendSize);
++  }
++  return result;
+ }
+ int32_t HAL_ReadI2C(HAL_I2CPort port, int32_t deviceAddress, uint8_t* buffer,
+                     int32_t count) {
+-  SimI2CData[port].Read(deviceAddress, buffer, count);
+-  return 0;
++  std::scoped_lock lock(SimI2CData[port].transferMutex);
++  int32_t result = SimI2CData[port].BeginTransfer(deviceAddress);
++  if (result >= 0) {
++    SimI2CData[port].Read(deviceAddress, buffer, count);
++  }
++  return result;
+ }
+ void HAL_CloseI2C(HAL_I2CPort port) {
+   SimI2CData[port].initialized = false;
+diff --git a/host/hal/sim/mockdata/I2CData.cpp b/host/hal/sim/mockdata/I2CData.cpp
+index db92aff..d0b2920 100644
+--- a/host/hal/sim/mockdata/I2CData.cpp
++++ b/host/hal/sim/mockdata/I2CData.cpp
+@@ -20,6 +20,22 @@ void I2CData::ResetData() {
+   initialized.Reset(false);
+   read.Reset();
+   write.Reset();
++  std::scoped_lock lock(transferMutex);
++  m_lastAddress = -1;
++  m_resultCallback = nullptr;
++  m_resultParam = nullptr;
++}
++
++int32_t I2CData::BeginTransfer(int32_t deviceAddress) {
++  m_lastAddress = deviceAddress;
++  return m_resultCallback ? m_resultCallback(m_resultParam, deviceAddress) : 0;
++}
++
++void I2CData::SetResultCallback(HALSIM_I2CResultCallback callback,
++                                void* param) {
++  std::scoped_lock lock(transferMutex);
++  m_resultCallback = callback;
++  m_resultParam = param;
+ }
+ 
+ void I2CData::Write(int32_t deviceAddress, const uint8_t* dataToSend,
+@@ -36,6 +52,16 @@ void HALSIM_ResetI2CData(int32_t index) {
+   SimI2CData[index].ResetData();
+ }
+ 
++int32_t HALSIM_GetI2CLastAddress(int32_t index) {
++  return SimI2CData[index].GetLastAddress();
++}
++
++void HALSIM_SetI2CResultCallback(int32_t index,
++                                 HALSIM_I2CResultCallback callback,
++                                 void* param) {
++  SimI2CData[index].SetResultCallback(callback, param);
++}
++
+ #define DEFINE_CAPI(TYPE, CAPINAME, LOWERNAME)                          \
+   HAL_SIMDATAVALUE_DEFINE_CAPI(TYPE, HALSIM, I2C##CAPINAME, SimI2CData, \
+                                LOWERNAME)
+diff --git a/host/hal/sim/mockdata/I2CDataInternal.hpp b/host/hal/sim/mockdata/I2CDataInternal.hpp
+index 895a045..5519710 100644
+--- a/host/hal/sim/mockdata/I2CDataInternal.hpp
++++ b/host/hal/sim/mockdata/I2CDataInternal.hpp
+@@ -4,6 +4,10 @@
+ 
+ #pragma once
+ 
++#include <atomic>
++#include <mutex>
++
++#include "prosdk/hal/simulation/I2CData.h"
+ #include "prosdk/hal/simulation/SimCallbackRegistry.hpp"
+ #include "prosdk/hal/simulation/SimDataValue.hpp"
+ 
+@@ -18,12 +22,24 @@ class I2CData {
+              int32_t sendSize);
+   void Read(int32_t deviceAddress, uint8_t* buffer, int32_t count);
+ 
++  // prosdk: device address and per-address result. A transfer holds transferMutex, calls
++  // BeginTransfer and runs Write/Read only when the result is >= 0.
++  int32_t BeginTransfer(int32_t deviceAddress);
++  int32_t GetLastAddress() const { return m_lastAddress; }
++  void SetResultCallback(HALSIM_I2CResultCallback callback, void* param);
++  std::recursive_mutex transferMutex;
++
+   SimDataValue<HAL_Bool, HAL_MakeBoolean, GetInitializedName> initialized{
+       false};
+   SimCallbackRegistry<HAL_BufferCallback, GetReadName> read;
+   SimCallbackRegistry<HAL_ConstBufferCallback, GetWriteName> write;
+ 
+   void ResetData();
++
++ private:
++  std::atomic<int32_t> m_lastAddress{-1};
++  HALSIM_I2CResultCallback m_resultCallback = nullptr;  // guarded by transferMutex
++  void* m_resultParam = nullptr;
+ };
+ extern I2CData* SimI2CData;
+ }  // namespace prosdk::hal
+diff --git a/src/prosdk/hal/simulation/I2CData.h b/src/prosdk/hal/simulation/I2CData.h
+index f5d0e39..0887405 100644
+--- a/src/prosdk/hal/simulation/I2CData.h
++++ b/src/prosdk/hal/simulation/I2CData.h
+@@ -31,6 +31,21 @@ int32_t HALSIM_RegisterI2CWriteCallback(int32_t index,
+                                         void* param);
+ void HALSIM_CancelI2CWriteCallback(int32_t index, int32_t uid);
+ 
++// prosdk additions (not in WPILib): device addresses and failure injection.
++// HALSIM_GetI2CLastAddress is the 7-bit address of the transfer in progress on the port, valid
++// inside a read, write or result callback; outside one it is the last address used (-1 before
++// the first transfer). The result callback is called once at the start of every
++// HAL_TransactionI2C, HAL_WriteI2C and HAL_ReadI2C on the port; the transfer returns its result.
++// A result < 0 (an address NACK) skips the write and read callbacks. Without a result callback
++// (or after setting it to NULL) every transfer returns 0, as in WPILib. Transfers on one port
++// are serialized.
++typedef int32_t (*HALSIM_I2CResultCallback)(void* param, int32_t address);
++
++int32_t HALSIM_GetI2CLastAddress(int32_t index);
++void HALSIM_SetI2CResultCallback(int32_t index,
++                                 HALSIM_I2CResultCallback callback,
++                                 void* param);
++
+ #ifdef __cplusplus
+ }  // extern "C"
+ #endif

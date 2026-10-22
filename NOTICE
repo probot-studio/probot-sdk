@@ -17,6 +17,8 @@ tools/upstream/generated.txt. The license texts are in licenses/:
   licenses/Catch2-LICENSE.txt             Boost Software License 1.0
   licenses/eigen/COPYING.*                Eigen's license files as shipped with Eigen (Eigen is built
                                           with EIGEN_MPL2_ONLY, so only MPL 2.0 code is compiled)
+  licenses/melexis/LICENSE                Apache License 2.0 (Melexis MLX90640/MLX90641 API)
+  licenses/st-vl53l7cx/LICENSE            BSD 3-Clause (STMicroelectronics VL53L7CX ULD)
 
 Component                 License                              Location in prosdk
 ---------                 -------                              ------------------
@@ -74,11 +76,27 @@ Sleipnir                  BSD 3-Clause (Sleipnir contributors) src/prosdk/thirdp
 WPILib examples           BSD 3-Clause (WPILib)                examples/ (the 63 ported sketches; see
                                                                below), test/examples
 Catch2 (tests only)       Boost Software License 1.0           test/thirdparty/catch2
+Melexis MLX90640 and      Apache 2.0 (Melexis N.V.)            src/prosdk/drivers/thermal/melexis/
+MLX90641 API (modified)                                        MLX90640_API.{h,cpp}, MLX90641_API.{h,cpp}
+ST VL53L7CX ULD 2.0.0     BSD 3-Clause (STMicroelectronics)    src/prosdk/drivers/range/st/
+                                                               vl53l7cx_api.{c,h}, vl53l7cx_buffers.h
 
 Eigen source files are covered by MPL 2.0 at file level: the files under src/prosdk/thirdparty/eigen
 are vendored unmodified apart from the include-path rewrite, the Arduino macro guard, the
 configuration include (tools/upstream/wpilib.py) and the patches in tools/upstream/patches/eigen,
 and their source is this repository.
+
+Two driver libraries are vendored by hand, not by tools/upstream/wpilib.py:
+- The Melexis MLX90640 and MLX90641 API, from https://github.com/melexis/mlx90640-library
+  (commit f6be7ca1) and https://github.com/melexis/mlx90641-library (commit 3c94aa87). Each
+  modified file keeps the upstream license header and carries a "Modified by Probot Studio"
+  notice that lists the changes (MLX90640_API.c renamed to .cpp, namespace prosdk::melexis,
+  include paths, line endings; the upstream I2C layer replaced by
+  src/prosdk/drivers/thermal/melexis/MelexisI2C.*).
+- The ST VL53L7CX Ultra Lite Driver 2.0.0, from https://github.com/STMicroelectronics/x-cube-tof1
+  (Drivers/BSP/Components/vl53l7cx/modules, commit 9d721708c394de16aaee9d1579e1f79f2a1e085a),
+  unmodified. Its platform layer (platform.h, platform.cpp, VL53L7CXPlatform.hpp in the same
+  folder) is hand-written.
 
 The examples in examples/ and their tests in test/examples are ported by hand from WPILib's
 wpilibcExamples with the same renames (design/examples.md). Each keeps upstream's copyright
@@ -87,8 +105,14 @@ pinned commit.
 
 Hand-written prosdk code is under the prosdk license (LICENSE, LICENSE-commercial):
   src/prosdk.h, src/prosdk/cxx, src/prosdk/platform, src/prosdk/probot;
-  the drivers not listed above: src/prosdk/drivers/ProHub.*, src/prosdk/drivers/{encoder,imu,
-  pwm,servo}, src/prosdk/drivers/motor/{BTS7960,ProHubMotor,VNH5019}.*;
+  the drivers not listed above: src/prosdk/drivers/ProHub.*, src/prosdk/drivers/{adc,analog,bus,
+  dac,display,encoder,environment,gnss,haptic,imu,led,light,magnetic,memory,pwm,radio,rtc,sensor,
+  servo}, src/prosdk/drivers/motor/{BTS7960,DRV8307,DRV8317H,ProHubMotor,TwoPinHBridge,VNH5019,
+  VNH7070AS}.*, src/prosdk/drivers/range (except the ST files above),
+  src/prosdk/drivers/thermal (except the Melexis files above);
+  src/prosdk/simulation/{PulseIOSim,SpiSim}.hpp (hand-written headers in the wpilibc folder);
   the prosdk examples HalSmoke, TimedRobotDifferential, OpModeRobotExample, TimesliceRobotExample,
-  CommandBasedRobot, DriversShowcase and AprilTagFieldPose in examples/;
+  CommandBasedRobot, DriversShowcase, AprilTagFieldPose, BoardozaClimate, BoardozaEveDisplay,
+  BoardozaGnss, BoardozaLoRa, BoardozaLoadCell, BoardozaMultizoneToF, BoardozaRotaryArgb,
+  BoardozaSdLog and BoardozaThermalCamera in examples/;
   tools/, test/prosdk and test/target.

@@ -3,7 +3,7 @@
 // Shared internals of the ESP32-S3 HAL backend (design/hal-esp32.md).
 //
 // Channel model: channel number = GPIO number for every pin API (DIO, PWM, Counter, Encoder,
-// DutyCycle, AnalogInput, AddressableLED). One DigitalHandleResource indexed by GPIO
+// DutyCycle, AnalogInput, AddressableLED, pulse I/O). One DigitalHandleResource indexed by GPIO
 // (smartIoHandles) gives each pin exactly one owner, like systemcore's SmartIo table. A pin is
 // checked against the chip (GPIO 22-25 do not exist), the module (flash/PSRAM pins), the board
 // (USB D-/D+, UART0 console) and probot-core (pins named by its configuration macros) before it is
@@ -13,7 +13,8 @@
 // only leave the chip while probot-core reports outputsEnabled() (RUN phase, DS connected, no
 // deadline miss, no e-stop). The output gate
 // is re-evaluated on core's user task (pre-cycle) and every 10 ms by an esp_timer. On an emergency
-// stop every HAL-owned output pin is routed to plain GPIO and driven low, lock-free.
+// stop every HAL-owned output pin (SetOutputPin: PWM, DIO outputs, LED data lines, pulse TX) is
+// routed to plain GPIO and driven low, lock-free.
 
 #pragma once
 
@@ -41,7 +42,10 @@ inline constexpr int32_t kNumPwmOutputs = 12;         // MCPWM: 2 groups x 3 tim
 inline constexpr int32_t kNumPulseCounters = 4;       // PCNT units (encoders + counters)
 inline constexpr int32_t kNumDutyCycleInputs = 6;     // MCPWM capture: 2 groups x 3 channels
 inline constexpr int32_t kNumDigitalPwmOutputs = 6;   // LEDC channels (of 8)
-inline constexpr int32_t kNumAddressableLeds = 3;     // RMT TX channels (of 4; core's LED uses one)
+// RMT TX channels (of 4; core's status LED uses one), shared by LED outputs and pulse TX
+inline constexpr int32_t kNumRmtTxChannels = 3;
+inline constexpr int32_t kNumAddressableLeds = kNumRmtTxChannels;  // while no pulse TX is open
+inline constexpr int32_t kNumPulseRx = 4;             // RMT RX channels (S3 channels 4-7)
 inline constexpr int32_t kNumI2CBuses = 2;
 inline constexpr int32_t kNumCanBuses = 1;            // TWAI
 inline constexpr int32_t kMaxPwmPulseUs = 4096;       // [0, 4096) like systemcore, or 0xFFFF
@@ -61,6 +65,8 @@ enum class PinMode : uint8_t {
   kDutyCycle,
   kAnalogInput,
   kAddressableLed,
+  kPulseTx,     // RMT TX pulse train (PulseIO.cpp)
+  kPulseRx,     // RMT RX pulse capture (PulseIO.cpp)
   kPeripheral,  // claimed by a UART or the TWAI controller (ClaimPin)
 };
 
@@ -77,7 +83,8 @@ struct SmartIo {
   std::unique_ptr<PinDriver> driver;
 };
 
-/** GPIO-indexed handle table shared by DIO, PWM, Counter, Encoder, DutyCycle, Analog, LED. */
+/** GPIO-indexed handle table shared by DIO, PWM, Counter, Encoder, DutyCycle, Analog, LED,
+ * pulse I/O. */
 extern DigitalHandleResource<HAL_DigitalHandle, SmartIo, kNumSmartIo>* smartIoHandles;
 
 /** True for a GPIO that exists on the ESP32-S3 (0..21, 26..48). */
@@ -131,6 +138,32 @@ bool OutputsEnabled();
  * generators (task context only). */
 void UpdateOutputGate();
 
+// ---- shared RMT TX budget ----
+namespace rmt {
+/** RMT TX channels taken by HAL users (AddressableLED outputs and pulse transmitters). */
+inline constinit std::atomic<int32_t> txChannelsInUse{0};
+
+/**
+ * Reserves one of the kNumRmtTxChannels RMT TX channels that AddressableLED and pulse TX share
+ * (the 4th belongs to probot-core's status LED). Returns false when all are taken. Call before
+ * rmt_new_tx_channel; release with ReleaseTxChannel when the channel is deleted.
+ */
+inline bool AcquireTxChannel() {
+  int32_t n = txChannelsInUse.load(std::memory_order_relaxed);
+  do {
+    if (n >= kNumRmtTxChannels) {
+      return false;
+    }
+  } while (!txChannelsInUse.compare_exchange_weak(n, n + 1, std::memory_order_acq_rel));
+  return true;
+}
+
+/** Returns a channel taken by AcquireTxChannel. */
+inline void ReleaseTxChannel() {
+  txChannelsInUse.fetch_sub(1, std::memory_order_acq_rel);
+}
+}  // namespace rmt
+
 // ---- per-module hooks (defined in the module .cpp files) ----
 namespace pwm {
 /** Applies the output gate to every PWM output. Returns false if it could not lock (retry). */
@@ -147,6 +180,15 @@ namespace can {
 /** Lock-free: stops periodic CAN transmissions after an emergency stop. */
 void OnEmergencyStop();
 }  // namespace can
+
+namespace sixstep {
+/** Applies the output gate to every six-step motor (coast while closed; SixStep.cpp). Returns
+ * false if it could not lock (retry). */
+bool ApplyGate(bool enabled, bool blocking);
+/** Coasts every six-step motor for good: all 6 outputs low, under the Hall interrupt's spinlock
+ * (register writes only). */
+void OnEmergencyStop();
+}  // namespace sixstep
 
 /**
  * Logs one diagnostic line through the prosdk console (adds the "[prosdk hal] " prefix). HAL

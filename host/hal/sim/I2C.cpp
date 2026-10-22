@@ -4,6 +4,8 @@
 
 #include "prosdk/hal/I2C.h"
 
+#include <mutex>
+
 #include "HALInitializer.hpp"
 #include "mockdata/I2CDataInternal.hpp"
 
@@ -21,19 +23,38 @@ void HAL_InitializeI2C(HAL_I2CPort port, int32_t* status) {
 int32_t HAL_TransactionI2C(HAL_I2CPort port, int32_t deviceAddress,
                            const uint8_t* dataToSend, int32_t sendSize,
                            uint8_t* dataReceived, int32_t receiveSize) {
-  SimI2CData[port].Write(deviceAddress, dataToSend, sendSize);
-  SimI2CData[port].Read(deviceAddress, dataReceived, receiveSize);
-  return 0;
+  // prosdk: per-address result (HALSIM_SetI2CResultCallback). The phases follow the ESP32
+  // backend: nothing to receive is a write only (AddressOnly: one empty write), nothing to send
+  // is a read only.
+  std::scoped_lock lock(SimI2CData[port].transferMutex);
+  int32_t result = SimI2CData[port].BeginTransfer(deviceAddress);
+  if (result >= 0) {
+    if (sendSize > 0 || receiveSize <= 0) {
+      SimI2CData[port].Write(deviceAddress, dataToSend, sendSize);
+    }
+    if (receiveSize > 0) {
+      SimI2CData[port].Read(deviceAddress, dataReceived, receiveSize);
+    }
+  }
+  return result;
 }
 int32_t HAL_WriteI2C(HAL_I2CPort port, int32_t deviceAddress,
                      const uint8_t* dataToSend, int32_t sendSize) {
-  SimI2CData[port].Write(deviceAddress, dataToSend, sendSize);
-  return 0;
+  std::scoped_lock lock(SimI2CData[port].transferMutex);
+  int32_t result = SimI2CData[port].BeginTransfer(deviceAddress);
+  if (result >= 0) {
+    SimI2CData[port].Write(deviceAddress, dataToSend, sendSize);
+  }
+  return result;
 }
 int32_t HAL_ReadI2C(HAL_I2CPort port, int32_t deviceAddress, uint8_t* buffer,
                     int32_t count) {
-  SimI2CData[port].Read(deviceAddress, buffer, count);
-  return 0;
+  std::scoped_lock lock(SimI2CData[port].transferMutex);
+  int32_t result = SimI2CData[port].BeginTransfer(deviceAddress);
+  if (result >= 0) {
+    SimI2CData[port].Read(deviceAddress, buffer, count);
+  }
+  return result;
 }
 void HAL_CloseI2C(HAL_I2CPort port) {
   SimI2CData[port].initialized = false;
