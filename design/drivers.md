@@ -134,7 +134,17 @@ drives the forward channel, negative the reverse channel, the other one fully of
 old SDK; brake behaviour is therefore not offered.
 
 `prosdk/drivers/ProHub.hpp` holds the board constants (pins, addresses, frequencies, channel map)
-and `ConfigurePins()`.
+and `ConfigurePins()`. It must run before any ProHub device is constructed; robot members are
+built before the constructor body, so call it from the first member
+(`bool m_pinsConfigured = prosdk::prohub::ConfigurePins();`, examples/DriversShowcase).
+
+Address clash: probot-core's optional INA219/INA226 battery sensor (`PROBOT_BATTERY_INA`) runs on
+Arduino's `Wire`, which is I2C controller 0 (prosdk port 0, the ProHub port), at 0x40 by default
+(`PROBOT_BATTERY_INA_ADDR`), the first PCA9685's address. When core has started `Wire` on its own
+pins (GPIO 8/9 unless `PROBOT_BATTERY_INA_SDA`/`SCL`), port 0 shares that bus as is
+(design/hal-esp32.md, I2C), so `ConfigurePins()`' pins 1/2 do not apply. To use both, wire the INA
+to the ProHub bus (`PROBOT_BATTERY_INA_SDA 1`, `PROBOT_BATTERY_INA_SCL 2`) at an address other
+than 0x40/0x41 (its A0/A1 pins, `PROBOT_BATTERY_INA_ADDR`). Not tested on hardware.
 
 ## ProHub encoders
 

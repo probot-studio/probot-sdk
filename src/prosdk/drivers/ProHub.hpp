@@ -69,8 +69,17 @@ constexpr int GetMotorPcaAddress(int port) {
 
 /**
  * Points I2C port 0 at the ProHub bus (SDA 1, SCL 2, 400 kHz) and the onboard serial port at the
- * encoder stream (RX 10, TX 11). Call it before constructing a PCA9685 or ProHubEncoders (for
- * example at the top of the robot constructor). Returns false if a pin was refused.
+ * encoder stream (RX 10, TX 11). Call it before a PCA9685, ProHubEncoders or other port 0 device is
+ * constructed. Members are constructed before the robot constructor's body runs, so call it from a
+ * member declared above them: `bool m_pinsConfigured = prosdk::prohub::ConfigurePins();` as the
+ * first member (examples/DriversShowcase). Returns false if a pin was refused.
+ *
+ * probot-core's optional INA219/INA226 battery sensor (PROBOT_BATTERY_INA) also uses I2C
+ * controller 0 (Arduino's Wire, prosdk port 0), at PCA9685 address 0x40 by default
+ * (PROBOT_BATTERY_INA_ADDR). Once core has started that bus on its pins (GPIO 8/9 unless
+ * PROBOT_BATTERY_INA_SDA/SCL), port 0 shares it as is and the pins set here do not apply. To use
+ * both, wire the INA to the ProHub bus (PROBOT_BATTERY_INA_SDA 1, PROBOT_BATTERY_INA_SCL 2) and
+ * give it an address other than 0x40 and 0x41 (PROBOT_BATTERY_INA_ADDR, set by its A0/A1 pins).
  */
 bool ConfigurePins();
 
