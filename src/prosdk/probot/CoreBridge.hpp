@@ -653,14 +653,22 @@ inline bool UtilityAvailable() { return probot::ds::utilityAvailable(); }
   .utilityAvailable = nullptr
 #endif
 
-// Core's boot hook. With USB CDC On Boot Enabled (the Pulse settings) Arduino's Serial is HWCDC
-// on USB-C, whose write waits up to 20 times its TX timeout (100 ms, so about 2 s) per call while
-// the CDC link counts as connected but the host does not read (a serial monitor opened, then
-// closed, cable still in). Core prints from its sysloop, the DS timeout line before it stops the
-// robot, so 1 ms bounds that to about 20 ms per write; text that does not fit is dropped.
+// Core's boot hook. With USB CDC On Boot Enabled (the Pulse settings) Arduino's Serial is HWCDC on
+// USB-C. From Arduino-ESP32 3.3.9, while the host keeps the port open without reading (a serial
+// monitor opened, then closed, cable still in), each write that finds the TX ring full waits up to
+// 20 times the TX timeout (100 ms by default, so about 2 s per write), and core's sysloop, which
+// also runs the emergency stop, logs. probot-core sets the timeout to 5 ms in runtime_setup() since
+// its PR #46 (about 100 ms per write); this hook runs after runtime_setup() and applies the same
+// rule, so a core before #46 gets it too (on #46 it repeats core's value). Not lower: the TX lock
+// take and flush() use the same timeout, so at 1 ms a second printing task loses its whole line
+// and flush() drops the ring with a reading host. Before 3.3.9 a write stops waiting after one
+// timeout by itself (core's review), so the rule leaves those cores alone.
 inline void Boot() {
-#if ARDUINO_USB_CDC_ON_BOOT && ARDUINO_USB_MODE
-  HWCDCSerial.setTxTimeoutMs(1);
+#if defined(ARDUINO_USB_MODE) && ARDUINO_USB_MODE && defined(ARDUINO_USB_CDC_ON_BOOT) && \
+    ARDUINO_USB_CDC_ON_BOOT
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 3, 9)
+  HWCDCSerial.setTxTimeoutMs(5);
+#endif
 #endif
   pf::detail::Boot();
 }
@@ -729,8 +737,12 @@ inline bool Install() {
  */
 inline const bool kInstalled = Install();
 
+// probot-core #46 and later default the INA pins to SDA 1 / SCL 2 (the Pulse J3 header) in
+// battery.hpp, which <probot.h> includes before this header, so PROBOT_BATTERY_INA_SDA/SCL are
+// always defined with PROBOT_BATTERY_INA there. An older core leaves them undefined and calls
+// Wire.begin() without pins: the esp32s3 variant's SDA 8 / SCL 9.
 #if defined(PROBOT_BATTERY_INA) && !defined(PROBOT_BATTERY_INA_SDA)
-#warning "probot-core starts the INA battery sensor's I2C bus on GPIO 8/9, which are not on a Pulse header, and prosdk I2C port 0 then shares that bus. Define PROBOT_BATTERY_INA_SDA 1 and PROBOT_BATTERY_INA_SCL 2 (J3), or 8/9 on another board."
+#warning "This probot-core (before PR #46) starts the INA battery sensor's I2C bus on GPIO 8/9, which are not on a Pulse header, and prosdk I2C port 0 then shares that bus. Define PROBOT_BATTERY_INA_SDA 1 and PROBOT_BATTERY_INA_SCL 2 (J3), or 8/9 on another board."
 #endif
 
 #if defined(PROBOT_BATTERY_INA)
@@ -740,7 +752,7 @@ inline bool StartCoreI2C() {
 #if defined(PROBOT_BATTERY_INA_SDA) && defined(PROBOT_BATTERY_INA_SCL)
   return Wire.begin(PROBOT_BATTERY_INA_SDA, PROBOT_BATTERY_INA_SCL);
 #else
-  return Wire.begin();
+  return Wire.begin();  // core before #46: the variant's 8 / 9
 #endif
 }
 #endif
@@ -764,7 +776,7 @@ inline bool ReservePinsOfThisUnit() {
 #if defined(PROBOT_BATTERY_INA_SDA) && defined(PROBOT_BATTERY_INA_SCL)
       PROBOT_BATTERY_INA_SDA, PROBOT_BATTERY_INA_SCL,
 #elif defined(PROBOT_BATTERY_INA)
-      8, 9,  // core's INA sensor calls Wire.begin() without pins: the esp32s3 variant's SDA 8 /
+      8, 9,  // core before #46 calls Wire.begin() without pins: the esp32s3 variant's SDA 8 /
              // SCL 9 (not on a Boardoza Pulse header; see the #warning above)
 #endif
       -1,

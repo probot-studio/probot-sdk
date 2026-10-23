@@ -78,11 +78,12 @@ constexpr int GetMotorPcaAddress(int port) {
  *
  * probot-core's optional INA219/INA226 battery sensor (PROBOT_BATTERY_INA) also uses I2C
  * controller 0 (Arduino's Wire, prosdk port 0), at PCA9685 address 0x40 by default
- * (PROBOT_BATTERY_INA_ADDR). With the INA enabled, port 0 runs on core's Wire pins (GPIO 8/9, the
- * generic esp32s3 variant's Wire pins, unless PROBOT_BATTERY_INA_SDA/SCL), whichever of core and
- * the robot starts the bus first, and the pins set here do not apply. To use both, wire the INA
- * to the ProHub bus (PROBOT_BATTERY_INA_SDA 1, PROBOT_BATTERY_INA_SCL 2) and give it an address
- * other than 0x40 and 0x41 (PROBOT_BATTERY_INA_ADDR, set by its A0/A1 pins).
+ * (PROBOT_BATTERY_INA_ADDR). With the INA enabled, port 0 runs on core's INA pins
+ * (PROBOT_BATTERY_INA_SDA/SCL, default SDA 1 / SCL 2 = the ProHub bus since probot-core #46; a
+ * core before #46 uses the generic esp32s3 variant's GPIO 8/9 unless they are defined), whichever
+ * of core and the robot starts the bus first, and the pins set here do not apply. To use both,
+ * keep the INA on the ProHub bus (SDA 1, SCL 2) and give it an address other than 0x40 and 0x41
+ * (PROBOT_BATTERY_INA_ADDR, set by its A0/A1 pins).
  * With the INA enabled the bus runs at 100 kHz, not 400 kHz: core sets Wire.setClock(100000)
  * whichever side starts the bus first, so every port 0 transfer takes about 4 times longer.
  */
