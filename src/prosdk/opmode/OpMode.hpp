@@ -20,8 +20,10 @@ namespace prosdk {
  *   <li>constructed when opmode selected on driver station
  *   <li>DisabledPeriodic() called periodically as long as DS is disabled
  *   <li>when DS transitions from disabled to enabled, Start() is called once
- *   <li>while DS is enabled, Periodic() is called periodically and additional
- *       periodic callbacks added via GetCallbacks() are called periodically
+ *   <li>while DS is enabled, Periodic() is called periodically
+ *   <li>additional periodic callbacks returned by GetCallbacks() are
+ *       registered when the opmode is constructed and run from then on, while
+ *       disabled too, until the opmode is closed
  *   <li>when DS transitions from enabled to disabled, or a different opmode is
  *       selected while enabled, End() is called, followed by Close(); the
  *       object is not reused
@@ -62,7 +64,7 @@ class OpMode {
 
   /**
    * Returns a vector of custom periodic callbacks to be executed while the
-   * opmode is enabled.
+   * opmode exists (selected or running; see Registration timing).
    *
    * <p>This method allows opmodes to register arbitrary periodic callbacks
    * with custom execution intervals. The callbacks are executed by the robot

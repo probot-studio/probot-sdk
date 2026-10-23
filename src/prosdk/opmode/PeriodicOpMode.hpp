@@ -34,8 +34,11 @@ namespace prosdk {
  * - When DS transitions from disabled to enabled, Start() is called once
  *
  * - While DS is enabled, Periodic() is called periodically on the time interval
- *   set by the robot framework, and additional periodic callbacks added via
- *   AddPeriodic() are called periodically on their set time intervals
+ *   set by the robot framework
+ *
+ * - Additional periodic callbacks added via AddPeriodic() (in the constructor)
+ *   are registered when the opmode is constructed and are called on their set
+ *   time intervals from then on, while disabled too, until the opmode is closed
  *
  * - When DS transitions from enabled to disabled, or a different opmode is
  *   selected on the driver station when the DS is enabled, End() is called,
@@ -81,8 +84,9 @@ class PeriodicOpMode : public OpMode {
 
   /**
    * Returns the set of additional periodic callbacks registered via
-   * AddPeriodic(). These are executed by the robot framework while the opmode
-   * is enabled, in addition to the primary Periodic() callback.
+   * AddPeriodic(). The robot framework registers them when the opmode is
+   * constructed and executes them from then on, while disabled too, in addition
+   * to the primary Periodic() callback (which only runs while enabled).
    *
    * @return The vector of additional periodic callbacks.
    */
@@ -96,6 +100,10 @@ class PeriodicOpMode : public OpMode {
    *
    * This is scheduled on the same Notifier as Periodic(), so Periodic() and
    * the callback run synchronously. Interactions between them are thread-safe.
+   *
+   * Call it from the constructor: the framework reads the callbacks once, when
+   * the opmode is constructed, and runs them while disabled too. To run only
+   * while enabled, start the callback with a RobotState::IsEnabled() check.
    *
    * @param callback The callback to run.
    * @param period   The period at which to run the callback.
