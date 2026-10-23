@@ -195,8 +195,8 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `dashboard::clearPersisted()` (R12 part 2); the
   refused-schema report to core's per-schema limit (R13, `PROBOT_DASH_MAX_SCHEMA_BYTES`). Battery
   current (`io::battery::currentAmps()`, NaN without a sensor) has no WPILib 2027 API and is not
-  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (9 since R18
-  match info), and the bridge leaves a field null when the core lacks the feature (detected with
+  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (10 since the
+  dashboard value limit for the R19 display), and the bridge leaves a field null when the core lacks the feature (detected with
   `__has_include`, R13 on `dashboard::Limits`, R12 persistence with core's `PROBOT_HAS_DASH_PERSIST`
   macro plus a requires-check on `dashboard::clearPersisted()`, R15 with requires-checks on
   `loopGridRestarts()` and `dashboard::limits()`, R11 with core's `PROBOT_HAS_FILES_SHARE` macro plus
@@ -275,10 +275,12 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `EmergencyStopped()` and stops as well (host tests). Threads the program started itself
   (`Notifier`, `MotorSafety`, `Watchdog`) keep running, but every output they write is refused by
   the gate.
-- **Driver Station display.** The page has no display panel (core request R19). A small terminal
-  keeps the screen (cursor and erase sequences applied, colors dropped); its plain text is logged,
-  when it changed, as the telemetry table `DriverStationDisplay` (`text`), which the DS topic tree
-  shows in place; nothing goes to the console (`prosdk/platform/dashboard/DashboardDisplay.hpp`).
+- **Driver Station display.** A small terminal keeps the screen (cursor and erase sequences
+  applied, colors dropped, columns counted in code points); its plain text is logged, when it
+  changed, as the telemetry table `DriverStationDisplay` (`text`), which core's page shows as a text
+  panel of 48 x 160 (core request R19, #44; an older core: one row of the topic tree). The text is
+  capped at core's `PROBOT_DASH_MAX_VALUE` (CoreOps ABI 10), so 8192 shows a full screen; nothing
+  goes to the console (`prosdk/platform/dashboard/DashboardDisplay.hpp`).
 - **Tests.** `test/prosdk/robot` (own executable): the robot host on the HAL sim with a fake core
   table, driving core's hooks on simulated time (disabled -> auto -> teleop -> utility -> e-stop,
   callback order, `AddPeriodic`/timeslice timing, jitter, late pass and late one-shot pass,
@@ -312,6 +314,10 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `prosdk_files_tests` also compiles probot-core's header-only `probot/files/files.hpp` from `$PROBOT_CORE`
   or `.upstream/probot-core` when present (CI checks out `PROBOT_CORE_REF` for the host job), so
   DataLogManager's share calls meet core's own rules; without it a reduced fake rule stands in.
+  `prosdk_match_tests` (core's match store) and `prosdk_gamepad_tests` (core's gamepad mapping
+  profiles, the R20 Home/Guide button) use the same clone. `prosdk_ds_pump_tests` compiles the robot's
+  Driver Station backend (`hal/esp32/DriverStation.cpp`) on the host over a fake CoreOps table, so the
+  pump's match info and gamepad path is checked without QEMU.
 - ccache (static binary in `tools/bin`, cache in `.build/ccache`) and ninja (pip venv) are used when present.
 - Every compile runs as `nice -n 19 ionice -c3`, at most `-j2`, under the lock `flock .build/build.lock`, so
   parallel agents never stack compiles on the shared server.

@@ -548,8 +548,8 @@ Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attac
 
 ### 6.2 probot-core
 
-9. **Open.** probot-core's stack is now draft PRs #26-#43 (R1-R18). Its latest release is still
-   0.3.0. CI's `PROBOT_CORE_REF` is `feat/ds-match-info` (#43, 73c7e10), and the oldest supported
+9. **Open.** probot-core's stack is now draft PRs #26-#45 (R1-R20). Its latest release is still
+   0.3.0. CI's `PROBOT_CORE_REF` is `feat/gamepad-guide` (#45, e0cb17f), and the oldest supported
    core is `feat/dashboard-store`. As written on 2026-10-22: **PRs #26-#31 merged and released**
    as probot-core 0.4.0 or later, on stable and in Library
    Manager. These carry R1-R4 (framework, ds, api), R5 (dashboard store and DS page), R7 (opmodes),

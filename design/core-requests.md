@@ -276,7 +276,9 @@ Wanted: a widget for `.type` `"DriverStationDisplay"` that draws `text` as a mon
 store or protocol change is needed. Colors are dropped today; if the widget should draw them, say so and
 prosdk can add an `ansi` string child with the screen's SGR runs.
 
-Status: open (written 2026-10-23, not sent to core yet).
+Status: delivered as draft PR #44 (`feat/ds-display` 5281bde, no colors) and wired (CoreOps ABI 10:
+the text's byte cap follows core's `PROBOT_DASH_MAX_VALUE`), see "P1 R19 and R20 delivered and wired"
+below.
 
 ### R20. Gamepad GUIDE (Home) button in the mapping profiles (low priority)
 
@@ -291,7 +293,9 @@ frame with fewer than 17 buttons keeps GUIDE unavailable, which prosdk already h
 API.md that the OS, Steam or the browser may capture the Guide/PS button. No prosdk change is needed once
 core has it. Until then design/hal-esp32.md (Joysticks) and the user docs say GUIDE is not available.
 
-Status: open (written 2026-10-23, not sent to core yet).
+Status: delivered as draft PR #45 (`feat/gamepad-guide` e0cb17f, stacked on #44) and wired (no prosdk
+code change was needed; the docs and tests are updated), see "P1 R19 and R20 delivered and wired"
+below.
 
 ## Status
 
@@ -1016,3 +1020,62 @@ Wired:
   checks), the HAL link test (1,731,185 / 76,956; against 940d300 1,725,921 / 76,812; against
   `feat/dashboard-store` 1,761,353 / 69,772), examples TemplateTimed 1,812,056 / 73,164 and
   SnippetDigitalCommunication 1,809,196 / 73,172, `ds_widget_check.js` on core's page.
+
+### P1 R19 and R20 delivered and wired (CoreOps ABI 10), 2026-10-23
+
+Core's R19: draft PR #44 `feat/ds-display` 5281bde, stacked on #43 (73c7e10, unchanged). A folder whose
+`.type` is `"DriverStationDisplay"` with a string child `text` is drawn as a monospace panel of at most
+48 lines of 160 columns, a column being one code point (`Array.from`), tabs expanded to multiples of 8,
+lines split on `\n`, `\r\n` or `\r`; the Dashboard's "Robot Ekranı" card prefers
+`/Telemetry/DriverStationDisplay`. No colors, no store or protocol change. Core's R20: draft PR #45
+`feat/gamepad-guide` e0cb17f, stacked on #44: `Options = 16` (W3C Home/Guide/PS) in
+`mapping_logitech_f310`, `mapping_standard` (xbox/ds4/ps aliases) and `mapping_axis9_dpad`; tuna-default
+keeps 10; a frame with fewer than 17 buttons reads it as false; the DS labels it "Home"; `API.md` notes
+that the OS, Steam or the browser may capture it. `.upstream/probot-core` `sdk-target` is at e0cb17f
+(`git reset --keep`); CI's `PROBOT_CORE_REF` names `feat/gamepad-guide` (`PROBOT_CORE_OLDEST_REF` stays
+`feat/dashboard-store`).
+
+Checked against the panel, prosdk's publishing had one mismatch: it counted columns in bytes, so a row
+of two-byte characters was clipped at 80 columns and the 1024-byte cut could split a character. Fixed:
+
+- R19, display: prosdk's terminal (`platform/dashboard/DashboardDisplay.cpp`) now counts one column per
+  code point like the panel, decodes UTF-8 strictly (no overlong forms, surrogates or values past
+  U+10FFFF; invalid bytes and C1 controls dropped; a sequence split across two writes is kept), and
+  edits rows (cursor moves, overwrite, `K`/`J` erase) by column. The text's byte cap is
+  `DisplayMaxBytes()` = min(core's `PROBOT_DASH_MAX_VALUE` at run time, 30,767 = 48 x 160 four-byte
+  characters plus 47 newlines); 1024 (core's default) while core's store is not set up or with no core.
+  Over the cap whole rows are dropped from the top, then a single long row is cut on a character
+  boundary, so the store never refuses the text. A full ASCII screen is 7,727 B (fits 8192); a full
+  screen of two-byte characters is 15,359 B (needs 16384); at 1024 the last 6 full ASCII rows show.
+  RAM: design/size.md section 14 (about +11.3 KB of core heap and an 8 KB pool slot at 8192, plus
+  prosdk's copies of the text).
+- CoreOps ABI 10: `dashMaxValue()`, last field. The bridge reads `dashboard::limits().maxValue` (R15)
+  when the requires-probe finds it, else `dashboard::detail::maxValue()` (every core with the store);
+  both return 0 before `runtime_setup()`. Default (no core, or null): 0.
+- R20, gamepad: no gate is needed; the bridge copies core's profile as is (`CopyCoreMapping()`, a
+  template in `CoreOps.hpp` so the archive never names a core type), so an older core carries
+  `Options` -1 and GUIDE stays unavailable, and `CoreJoystick` maps `Options` to WPILib's GUIDE
+  (index 5) only when the frame has that button. The "GUIDE is not available" notes in the docs are
+  now qualified as "before core #45".
+- Tests: `prosdk_dashboard_tests` (columns in characters for two-, three- and four-byte characters,
+  tabs, cursor edits and erase in UTF-8 rows, a sequence split across writes, invalid bytes, the cut on
+  a character boundary; `DashboardDisplayStoreTest.cpp` through the fake store: 8192 keeps a full ASCII
+  screen, 16384 a full two-byte screen, 1024 the last 6 rows, 32 a row cut on a boundary, never
+  refused); `prosdk_tests` (CoreOps defaults for `dashMaxValue`, GUIDE from `Options` 16 with 17
+  buttons and not with 16, `CopyCoreMapping` copies every field); `prosdk_gamepad_tests` (new, with the
+  core clone, `PROSDK_TEST_PROBOT_CORE_GAMEPAD`: core's own profiles through `CopyCoreMapping` and
+  `CoreJoystick`, Home/Guide on R20 and none before); `prosdk_ds_pump_tests` (new: the robot's
+  `hal/esp32/DriverStation.cpp` on the host over a fake CoreOps table: match info appears only after a
+  pump pass and `HAL_RefreshDSData`, is read once per change and clears; button 16 reaches
+  `HAL_GetJoystickButtons` as GUIDE); `ds_widget_check.js` decodes the panel's `dsdFormat` with
+  prosdk's layouts (full ASCII screen 7,727 B, two-byte screen, 161 columns and 49 rows clipped).
+- Checked against e0cb17f: `build.sh host all header_check --test` (every binary passes), `build.sh
+  esp32s3 prosdk header_check` (no warnings), the HAL link test (1,733,857 / 76,972; against 73c7e10
+  1,732,433 / 76,972; against `feat/dashboard-store` 9217ae4 1,762,525 / 69,788, `DashMaxValue<>`
+  through `detail::maxValue()`), QEMU smoke 8/8 on both boots, `ds_widget_check.js` on core's page,
+  `wpilib.py --check`, `examples.py --check`, examples DSGamepadChooser 1,854,452 / 73,292 and
+  DriverStationDisplayLines 1,835,176 / 73,228.
+- Docs: design/API-DIFFERENCES.md (Joysticks and `DriverStationDisplay` rows, section 6),
+  design/hal-esp32.md, design/PORT.md, design/user-docs-handoff.md, design/examples.md,
+  design/size.md section 14, and the DriverStationDisplayLines / DriverStationDisplayAnsi /
+  DSGamepadChooser headers.

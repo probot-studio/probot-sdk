@@ -3,7 +3,8 @@
 For probot-docs (probotstudio.com/docs). Release checklist item 18 (`design/audit-final.md` section
 6.4). Written 2026-10-23 at prosdk `79cdeb7` (branch `dev`) against probot-core's draft stack up to
 #42 (`feat/dash-set-refused` 940d300, `library.properties` version 0.4.0); the match info item (R18)
-needs #43 on top of it (`feat/ds-match-info` 73c7e10, which CI now pins). Today the docs mention
+needs #43 on top of it (`feat/ds-match-info` 73c7e10), the display panel (R19) #44 and the
+Home/Guide button (R20) #45 (`feat/gamepad-guide` e0cb17f, which CI now pins). Today the docs mention
 probot-sdk only as a future library (`docs/ornekler.md:917`).
 
 Every item below names the source in this repository. The source is the reference; this file only
@@ -93,8 +94,9 @@ hardware validation is done.
   `DualSenseController` and their `Command*` read the same layout). Not the `NiDs*` /
   `CommandNiDs*` classes: legacy NI DS numbering, wrong on the Probot DS (`API-DIFFERENCES.md`,
   `NiDs*` row). Buttons are 0-based (`GetRawButton(0)` = FACE_DOWN); old "starting at 1" comments
-  were fixed in prosdk (`wpilibc/0017`). GUIDE is not available with core's profiles (core request
-  R20); `Joystick::GetTrigger()`/`GetTop()` read buttons 1/2 (B/X on a gamepad).
+  were fixed in prosdk (`wpilibc/0017`). GUIDE is the centre Home/Guide/PS button (core request R20, #45;
+  not available with an older core, and the operating system, Steam or the browser may keep the
+  button for itself, so do not rely on it for robot functions); `Joystick::GetTrigger()`/`GetTop()` read buttons 1/2 (B/X on a gamepad).
 - Alliance, game data and match info (core R18, `API-DIFFERENCES.md` section 3, `MatchState` row):
   entered on the DS Dashboard's "Maç Bilgisi" card (station Red 1-3 / Blue 1-3 / none, game data,
   event name, match type, match and replay number; text at most 64 bytes UTF-8). Changeable only
@@ -104,7 +106,12 @@ hardware validation is done.
   page resends to the same robot; a reloaded page does not). Not logged, no FMS. With an older core
   they stay empty. On the host `DriverStationSim` sets them (`examples.md` "Example tests").
 - Console: lines carry a level (error/warning/info), shown on the DS Logs page
-  (`API-DIFFERENCES.md` section 3, "Console levels"). `DriverStationDisplay` shows as plain text in the topic tree (`/Telemetry/DriverStationDisplay/text`), not the console.
+  (`API-DIFFERENCES.md` section 3, "Console levels"). `DriverStationDisplay` shows on the DS as a text panel (core R19, #44: the
+  Dashboard's "Robot Ekranı" card and the Veri page; 48 rows of 160 characters, no colors), not the
+  console. With core's default `PROBOT_DASH_MAX_VALUE` (1024 bytes) only the last rows that fit are
+  shown (about six full rows); `#define PROBOT_DASH_MAX_VALUE 8192` before `#include <prosdk.h>`
+  shows a full screen and costs about 11 KB more of core's heap plus up to about 23 KB on prosdk's
+  side for a full screen (`API-DIFFERENCES.md` section 3, `DriverStationDisplay` row).
 
 ## 5. Telemetry, tunables and widgets
 

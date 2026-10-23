@@ -1,8 +1,9 @@
 # prosdk CI (design/PORT.md sections 2, 5, 9):
 #   host:    vendoring drift check (tools/upstream/wpilib.py --check), examples drift check
 #            (tools/upstream/examples.py --check), host build, host header check and the
-#            upstream + prosdk unit tests (prosdk_files_tests with probot-core's probot::files
-#            and prosdk_match_tests with its match store, from PROBOT_CORE_REF)
+#            upstream + prosdk unit tests (prosdk_files_tests with probot-core's probot::files,
+#            prosdk_match_tests with its match store and prosdk_gamepad_tests with its gamepad
+#            mapping profiles, from PROBOT_CORE_REF)
 #   esp32s3: the same drift check with the Arduino toolchain installed (also verifies
 #            tools/upstream/arduino-macros.txt), the precompiled archive and the header check
 #            (every public header after #include <Arduino.h>, exact Arduino flags)
@@ -23,7 +24,7 @@ env:
   ARDUINO_CLI_VERSION: "1.5.1"
   ARDUINO_ESP32_VERSION: "3.3.10"
   # probot-core branch or tag the sketches link against (the only place it is named)
-  PROBOT_CORE_REF: "feat/ds-match-info"
+  PROBOT_CORE_REF: "feat/gamepad-guide"
   # oldest probot-core the bridge supports (framework API and dashboard store, before R6-R13):
   # building against it compiles every fallback branch of src/prosdk/probot/CoreBridge.hpp
   PROBOT_CORE_OLDEST_REF: "feat/dashboard-store"
@@ -45,7 +46,8 @@ jobs:
         run: python3 tools/upstream/examples.py --check
 
       # prosdk_files_tests runs DataLogManager's share calls through core's own probot::files rules,
-      # prosdk_match_tests reads core's own probot::ds match store
+      # prosdk_match_tests reads core's own probot::ds match store, prosdk_gamepad_tests core's own
+      # gamepad mapping profiles
       - name: Check out probot-core
         uses: actions/checkout@v4
         with:

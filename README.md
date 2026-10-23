@@ -6,7 +6,7 @@ the include root `<prosdk/...>` instead of `<wpi/...>`. It runs on top of the pr
 (`depends=probot`), which owns WiFi, the browser Driver Station and the robot state machine.
 
 **Status: alpha (2027.0.0-alpha.1), not released.** A port of WPILib 2027 (allwpilib `b68effca`)
-on the probot-core 0.4.0 draft stack (core PRs #26-#43, not released yet).
+on the probot-core 0.4.0 draft stack (core PRs #26-#45, not released yet).
 
 - Works and is checked: the vendored libraries with WPILib's own host tests, the ESP32-S3 archive,
   all example sketches compile in CI, and a QEMU smoke test runs the archive on the emulated chip

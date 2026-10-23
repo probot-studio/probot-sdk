@@ -8,9 +8,11 @@
 // ported to prosdk.
 // No wiring. Gamepad 0 drives the chooser; select "Score Auto" or "Balance Auto" on the Driver
 // Station, pick options while disabled, then enable.
-// On the Probot Driver Station there is no display panel: the DriverStationDisplay screen shows
-// as plain text in the topic tree, /Telemetry/DriverStationDisplay/text, updated in place
-// (design/API-DIFFERENCES.md).
+// The Probot Driver Station shows the DriverStationDisplay screen (/Telemetry/DriverStationDisplay)
+// as a text panel: the Dashboard's "Robot Ekranı" card and the Veri page (probot-core R19; an older
+// core shows it as plain text in the topic tree). Core's default PROBOT_DASH_MAX_VALUE (1024 bytes)
+// holds this screen; a full 48 x 160 screen needs #define PROBOT_DASH_MAX_VALUE 8192 before
+// #include <prosdk.h> (design/API-DIFFERENCES.md).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

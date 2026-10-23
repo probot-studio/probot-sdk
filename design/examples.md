@@ -98,9 +98,11 @@ which need more pins than those ranges allow.
     card (design/hal-esp32.md; core request R18), set while the robot is disabled. Until it is
     set (and with a probot-core without R18) SnippetDigitalCommunication and
     SnippetI2CCommunication see "no alliance" on the robot.
-  - `DriverStationDisplay` has no panel on the Driver Station (core request R19). The screen
-    shows as plain text in the topic tree (`/Telemetry/DriverStationDisplay/text`), updated in
-    place; DriverStationDisplayAnsi keeps its in-place counter but loses its colors.
+  - `DriverStationDisplay` shows as a text panel on the Driver Station (core request R19, #44:
+    the Dashboard's "Robot Ekranı" card and the Veri page; an older core shows plain text in the
+    topic tree), updated in place; DriverStationDisplayAnsi keeps its in-place counter but loses
+    its colors. The examples' screens fit core's default `PROBOT_DASH_MAX_VALUE` (1024 bytes); a
+    full 48 x 160 screen needs 8192 (design/API-DIFFERENCES.md).
   - Preferences appear as `/Preferences/<key>` tunables and are stored in NVS (ArmSimulation).
 - **Console output.** `prosdk::util::print` (snippets) writes to stdout, which is the USB serial
   on the robot, not the Driver Station console. It was kept as upstream.
@@ -322,7 +324,10 @@ the review fixes: TemplateTimed 1,802,508 / 72,372, DriverStationDisplayLines 1,
 DriverStationDisplayAnsi 1,805,464 / 72,484, DSGamepadChooser 1,845,324 / 72,556, SysIdRoutine
 2,017,108 / 76,284. Since then CI pins core #43 (`feat/ds-match-info` 73c7e10, R18 match info, about
 5 KB of core flash): TemplateTimed 1,812,056 / 73,164 and SnippetDigitalCommunication 1,809,196 /
-73,172 locally (design/size.md section 13). The next CI run gives the figures for all 79 sketches.
+73,172 locally (design/size.md section 13). CI now pins core #45 (`feat/gamepad-guide` e0cb17f, R19
+display panel and R20 Home/Guide button on #44): DSGamepadChooser 1,854,452 / 73,292 and
+DriverStationDisplayLines 1,835,176 / 73,228 locally (design/size.md section 14). The next CI run gives
+the figures for all 79 sketches.
 
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|

@@ -424,3 +424,36 @@ HAL link test was also linked against 940d300 with the same archive, which split
 - TemplateTimed was last measured locally at 1,802,508 / 72,372 (examples.md, after the display
   terminal's review fixes, core 940d300); the +9,548 / +792 since also contain ecb5460 (Utility mode for
   `TimedRobot`) and are not attributed further.
+
+## 14. Core R19 display panel and R20 Home/Guide, CoreOps ABI 10 (measured 2026-10-23)
+
+Archive with the ABI 10 wiring (`dashMaxValue`, the display terminal counting columns in characters and
+cutting on UTF-8 boundaries, `CopyCoreMapping`), probot-core `sdk-target` at `e0cb17f`
+(`feat/gamepad-guide`, draft PR #45 on #44 `feat/ds-display` 5281bde on #43 73c7e10). The HAL link test
+was also linked against 73c7e10 with the same archive, which splits off core's share.
+
+| Build | Flash | Static RAM |
+|---|---:|---:|
+| HAL link test, core 73c7e10 (R18, before this change: 1,731,185 / 76,956) | 1,732,433 | 76,972 |
+| HAL link test, core e0cb17f (R19, R20) | 1,733,857 | 76,972 |
+| HAL link test, core `feat/dashboard-store` 9217ae4 (oldest) | 1,762,525 | 69,788 |
+| DSGamepadChooser, core e0cb17f | 1,854,452 | 73,292 |
+| DriverStationDisplayLines, core e0cb17f | 1,835,176 | 73,228 |
+
+- prosdk's part (same core 73c7e10): +1,248 B flash, +16 B static RAM. `WriteDisplay` 1,991 B with the
+  UTF-8 decoder inlined, `Display::Put` 315 B, `Row::Offset` 49 B, `Row::Truncate` 30 B,
+  `DisplayMaxBytes` 28 B; the display object grows to 64 B (a pending UTF-8 sequence and the row's
+  column count). The bridge's `DashMaxValue<>` is 17 B on e0cb17f (reads `dashboard::limits()`) and
+  10 B on `feat/dashboard-store` (`detail::maxValue()`).
+- Core's #44 and #45 add 1,424 B of flash (the regenerated DS page with the display panel, the mapping
+  tables) and no static RAM.
+- Heap, not in the table: the display text is capped at `min(PROBOT_DASH_MAX_VALUE, 30,767)` bytes
+  (default 1024). Raising core's limit to 8192 (a full 48 x 160 ASCII screen, 7,727 B) costs about
+  11.3 KB of core heap (its WebSocket receive buffer, value + 4, and the DS frame buffer,
+  max(value + 520, schema + 515), from about 5.6 KB at 1024 to about 16.9 KB) plus an 8 KB pool slot
+  for the text out of core's 32 KB pool; prosdk holds up to three copies of the text (the terminal's
+  rows, the last logged text, the telemetry buffer, about 7.7 KB each) and one temporary render copy
+  while it publishes. At the default 1024 the prosdk copies stay under 1 KB each.
+- DSGamepadChooser and DriverStationDisplayLines were last measured locally at 1,845,324 / 72,556 and
+  1,826,176 / 72,484 (examples.md, core 940d300); the difference since also holds R18 and ecb5460 and
+  is not attributed further.

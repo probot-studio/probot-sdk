@@ -328,10 +328,14 @@ Driver Station (design/PORT.md section 8).
   empty when core has none); a gamepad with the browser's standard mapping is a gamepad of type
   `HIDType::STANDARD`, any other one a generic HID (not a gamepad, type UNKNOWN; the profile
   remap still applies). No touchpads, rumble or LEDs (`supportedOutputs` 0). GUIDE (5) comes
-  from the profile's `Options` field, which is -1 in core's logitech-f310 (default), standard
-  (also the xbox/ds4/ps aliases) and axis9-dpad profiles, so with them GUIDE is never available:
-  `GetGuideButton()` is false and the DriverStation alert reports a missing button (core request
-  R20 maps the W3C Home button, 16). Button indexes are 0-based, as upstream 2027; the "starting
+  from the profile's `Options` field, the centre Home/Guide/PS button: W3C standard button 16 in
+  core's logitech-f310 (default), standard (also the xbox/ds4/ps aliases) and axis9-dpad profiles
+  since core request R20 (#45; tuna-default has its own 10). It is available only when the frame
+  has that button (a pad that reports fewer than 17 buttons has none), and the operating system,
+  Steam or the browser may keep the button for itself, so it never reaches the page. With a core
+  before R20 those profiles have no `Options` (-1): GUIDE is not available, `GetGuideButton()` is
+  false and the DriverStation alert reports a missing button. Nothing is detected at compile
+  time: the bridge copies the active profile as it is (`CopyCoreMapping`). Button indexes are 0-based, as upstream 2027; the "starting
   at 1" doc comments of `GenericHID`/`Joystick` are corrected by `wpilibc/0017`. The `NiDs*`
   controllers use the legacy NI DS numbering and do not match this layout (API-DIFFERENCES.md).
 - Alliance station, game data and match info (core-requests.md R18, CoreOps ABI 9
@@ -350,8 +354,11 @@ Driver Station (design/PORT.md section 8).
   name, `MATCH_TYPE_NONE`, match/replay 0. FMS is never attached, so DataLogManager's FMS rename
   of the log file does not use them. Match time from core (-1 when unknown).
 - `HAL_WriteDisplayAnsi` (`DriverStationDisplay`): the screen as plain text in the telemetry table
-  `DriverStationDisplay` (`prosdk/platform/dashboard/DashboardDisplay.hpp`; the page has no display
-  panel, core request R19), not the console and not the DataLog telemetry copy. The terminal is
+  `DriverStationDisplay` (`prosdk/platform/dashboard/DashboardDisplay.hpp`), not the console and not
+  the DataLog telemetry copy. Core's page (core request R19, #44) shows it as a text panel of 48 rows
+  of 160 columns (code points); the text is at most core's `PROBOT_DASH_MAX_VALUE` bytes (CoreOps
+  ABI 10 `dashMaxValue`, read on every write; 1024 until core configured its store), top rows left
+  out first, a single row cut on a UTF-8 boundary (sizes and memory: API-DIFFERENCES.md section 3). The terminal is
   linked into every sketch (the HAL's display hook is a virtual call, about 2-3 KB of flash).
 - `HAL_GetSystemTimeValid` (`RobotController::IsSystemTimeValid`) = core's `ds::systemTimeValid()`
   (core-requests.md R10, CoreOps `systemTimeValid`): true once the Driver Station page has set the
