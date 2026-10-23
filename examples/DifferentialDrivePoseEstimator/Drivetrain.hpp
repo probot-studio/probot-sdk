@@ -127,13 +127,13 @@ class Drivetrain {
       prosdk::fields::GetField(prosdk::fields::FieldId::FRC_2024_CRESCENDO)};
   prosdk::math::Pose3d objectInField{field.GetTagPose(1).value()};
 
-  prosdk::PWMSparkMax leftLeader{4};
-  prosdk::PWMSparkMax leftFollower{5};
-  prosdk::PWMSparkMax rightLeader{12};
-  prosdk::PWMSparkMax rightFollower{13};
+  prosdk::PWMSparkMax leftLeader{38};
+  prosdk::PWMSparkMax leftFollower{37};
+  prosdk::PWMSparkMax rightLeader{36};
+  prosdk::PWMSparkMax rightFollower{35};
 
-  prosdk::Encoder leftEncoder{6, 7};
-  prosdk::Encoder rightEncoder{15, 16};
+  prosdk::Encoder leftEncoder{39, 40};
+  prosdk::Encoder rightEncoder{41, 42};
 
   prosdk::math::PIDController leftPIDController{1.0, 0.0, 0.0};
   prosdk::math::PIDController rightPIDController{1.0, 0.0, 0.0};

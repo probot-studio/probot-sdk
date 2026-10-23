@@ -7,9 +7,9 @@
 // prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   GPIO 6/7    encoder A/B
-//   GPIO 4, 5   left leader / follower Spark (or any PWM ESC)
-//   GPIO 12, 13 right leader / follower Spark
+//   GPIO 39/40  encoder A/B
+//   GPIO 38, 37 left leader / follower Spark (or any PWM ESC)
+//   GPIO 36, 35 right leader / follower Spark
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6
@@ -49,13 +49,13 @@ class Robot : public prosdk::TimedRobot {
   }
 
  private:
-  // Creates an encoder on GPIO 6 and 7.
-  prosdk::Encoder encoder{6, 7};
+  // Creates an encoder on GPIO 39 and 40.
+  prosdk::Encoder encoder{39, 40};
   // Initialize motor controllers and drive
-  prosdk::Spark leftLeader{4};
-  prosdk::Spark leftFollower{5};
-  prosdk::Spark rightLeader{12};
-  prosdk::Spark rightFollower{13};
+  prosdk::Spark leftLeader{38};
+  prosdk::Spark leftFollower{37};
+  prosdk::Spark rightLeader{36};
+  prosdk::Spark rightFollower{35};
   prosdk::DifferentialDrive drive{
       [&](double output) { leftLeader.SetThrottle(output); },
       [&](double output) { rightLeader.SetThrottle(output); }};

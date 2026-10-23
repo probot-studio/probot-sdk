@@ -6,8 +6,8 @@
 // ElevatorFeedforward, and a Mechanism2d view (upstream
 // wpilibcExamples/src/main/cpp/examples/ElevatorSimulation), ported to prosdk.
 //
-// Wiring (GPIO numbers; channel = GPIO): PWMSparkMax (or any PWM ESC) on GPIO 4, quadrature
-// encoder A/B on GPIO 6/7 (upstream: PWM 0, DIO 0/1).
+// Wiring (GPIO numbers; channel = GPIO): PWMSparkMax (or any PWM ESC) on GPIO 38,
+// quadrature encoder A/B on GPIO 39/40 (upstream: PWM 0, DIO 0/1).
 // Joystick 0: hold the trigger to go to 0.75 m, release to go to 0.
 // GetTrigger() reads raw button 1, which on the Probot DS gamepad is FACE_RIGHT (B / Circle).
 // The physics model only runs in the host simulator (SimulationPeriodic); on the robot it is

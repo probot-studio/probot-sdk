@@ -73,13 +73,13 @@ class Drivetrain {
   static constexpr double WHEEL_RADIUS = 0.0508;  // meters
   static constexpr int ENCODER_RESOLUTION = 4096;
 
-  prosdk::PWMSparkMax leftLeader{4};
-  prosdk::PWMSparkMax leftFollower{5};
-  prosdk::PWMSparkMax rightLeader{12};
-  prosdk::PWMSparkMax rightFollower{13};
+  prosdk::PWMSparkMax leftLeader{38};
+  prosdk::PWMSparkMax leftFollower{37};
+  prosdk::PWMSparkMax rightLeader{36};
+  prosdk::PWMSparkMax rightFollower{35};
 
-  prosdk::Encoder leftEncoder{6, 7};
-  prosdk::Encoder rightEncoder{15, 16};
+  prosdk::Encoder leftEncoder{39, 40};
+  prosdk::Encoder rightEncoder{41, 42};
 
   prosdk::math::PIDController leftPIDController{8.5, 0.0, 0.0};
   prosdk::math::PIDController rightPIDController{8.5, 0.0, 0.0};

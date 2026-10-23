@@ -3,9 +3,9 @@
 // prosdk::platform::MountSdCard on SPI bus 0, and DataLogManager writes to /sd/logs. The battery
 // voltage is logged every loop; the Driver Station shows whether the card is mounted.
 //
-// Wiring (change the pins to match your robot; none may be a probot-core pin). These are the
-// SPI2 IO_MUX pins of the ESP32-S3:
-//   MicroSD J1: 1 MISO -> GPIO 13, 2 SCK -> GPIO 12, 3 MOSI -> GPIO 11, 4 CS -> GPIO 10,
+// Wiring (change the pins to match your robot; none may be a probot-core pin). SPI bus 0 on the
+// Probot main board's J5 header (Boardoza ESP32-S3 Pulse; the HAL's default bus 0 pins):
+//   MicroSD J1: 1 MISO -> GPIO 16, 2 SCK -> GPIO 17, 3 MOSI -> GPIO 15, 4 CS -> GPIO 7,
 //               5 GND -> GND, 6 +5V -> 5 V
 // The board has no 3.3 V input: it needs 5 V on pin 6 (its regulator feeds the card 3.3 V). The
 // SPI lines go straight to the card, so they are 3.3 V signals; never drive them from 5 V logic.
@@ -35,10 +35,10 @@
 namespace {
 
 constexpr int kSpiBus = 0;  // SPI2
-constexpr int kSck = 12;
-constexpr int kMosi = 11;
-constexpr int kMiso = 13;
-constexpr int kSdChipSelect = 10;
+constexpr int kSck = 17;
+constexpr int kMosi = 15;
+constexpr int kMiso = 16;
+constexpr int kSdChipSelect = 7;
 
 // Mounts the card, points the log directory at it (else LittleFS) and starts DataLogManager.
 bool StartSdLog() {

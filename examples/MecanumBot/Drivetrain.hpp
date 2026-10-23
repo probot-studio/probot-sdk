@@ -46,15 +46,15 @@ class Drivetrain {
       std::numbers::pi};  // 1/2 rotation per second
 
  private:
-  prosdk::PWMSparkMax frontLeftMotor{4};
-  prosdk::PWMSparkMax frontRightMotor{5};
-  prosdk::PWMSparkMax backLeftMotor{12};
-  prosdk::PWMSparkMax backRightMotor{13};
+  prosdk::PWMSparkMax frontLeftMotor{38};
+  prosdk::PWMSparkMax frontRightMotor{37};
+  prosdk::PWMSparkMax backLeftMotor{36};
+  prosdk::PWMSparkMax backRightMotor{35};
 
-  prosdk::Encoder frontLeftEncoder{6, 7};
-  prosdk::Encoder frontRightEncoder{15, 16};
-  prosdk::Encoder backLeftEncoder{38, 39};
-  prosdk::Encoder backRightEncoder{40, 41};
+  prosdk::Encoder frontLeftEncoder{39, 40};
+  prosdk::Encoder frontRightEncoder{41, 42};
+  prosdk::Encoder backLeftEncoder{47, 48};
+  prosdk::Encoder backRightEncoder{15, 16};
 
   prosdk::math::Translation2d frontLeftLocation{0.381_m, 0.381_m};
   prosdk::math::Translation2d frontRightLocation{0.381_m, -0.381_m};

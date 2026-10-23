@@ -61,8 +61,8 @@ voltage (1.8 V).
 
 Host needs: the SPI bus (SCK, MOSI, MISO; `prosdk::platform::SetSPIPins`), one chip select and 4
 or 5 GPIOs: BUSY in, DIO1 in, NRST out (optional), RXEN out, TXEN out (unless on DIO2). The
-example uses the SPI2 IO_MUX pins (SCK 12, MOSI 11, MISO 13, CS 10), BUSY 4, DIO1 5, NRST 6,
-RXEN 7, TXEN 15.
+example uses SPI bus 0 on the Pulse J5 header (SCK 17, MOSI 15, MISO 16, CS 7), BUSY 38, DIO1 37,
+NRST 36, RXEN 35, TXEN 39.
 
 ## 2. `prosdk::SX126x`
 
@@ -246,7 +246,7 @@ assertions in 5 test cases. Nothing has run on hardware.
 - Memory: up to 16 queued packets of at most 255 bytes (about 4.5 KiB worst case) plus the class
   (under 0.5 KiB).
 - No RMT, LEDC, PCNT, ADC or timer.
-- Example `BoardozaLoRa`: SPI2 on GPIO 10-13, GPIO 4-7 and 15.
+- Example `BoardozaLoRa`: SPI2 on GPIO 7 and 15-17 (Pulse J5), GPIO 35-39.
 
 ## 7. Tests
 

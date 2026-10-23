@@ -18,8 +18,8 @@ class Robot : public prosdk::TimedRobot {
  private:
   static constexpr int LENGTH = 60;
 
-  // GPIO 21 (upstream: SmartIO port 1)
-  prosdk::AddressableLED led{21};
+  // GPIO 48 (upstream: SmartIO port 1)
+  prosdk::AddressableLED led{48};
   std::array<prosdk::AddressableLED::LEDData, LENGTH>
       ledBuffer;  // Reuse the buffer
 

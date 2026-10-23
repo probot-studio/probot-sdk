@@ -11,7 +11,7 @@
 //
 // Wiring (J2: 1 supply, 2 GND, 3 SDA, 4 SCL, 5 RST, 6 INT, 7 LPn; change the pins to match your
 // robot, none may be a probot-core pin):
-//   SDA -> GPIO 17, SCL -> GPIO 18. RST, INT and LPn stay unconnected (pulled on the board).
+//   SDA -> GPIO 17, SCL -> GPIO 16. RST, INT and LPn stay unconnected (pulled on the board).
 // I2C port 1 runs at 400 kHz; the driver needs at least that (1 MHz also works for the sensor).
 //
 // After the first IsReady() call the driver uploads the sensor firmware (84 KiB, about 2 s).
@@ -56,7 +56,7 @@ class Robot : public prosdk::TimedRobot {
  private:
   // first member: the bus pins before the driver opens the bus
   bool m_pinsConfigured =
-      prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/18, /*frequencyHz=*/400000);
+      prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/16, /*frequencyHz=*/400000);
 
   prosdk::VL53L7CX m_tof{prosdk::I2C::Port::PORT_1, /*lpnChannel=*/-1,
                          prosdk::VL53L7CX::kDefaultAddress, prosdk::VL53L7CX::Resolution::k8x8};

@@ -25,9 +25,9 @@
 
 namespace Constants {
 
-inline constexpr int MOTOR_PORT = 4;
-inline constexpr int ENCODER_A_CHANNEL = 6;
-inline constexpr int ENCODER_B_CHANNEL = 7;
+inline constexpr int MOTOR_PORT = 38;
+inline constexpr int ENCODER_A_CHANNEL = 39;
+inline constexpr int ENCODER_B_CHANNEL = 40;
 inline constexpr int JOYSTICK_PORT = 0;
 
 inline constexpr double ELEVATOR_KP = 5.0;

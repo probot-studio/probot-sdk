@@ -2,12 +2,12 @@
 // (design/hal-esp32.md). Not a robot program: a bring-up check for the board.
 //
 // Wiring (change the pins below to match your board; none may be a probot-core pin):
-//   GPIO 38  DIO output   blinks at 1 Hz (from a HAL Notifier thread)
-//   GPIO 39  DIO input    pull-up; printed
-//   GPIO 4   PWM output   servo pulse, sweeps 1000..2000 us while enabled, held low when disabled
-//   GPIO 5/6 Encoder A/B  quadrature, 4x; count and rate printed
-//   GPIO 7   Analog in    0..3.1 V; volts printed
-//   GPIO 21  LED strip    8 WS2812 LEDs, a moving dot
+//   GPIO 38     DIO output   blinks at 1 Hz (from a HAL Notifier thread)
+//   GPIO 39     DIO input    pull-up; printed
+//   GPIO 37     PWM output   servo pulse, sweeps 1000..2000 us while enabled, held low if disabled
+//   GPIO 41/42  Encoder A/B  quadrature, 4x; count and rate printed
+//   GPIO 7      Analog in    0..3.1 V; volts printed
+//   GPIO 48     LED strip    8 WS2812 LEDs, a moving dot
 //
 // Enable from the Driver Station: the PWM output only drives pulses while core's outputs are
 // enabled. Output goes to Serial only (115200 baud, opened by probot-core), not to the Driver
@@ -34,11 +34,11 @@ namespace {
 
 constexpr int kBlinkPin = 38;
 constexpr int kInputPin = 39;
-constexpr int kPwmPin = 4;
-constexpr int kEncoderA = 5;
-constexpr int kEncoderB = 6;
+constexpr int kPwmPin = 37;
+constexpr int kEncoderA = 41;
+constexpr int kEncoderB = 42;
 constexpr int kAnalogPin = 7;
-constexpr int kLedPin = 21;
+constexpr int kLedPin = 48;
 constexpr int kLedCount = 8;
 
 HAL_DigitalHandle gBlink = HAL_INVALID_HANDLE;

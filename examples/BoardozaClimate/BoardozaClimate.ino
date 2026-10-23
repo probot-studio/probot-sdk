@@ -10,7 +10,7 @@
 // HIH8131 board pull-ups are not documented; keep them at 3.3 V too.
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin):
-//   I2C port 1, SDA -> GPIO 17, SCL -> GPIO 18, 100 kHz:
+//   I2C port 1, SDA -> GPIO 17, SCL -> GPIO 16, 100 kHz:
 //     LM75ADP  0x48 (address pads A0-A2 open)
 //     HIH8131  0x27
 //     TH09C    0x43 (fixed)
@@ -18,7 +18,7 @@
 //     HP303B   0x76: short JP3 (SDO low) and tie CSB to 3.3 V. Its SDA/SCL pull-ups (JP1/JP2)
 //              are open by default; the MS5611 and TH09C boards pull the bus up, alone short JP1
 //              and JP2. (Jumper functions read from the schematic, unverified on a board.)
-//   I2C port 0 (Wire's bus, GPIO 8/9 unless Wire runs elsewhere):
+//   I2C port 0 (Wire's bus, GPIO 1 SDA / 2 SCL on J3 unless Wire runs elsewhere):
 //     BME688   0x77 with ADR unconnected (board pull-up, unverified; ADR to GND gives 0x76).
 //              Leave nCSB unconnected: a low level on it switches the chip to SPI.
 // The MS5611, HP303B and BME688 can only use 0x76 and 0x77, so the third one needs the second bus.
@@ -62,7 +62,7 @@ class Robot : public prosdk::TimedRobot {
  private:
   // first member: the bus pins before the drivers open the buses
   bool m_pinsConfigured =
-      prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/18, /*frequencyHz=*/100000);
+      prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/16, /*frequencyHz=*/100000);
 
   prosdk::LM75A m_lm75a{prosdk::I2C::Port::PORT_1};                      // 0x48
   prosdk::HIH8000 m_hih8131{prosdk::I2C::Port::PORT_1};                  // 0x27

@@ -6,8 +6,8 @@
 // (upstream wpilibcExamples/src/main/cpp/snippets/EventLoop), ported to prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   GPIO 4  shooter PWMSparkMax     GPIO 6/7  shooter encoder A/B
-//   GPIO 5  kicker PWMSparkMax      GPIO 12   intake PWMSparkMax
+//   GPIO 38 shooter PWMSparkMax     GPIO 39/40 shooter encoder A/B
+//   GPIO 37 kicker PWMSparkMax      GPIO 36   intake PWMSparkMax
 // Joystick 0: button 2 runs the intake, the trigger spins up and shoots. On the Probot DS gamepad
 // raw button 2 is FACE_LEFT (X / Square) and the trigger (raw button 1) is FACE_RIGHT (B / Circle).
 
@@ -94,15 +94,15 @@ class Robot : public prosdk::TimedRobot {
   void RobotPeriodic() override { loop.Poll(); }
 
  private:
-  prosdk::PWMSparkMax shooter{4};
-  prosdk::Encoder shooterEncoder{6, 7};
+  prosdk::PWMSparkMax shooter{38};
+  prosdk::Encoder shooterEncoder{39, 40};
   prosdk::math::PIDController controller{0.3, 0, 0};
   prosdk::math::SimpleMotorFeedforward<prosdk::units::radians> ff{0.1_V,
                                                             0.065_V / 1_rpm};
 
-  prosdk::PWMSparkMax kicker{5};
+  prosdk::PWMSparkMax kicker{37};
 
-  prosdk::PWMSparkMax intake{12};
+  prosdk::PWMSparkMax intake{36};
 
   prosdk::EventLoop loop{};
   prosdk::Joystick joystick{0};

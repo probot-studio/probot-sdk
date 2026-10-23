@@ -8,7 +8,7 @@
 //
 // ExampleSmartMotorController is upstream's API stub with no functionality (the kit has no
 // smart motor controllers), so this example drives nothing; it shows the command structure.
-// Its port numbers are GPIO 4/5 (left) and 12/13 (right) to match the other drive examples.
+// Its port numbers are GPIO 38/37 (left) and 36/35 (right) to match the other drive examples.
 // Gamepad 0: left Y / right X arcade drive; right bumper held = half output; face down drives
 // 3 m forward (encoders reset), face right drives 3 m from the current position.
 

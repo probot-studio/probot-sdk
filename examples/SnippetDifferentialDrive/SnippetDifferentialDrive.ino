@@ -6,7 +6,7 @@
 // wpilibcExamples/src/main/cpp/snippets/DifferentialDrive),
 // ported to prosdk.
 //
-// Wiring (GPIO numbers; channel = GPIO): GPIO 4 left, GPIO 5 right PWMSparkMax (or any PWM
+// Wiring (GPIO numbers; channel = GPIO): GPIO 38 left, GPIO 37 right PWMSparkMax (or any PWM
 // ESC). Gamepad 0.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -24,8 +24,8 @@
  * https://docs.wpilib.org/en/stable/docs/software/hardware-apis/motors/wpi-drive-classes.html
  */
 class Robot : public prosdk::TimedRobot {
-  prosdk::PWMSparkMax leftMotor{4};
-  prosdk::PWMSparkMax rightMotor{5};
+  prosdk::PWMSparkMax leftMotor{38};
+  prosdk::PWMSparkMax rightMotor{37};
   prosdk::DifferentialDrive robotDrive{
       [&](double output) { leftMotor.SetThrottle(output); },
       [&](double output) { rightMotor.SetThrottle(output); }};

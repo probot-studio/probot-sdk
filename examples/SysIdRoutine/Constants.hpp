@@ -16,13 +16,13 @@
 
 namespace constants {
 namespace drive {
-inline constexpr int LEFT_MOTOR1_PORT = 4;
-inline constexpr int LEFT_MOTOR2_PORT = 5;
-inline constexpr int RIGHT_MOTOR1_PORT = 12;
-inline constexpr int RIGHT_MOTOR2_PORT = 13;
+inline constexpr int LEFT_MOTOR1_PORT = 38;
+inline constexpr int LEFT_MOTOR2_PORT = 37;
+inline constexpr int RIGHT_MOTOR1_PORT = 36;
+inline constexpr int RIGHT_MOTOR2_PORT = 35;
 
-inline constexpr std::array<int, 2> LEFT_ENCODER_PORTS = {6, 7};
-inline constexpr std::array<int, 2> RIGHT_ENCODER_PORTS = {15, 16};
+inline constexpr std::array<int, 2> LEFT_ENCODER_PORTS = {39, 40};
+inline constexpr std::array<int, 2> RIGHT_ENCODER_PORTS = {41, 42};
 inline constexpr bool LEFT_ENCODER_REVERSED = false;
 inline constexpr bool RIGHT_ENCODER_REVERSED = true;
 
@@ -44,14 +44,14 @@ using ka_unit = prosdk::units::compound_unit<
     prosdk::units::inverse<prosdk::units::turns_per_second_squared>>;
 using ka_unit_t = prosdk::units::unit_t<ka_unit>;
 
-inline constexpr std::array<int, 2> ENCODER_PORTS = {38, 39};
+inline constexpr std::array<int, 2> ENCODER_PORTS = {15, 16};
 inline constexpr bool ENCODER_REVERSED = false;
 inline constexpr int ENCODER_CPR = 1024;
 inline constexpr prosdk::units::turn_t ENCODER_DISTANCE_PER_PULSE =
     1_tr / static_cast<double>(ENCODER_CPR);
 
-inline constexpr int SHOOTER_MOTOR_PORT = 14;
-inline constexpr int FEEDER_MOTOR_PORT = 21;
+inline constexpr int SHOOTER_MOTOR_PORT = 47;
+inline constexpr int FEEDER_MOTOR_PORT = 48;
 
 inline constexpr prosdk::units::turns_per_second_t SHOOTER_FREE_SPEED = 5300_tps;
 inline constexpr prosdk::units::turns_per_second_t SHOOTER_TARGET_VELOCITY =

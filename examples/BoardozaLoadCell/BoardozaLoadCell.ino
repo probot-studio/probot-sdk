@@ -8,9 +8,9 @@
 // which are not 5 V tolerant.
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin):
-//   NAU7802  J2: 1 GND, 2 SDA -> GPIO 17, 3 SCL -> GPIO 18, 4 3.3V. Address 0x2A (fixed).
+//   NAU7802  J2: 1 GND, 2 SDA -> GPIO 17, 3 SCL -> GPIO 16, 4 3.3V. Address 0x2A (fixed).
 //            Load cell on J1 (channel 1): 1 WHT (A-), 2 GRN (A+), 3 BLK (E-), 4 RED (E+).
-//   HX711    J1: 1 VCC -> 3.3 V, 2 VDD -> 3.3 V, 3 DAT -> GPIO 4, 4 CLK -> GPIO 5, 5 GND.
+//   HX711    J1: 1 VCC -> 3.3 V, 2 VDD -> 3.3 V, 3 DAT -> GPIO 38, 4 CLK -> GPIO 37, 5 GND.
 //            Load cell on J3: 1 RED (E+), 2 BLK (E-), 3 WHT (A-), 4 GRN (A+).
 //            JP1 selects the rate: bridge 1-2 for 80 SPS or 2-3 for 10 SPS (open by default,
 //            unverified; an open RATE pin floats).
@@ -60,11 +60,11 @@ class Robot : public prosdk::TimedRobot {
  private:
   // first member: the bus pins before the driver opens the bus
   bool m_pinsConfigured =
-      prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/18, /*frequencyHz=*/400000);
+      prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/16, /*frequencyHz=*/400000);
 
   prosdk::NAU7802 m_nau7802{prosdk::I2C::Port::PORT_1};  // x128, 80 SPS, channel 1
   prosdk::LoadCell m_nauCell{[this] { return m_nau7802.Update(); }};
-  prosdk::HX711 m_hx711{/*dataGpio=*/4, /*clockGpio=*/5};  // channel A, gain 128
+  prosdk::HX711 m_hx711{/*dataGpio=*/38, /*clockGpio=*/37};  // channel A, gain 128
   prosdk::LoadCell m_hxCell{[this] { return m_hx711.Update(); }};
 };
 

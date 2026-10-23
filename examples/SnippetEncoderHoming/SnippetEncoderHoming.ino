@@ -7,7 +7,7 @@
 // prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   GPIO 6/7  encoder A/B         GPIO 4  Spark (or any PWM ESC)
+//   GPIO 39/40 encoder A/B        GPIO 38 Spark (or any PWM ESC)
 //   GPIO 17   normally-open limit switch to GND (internal pull-up: open reads true,
 //             pressed reads false)
 
@@ -40,8 +40,8 @@ class Robot : public prosdk::TimedRobot {
   }
 
  private:
-  prosdk::Encoder encoder{6, 7};
-  prosdk::Spark spark{4};
+  prosdk::Encoder encoder{39, 40};
+  prosdk::Spark spark{38};
   // Limit switch on GPIO 17
   prosdk::DigitalInput limit{17};
 };

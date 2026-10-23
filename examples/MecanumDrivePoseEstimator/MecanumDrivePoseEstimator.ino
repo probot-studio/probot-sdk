@@ -8,13 +8,13 @@
 // prosdk. ExampleGlobalMeasurementSensor stands in for a vision system.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   PWMSparkMax (or any PWM ESC): GPIO 4 front left, GPIO 5 front right, GPIO 12 back left,
-//   GPIO 13 back right
-//   Encoders A/B: GPIO 6/7 front left, GPIO 15/16 front right, GPIO 38/39 back left,
-//   GPIO 40/41 back right (all 4 PCNT units of the ESP32-S3)
+//   PWMSparkMax (or any PWM ESC): GPIO 38 front left, GPIO 37 front right, GPIO 36 back left,
+//   GPIO 35 back right
+//   Encoders A/B: GPIO 39/40 front left, GPIO 41/42 front right, GPIO 47/48 back left,
+//   GPIO 15/16 back right (all 4 PCNT units of the ESP32-S3)
 // Gamepad 0: left stick drives (field relative in teleop), right stick X turns.
 // The Probot board has no onboard IMU: upstream's OnboardIMU is replaced by the kit IMU,
-// prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 8 SDA, GPIO 9 SCL, the HAL default).
+// prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 1 SDA, GPIO 2 SCL: J3, the HAL default).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

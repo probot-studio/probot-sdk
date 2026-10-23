@@ -8,12 +8,12 @@
 // prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   PWMSparkMax (or any PWM ESC): GPIO 4 left leader, GPIO 5 left follower,
-//   GPIO 12 right leader, GPIO 13 right follower
-//   Encoders A/B: GPIO 6/7 left, GPIO 15/16 right
+//   PWMSparkMax (or any PWM ESC): GPIO 38 left leader, GPIO 37 left follower,
+//   GPIO 36 right leader, GPIO 35 right follower
+//   Encoders A/B: GPIO 39/40 left, GPIO 41/42 right
 // Gamepad 0: left Y drives, right X turns.
 // The Probot board has no onboard IMU: upstream's OnboardIMU is replaced by the kit IMU,
-// prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 8 SDA, GPIO 9 SCL, the HAL default).
+// prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 1 SDA, GPIO 2 SCL: J3, the HAL default).
 // Changes from upstream: prosdk has no NetworkTables, so the simulated camera-to-object
 // transform goes through a std::array member instead of an NT topic; the MPU6050 has no sim
 // class, so the simulated heading is not written back (upstream's imuSim.SetYaw is commented

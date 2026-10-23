@@ -5,7 +5,7 @@
 // SnippetMotorControl: a motor from a joystick, encoder distance on the Driver Station
 // (upstream wpilibcExamples/src/main/cpp/snippets/MotorControl), ported to prosdk.
 //
-// Wiring (GPIO numbers; channel = GPIO): GPIO 4 PWMSparkMax (or any PWM ESC), GPIO 6/7
+// Wiring (GPIO numbers; channel = GPIO): GPIO 38 PWMSparkMax (or any PWM ESC), GPIO 39/40
 // encoder A/B. Joystick 0, Y axis.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -28,7 +28,7 @@
  * Joystick analog values range from -1 to 1 and motor controller inputs as
  * range from -1 to 1 making it easy to work together.
  *
- * In addition, the encoder value of an encoder connected to GPIO 6 and 7 is
+ * In addition, the encoder value of an encoder connected to GPIO 39 and 40 is
  * consistently sent to the Dashboard.
  *
  * Finally, short code snippets show how to invert the motor direction and how
@@ -64,8 +64,8 @@ class Robot : public prosdk::TimedRobot {
 
  private:
   prosdk::Joystick stick{0};
-  prosdk::PWMSparkMax motor{4};
-  prosdk::Encoder encoder{6, 7};
+  prosdk::PWMSparkMax motor{38};
+  prosdk::Encoder encoder{39, 40};
 };
 
 PROSDK_ROBOT_MAIN(Robot)

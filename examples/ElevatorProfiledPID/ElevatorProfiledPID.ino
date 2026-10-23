@@ -6,7 +6,7 @@
 // ElevatorFeedforward (upstream wpilibcExamples/src/main/cpp/examples/ElevatorProfiledPID), ported
 // to prosdk.
 //
-// Wiring (GPIO numbers; channel = GPIO): GPIO 4 PWMSparkMax (or any PWM ESC), GPIO 6/7
+// Wiring (GPIO numbers; channel = GPIO): GPIO 38 PWMSparkMax (or any PWM ESC), GPIO 39/40
 // encoder A/B. Joystick 1: button 2 goes to 5 m, button 3 to 0 m.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -61,8 +61,8 @@ class Robot : public prosdk::TimedRobot {
   static constexpr auto kV = 1.3_V / 1_mps;
 
   prosdk::Joystick joystick{1};
-  prosdk::Encoder encoder{6, 7};
-  prosdk::PWMSparkMax motor{4};
+  prosdk::Encoder encoder{39, 40};
+  prosdk::PWMSparkMax motor{38};
 
   // Create a PID controller whose setpoint's change is subject to maximum
   // velocity and acceleration constraints.

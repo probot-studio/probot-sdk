@@ -7,9 +7,9 @@
 // wpilibcExamples/src/main/cpp/examples/SysIdRoutine), ported to prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   Drive PWMSparkMax: GPIO 4/5 left (leader/follower), GPIO 12/13 right
-//   Drive encoders A/B: GPIO 6/7 left, GPIO 15/16 right
-//   Shooter PWMSparkMax GPIO 14, feeder PWMSparkMax GPIO 21, shooter encoder A/B GPIO 38/39
+//   Drive PWMSparkMax: GPIO 38/37 left (leader/follower), GPIO 36/35 right
+//   Drive encoders A/B: GPIO 39/40 left, GPIO 41/42 right
+//   Shooter PWMSparkMax GPIO 47, feeder PWMSparkMax GPIO 48, shooter encoder A/B GPIO 15/16
 //   (three of the four PCNT units)
 // Gamepad 0: arcade drive on the sticks, shooter on the left trigger. Right bumper + face
 // down/right/left/up runs the drive's quasistatic forward/reverse and dynamic forward/reverse

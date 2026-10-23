@@ -7,10 +7,10 @@
 // prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   GPIO 4 front left, GPIO 5 rear left, GPIO 12 front right, GPIO 13 rear right PWMSparkMax
+//   GPIO 38 front left, GPIO 37 rear left, GPIO 36 front right, GPIO 35 rear right PWMSparkMax
 // Joystick 0 (X, Y, Z axes).
 // The Probot board has no onboard IMU: upstream's OnboardIMU is replaced by the kit IMU,
-// prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 8 SDA, GPIO 9 SCL, the HAL default).
+// prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 1 SDA, GPIO 2 SCL: J3, the HAL default).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6
@@ -48,10 +48,10 @@ class Robot : public prosdk::TimedRobot {
   }
 
  private:
-  static constexpr int FRONT_LEFT_MOTOR_PORT = 4;
-  static constexpr int REAR_LEFT_MOTOR_PORT = 5;
-  static constexpr int FRONT_RIGHT_MOTOR_PORT = 12;
-  static constexpr int REAR_RIGHT_MOTOR_PORT = 13;
+  static constexpr int FRONT_LEFT_MOTOR_PORT = 38;
+  static constexpr int REAR_LEFT_MOTOR_PORT = 37;
+  static constexpr int FRONT_RIGHT_MOTOR_PORT = 36;
+  static constexpr int REAR_RIGHT_MOTOR_PORT = 35;
   static constexpr prosdk::I2C::Port IMU_PORT = prosdk::I2C::Port::PORT_0;
   static constexpr int JOYSTICK_PORT = 0;
 

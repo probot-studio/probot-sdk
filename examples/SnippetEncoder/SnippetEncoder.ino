@@ -6,8 +6,8 @@
 // to prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   GPIO 6/7    quadrature encoder A/B (4X decoding)
-//   GPIO 15/16  second encoder A/B (2X decoding; upstream puts both on DIO 0/1, which cannot
+//   GPIO 39/40  quadrature encoder A/B (4X decoding)
+//   GPIO 41/42  second encoder A/B (2X decoding; upstream puts both on DIO 0/1, which cannot
 //               be allocated twice)
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -53,13 +53,13 @@ class Robot : public prosdk::TimedRobot {
   }
 
  private:
-  // Initializes an encoder on GPIO 6 and 7
+  // Initializes an encoder on GPIO 39 and 40
   // Defaults to 4X decoding and non-inverted
-  prosdk::Encoder encoder{6, 7};
+  prosdk::Encoder encoder{39, 40};
 
-  // Initializes an encoder on GPIO 15 and 16
+  // Initializes an encoder on GPIO 41 and 42
   // 2X encoding and non-inverted
-  prosdk::Encoder encoder2x{15, 16, false, prosdk::Encoder::EncodingType::X2};
+  prosdk::Encoder encoder2x{41, 42, false, prosdk::Encoder::EncodingType::X2};
 };
 
 PROSDK_ROBOT_MAIN(Robot)

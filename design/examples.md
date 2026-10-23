@@ -43,37 +43,46 @@ hand-written examples are listed under `"handwritten"` in `tools/upstream/exampl
 
 ## Pin map
 
-The channel number is the GPIO number (design/hal-esp32.md). The ports avoid the pins the HAL
-refuses:
-- 19/20 (USB) and 43/44 (UART0);
-- 26-32 (flash) and 33-37 (octal PSRAM);
-- 22-25, which do not exist;
-- GPIO 3 (probot-core's NeoPixel).
+The channel number is the GPIO number (design/hal-esp32.md). The pins are the header pins of the
+Probot main board, the Boardoza ESP32-S3 Pulse (design/boardoza/P14-existing.md section 3.1;
+decision of 2026-10-23): J3 (IO1, IO2), J4 (IO10, IO11), J5 (IO7, IO15, IO16, IO17), J6 (IO35-38),
+J7 (IO39-42) and J8 (IO45-48). The ports avoid:
+- the pins the HAL refuses: 19/20 (USB), 43/44 (UART0, the console, on J4), 26-32 (flash and
+  PSRAM), 22-25 (do not exist) and GPIO 3 (probot-core's NeoPixel, the Pulse's RGB LED);
+- the strapping pins 0 (BOOT), 45 and 46 (J8), which the HAL allows;
+- every GPIO that is not on a Pulse header (4-6, 8, 9, 12-14, 18, 21, 33, 34).
 
-They also avoid the strapping pins 0, 45 and 46, which the HAL allows (hal-esp32.md). Only
-SwerveBot and SwerveDrivePoseEstimator use one, for lack of pins: GPIO 46 for the back-right
-turning encoder B, which a normal boot ignores (it counts only while GPIO 0 is held low). They say
-so in their wiring. GPIO 45 and GPIO 0 are not used by any example.
+The Pulse module (ESP32-S3-WROOM-1-N4R2) has quad PSRAM, so GPIO 33-37 are free. On an
+octal-PSRAM devkit (N8R8, N16R8) the HAL refuses 33-37: move the motor pins 35-37 there (for
+example to 4, 5, 12), see design/hal-esp32.md "Other ESP32-S3 boards".
+
+SwerveBot and SwerveDrivePoseEstimator do not fit (24 signals, 20 header pins): they keep pins off
+the headers and use GPIO 46 for the back-right turning encoder B, which a normal boot ignores (it
+counts only while GPIO 0 is held low). They say so in their wiring. GPIO 45 and GPIO 0 are not used
+by any example.
 
 They also stay inside the hardware limits:
 - 12 PWM outputs;
 - 4 PCNT units shared by encoders and counters;
 - 6 duty-cycle inputs;
-- analog inputs only on GPIO 1-10;
+- analog inputs only on GPIO 1-10 (on the headers: 1, 2, 7, 10);
 - 3 LED strips.
 
-| Use | GPIO |
+| Use | GPIO (Pulse header) |
 |---|---|
-| PWM motor controllers | 4, 5, 12, 13 (more: 14, 21, 47, 48) |
-| Quadrature encoders A/B | 6/7, 15/16, 38/39, 40/41 |
-| Digital inputs/outputs, duty cycle | 17, 18, 10, 11 |
-| Analog inputs | 1, 2 |
-| Addressable LED strip | 21 |
-| I2C port 0 (HAL default) | SDA 8, SCL 9 |
+| PWM motor controllers | 38, 37, 36, 35 (J6); more: 47, 48 (J8) |
+| Quadrature encoders A/B | 39/40, 41/42 (J7); 47/48 (J8); 15/16 (J5, when SPI is unused) |
+| Digital inputs/outputs, duty cycle | 17, 16 (J5), 10, 11 (J4) |
+| Analog inputs | 1, 2 (J3) without I2C; 7 (J5), 10 (J4) when J3 is I2C |
+| Addressable LED strip | 48 (J8) |
+| I2C port 0 (HAL default) | SDA 1, SCL 2 (J3) |
+| I2C port 1 (Boardoza sensor examples) | SDA 17, SCL 16 (J5) |
+| SPI bus 0 (HAL default) | SCK 17, MOSI 15, MISO 16, CS 7 (J5) |
+| Serial `ONBOARD` (HAL default) | RX 10, TX 11 (J4 F1/F2) |
 
-The same pins also fit the host simulation HAL that the example tests use, which limits PWM to
-0-19, DIO to 0-30 and analog to 0-7. The exceptions are SwerveBot and SwerveDrivePoseEstimator,
-which need more pins than those ranges allow.
+No example uses analog inputs and I2C port 0 together. The same pins also fit the host simulation
+HAL that the example tests use, which follows the ESP32-S3 HAL: DIO and PWM 0-48, analog 0-10
+(`tools/upstream/patches/hal/0005`; the robot accepts analog 1-10). The exceptions are SwerveBot and SwerveDrivePoseEstimator.
 
 ## Deviations common to several ports
 
@@ -116,7 +125,7 @@ which need more pins than those ranges allow.
   - On hardware, use absolute turning encoders instead (DutyCycleEncoder or AnalogEncoder). The
     header comment of both sketches says so.
 - **SnippetEncoder.** Upstream puts both encoders on DIO 0/1, which cannot be allocated twice.
-  The port uses 6/7 and 15/16.
+  The port uses 39/40 and 41/42.
 - **SysIdRoutine.**
   - Drive and Shooter name themselves (`SubsystemBase{"Drive"}`, `SubsystemBase{"Shooter"}`), so
     their SysId log entries (`sysid-test-state-Drive`, `-Shooter`) and command names differ.
@@ -184,7 +193,7 @@ Status values:
 
 | Upstream | Decision | prosdk example |
 |---|---|---|
-| Encoder | ported (second encoder moved to 15/16) | SnippetEncoder |
+| Encoder | ported (second encoder moved to 41/42) | SnippetEncoder |
 | DutyCycleEncoder | ported | SnippetDutyCycleEncoder |
 | AnalogEncoder | ported | SnippetAnalogEncoder |
 | EncoderDrive | ported | SnippetEncoderDrive |
@@ -282,131 +291,119 @@ Upstream has five example tests: three in `wpilibcExamples/src/test/cpp/examples
 Hand-written `TimedRobot` sketches for the Boardoza boards (`design/boardoza.md`), with no upstream
 counterpart. Each `.ino` header gives the boards, the power rule (the ESP32-S3 pins are not 5 V
 tolerant), the wiring as GPIO numbers and the package document. Readings go to the Driver Station
-(`/Telemetry`). The pins differ from the upstream pin map above, because I2C port 1 and SPI need
-pins of their own. None of them has run on hardware.
+(`/Telemetry`). I2C port 1 is SDA 17 / SCL 16 and SPI bus 0 is the Pulse's J5 header (the HAL
+default), so the two do not go together in one sketch. None of them has run on hardware.
 
 | Example | Boards and classes | Bus and pins |
 |---|---|---|
-| BoardozaClimate | LM75ADP, HIH8131, TH09C, MS5611, HP303B, BME688 (`LM75A`, `HIH8000`, `ENS210`, `MS5611`, `DPS310`, `BME688`) | I2C port 1, SDA 17 / SCL 18, 100 kHz; BME688 on port 0 (`Wire`'s bus), since only two barometers fit on one port |
-| BoardozaThermalCamera | MLX90640 (`MLX90640`; the MLX90641 works the same way) | I2C port 1, SDA 17 / SCL 18, 400 kHz |
-| BoardozaMultizoneToF | VL53L7CX-1..4 (`VL53L7CX`, 8x8 at 15 Hz) | I2C port 1, SDA 17 / SCL 18, 400 kHz |
-| BoardozaLoadCell | NAU7802, HX711 (`NAU7802`, `HX711`, `LoadCell`) | I2C port 1, SDA 17 / SCL 18, 400 kHz; HX711 DAT 4, CLK 5 |
-| BoardozaGnss | SAM-M8Q or SAM-M10Q (`UbloxGnss` on I2C), GP-02 (`NmeaGnss`) | I2C port 1, SDA 17 / SCL 18, 100 kHz; serial `ONBOARD`, RX 15 / TX 16 |
-| BoardozaSdLog | MicroSD (`platform::MountSdCard`, DataLogManager to `/sd/logs`) | SPI bus 0: SCK 12, MOSI 11, MISO 13, CS 10 |
+| BoardozaClimate | LM75ADP, HIH8131, TH09C, MS5611, HP303B, BME688 (`LM75A`, `HIH8000`, `ENS210`, `MS5611`, `DPS310`, `BME688`) | I2C port 1, SDA 17 / SCL 16, 100 kHz; BME688 on port 0 (SDA 1 / SCL 2) (`Wire`'s bus), since only two barometers fit on one port |
+| BoardozaThermalCamera | MLX90640 (`MLX90640`; the MLX90641 works the same way) | I2C port 1, SDA 17 / SCL 16, 400 kHz |
+| BoardozaMultizoneToF | VL53L7CX-1..4 (`VL53L7CX`, 8x8 at 15 Hz) | I2C port 1, SDA 17 / SCL 16, 400 kHz |
+| BoardozaLoadCell | NAU7802, HX711 (`NAU7802`, `HX711`, `LoadCell`) | I2C port 1, SDA 17 / SCL 16, 400 kHz; HX711 DAT 38, CLK 37 |
+| BoardozaGnss | SAM-M8Q or SAM-M10Q (`UbloxGnss` on I2C), GP-02 (`NmeaGnss`) | I2C port 1, SDA 17 / SCL 16, 100 kHz; serial `ONBOARD`, RX 10 / TX 11 |
+| BoardozaSdLog | MicroSD (`platform::MountSdCard`, DataLogManager to `/sd/logs`) | SPI bus 0: SCK 17, MOSI 15, MISO 16, CS 7 |
 | BoardozaRotaryArgb | Rotary Encoder ARGB (`ClockedAddressableLED`, `Encoder`, `DigitalInput`) | SPI bus 1 alone: SCK 39, MOSI 40; encoder A 41 / B 42; button 38 |
-| BoardozaLoRa | E22-900M22S (`SX126x`). Regulatory: 868.1 MHz, 14 dBm, at most 1 % duty cycle (EU 868.0-868.6 MHz sub-band); check local rules before changing them | SPI bus 0: SCK 12, MOSI 11, MISO 13, CS 10; BUSY 4, DIO1 5, NRST 6, RXEN 7, TXEN 15 |
-| BoardozaEveDisplay | FT810 or FT800 board and bundles (`FT8xx`, `ft8xx::kBoardozaFT810Bundle`) | SPI bus 0: SCK 12, MOSI 11, MISO 13, CS 10; PD 4, INT 5 |
+| BoardozaLoRa | E22-900M22S (`SX126x`). Regulatory: 868.1 MHz, 14 dBm, at most 1 % duty cycle (EU 868.0-868.6 MHz sub-band); check local rules before changing them | SPI bus 0: SCK 17, MOSI 15, MISO 16, CS 7; BUSY 38, DIO1 37, NRST 36, RXEN 35, TXEN 39 |
+| BoardozaEveDisplay | FT810 or FT800 board and bundles (`FT8xx`, `ft8xx::kBoardozaFT810Bundle`) | SPI bus 0: SCK 17, MOSI 15, MISO 16, CS 7; PD 38, INT 37 |
 
 All nine build with arduino-cli; their sizes are in the Sizes table below.
 
 ## Sizes
 
-ESP32-S3 (`esp32:esp32:esp32s3`, huge_app), compiled with `tools/build/build.sh examples <name>`.
-Flash is "Sketch uses", RAM is "Global variables use" (static RAM; the robot also allocates heap
-at run time).
+ESP32-S3 with the sketch FQBN of the Probot main board, the Boardoza ESP32-S3 Pulse
+(`esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc`,
+`tools/build/arduino_recipe.py --fqbn`), compiled with `tools/build/build.sh examples`. Flash is
+"Sketch uses", RAM is "Global variables use" (static RAM; the robot also allocates heap at run time,
+and on the Pulse malloc > 4 KiB goes to the 2 MB PSRAM).
 
-Measured by CI on 2026-10-23 (run 39890517789, prosdk `85ed58e`, CoreOps ABI 8) against probot-core
-`feat/dash-set-refused` (#42, then the top of core's draft stack: R11 files, R12 persistence, R5 widgets, R15,
-R16). The numbers move with the archive and core; design/size.md keeps the history (R14's gzipped
-Driver Station page saved about 100 KB per sketch, core's #38-#42 added about 16-24 KB).
-The huge_app partition gives the sketch 3,145,728 bytes of flash; static RAM is out of 327,680
-bytes. Every sketch also gets probot-core's WiFi AP and Driver Station. The same CI run links the HAL
-link test sketch at 1,709,957 / 75,996 against this core and at 1,745,453 / 68,956 against the oldest
-supported core (`feat/dashboard-store`). CI builds all examples on pushes to `dev` and `stable`, on pull requests and
-on manual runs; to refresh this table, take the "Sketch uses" / "Global variables use" lines after each
-"== <name>" line of the examples job log.
-
-The table predates the DataLog telemetry copy and the display terminal (749df1e, 6940946 and their
-review fixes): every robot sketch now links the display terminal and the default-backend wrapper,
-about 4 KB of flash and 64-128 B of RAM more, and a sketch that uses DataLogManager also links the log
-copy (about 9 KB in all). Local builds (`tools/build/build.sh examples`, same archive and core) after
-the review fixes: TemplateTimed 1,802,508 / 72,372, DriverStationDisplayLines 1,826,176 / 72,484,
-DriverStationDisplayAnsi 1,805,464 / 72,484, DSGamepadChooser 1,845,324 / 72,556, SysIdRoutine
-2,017,108 / 76,284. Since then CI pins core #43 (`feat/ds-match-info` 73c7e10, R18 match info, about
-5 KB of core flash): TemplateTimed 1,812,056 / 73,164 and SnippetDigitalCommunication 1,809,196 /
-73,172 locally (design/size.md section 13). CI now pins core #45 (`feat/gamepad-guide` e0cb17f, R19
-display panel and R20 Home/Guide button on #44): DSGamepadChooser 1,854,452 / 73,292 and
-DriverStationDisplayLines 1,835,176 / 73,228 locally (design/size.md section 14). The next CI run gives
-the figures for all 79 sketches.
+Measured locally on 2026-10-23 (all 79 sketches in one run, prosdk `ceaa8c4`: the Pulse pin defaults,
+CoreOps ABI 10) against probot-core `feat/gamepad-guide` e0cb17f (#45). The numbers move with the
+archive and core; design/size.md keeps the history. The huge_app partition gives the sketch 3,145,728
+bytes of flash; static RAM is out of 327,680 bytes. The largest sketch is
+SimpleDifferentialDriveSimulation at 2,229,814 bytes (71 %); it and DifferentialDrivePoseEstimator
+use the most static RAM, 78,128 bytes. Every sketch also gets probot-core's WiFi AP and
+Driver Station. CI builds all examples on pushes to `dev` and `stable`, on pull requests and on
+manual runs; to refresh this table, take the "Sketch uses" / "Global variables use" lines after each
+"== <name>" line of the examples log.
 
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|
-| AprilTagFieldPose | 2,025,492 | 72,372 |
-| ArcadeDriveGamepad | 1,833,196 | 72,692 |
-| ArmSimulation | 1,928,352 | 75,892 |
-| BoardozaClimate | 1,844,948 | 73,476 |
-| BoardozaEveDisplay | 1,848,156 | 72,976 |
-| BoardozaGnss | 1,850,324 | 73,500 |
-| BoardozaLoRa | 1,847,568 | 72,976 |
-| BoardozaLoadCell | 1,833,356 | 73,436 |
-| BoardozaMultizoneToF | 1,921,908 | 73,444 |
-| BoardozaRotaryArgb | 1,853,524 | 73,648 |
-| BoardozaSdLog | 1,932,817 | 75,752 |
-| BoardozaThermalCamera | 1,831,948 | 73,500 |
-| CommandBasedRobot | 2,010,312 | 76,420 |
-| DSGamepadChooser | 1,841,596 | 72,428 |
-| DifferentialDriveBot | 1,899,176 | 74,484 |
-| DifferentialDrivePoseEstimator | 2,021,248 | 76,980 |
-| DriveDistanceOffboard | 1,879,752 | 72,732 |
-| DriverStationDisplayAnsi | 1,801,624 | 72,356 |
-| DriverStationDisplayLines | 1,822,384 | 72,420 |
-| DriversShowcase | 1,925,972 | 73,900 |
-| DutyCycleEncoder | 1,807,844 | 72,556 |
-| ElevatorExponentialProfile | 1,800,704 | 72,348 |
-| ElevatorExponentialSimulation | 1,923,640 | 75,828 |
-| ElevatorProfiledPID | 1,869,244 | 73,332 |
-| ElevatorSimulation | 1,933,564 | 75,828 |
-| ElevatorTrapezoidProfile | 1,798,780 | 72,348 |
-| Encoder | 1,812,196 | 72,948 |
-| GettingStarted | 1,833,700 | 72,692 |
-| Gyro | 1,867,452 | 73,836 |
-| HalSmoke | 1,613,941 | 74,380 |
-| MecanumBot | 1,985,652 | 74,484 |
-| MecanumDrive | 1,867,396 | 73,836 |
-| MecanumDrivePoseEstimator | 1,994,340 | 76,980 |
-| Mechanism2d | 1,874,232 | 73,572 |
-| OpModeRobotExample | 1,867,980 | 73,276 |
-| SimpleDifferentialDriveSimulation | 2,216,612 | 76,980 |
-| SnippetADXLAccelerometers | 1,817,624 | 73,476 |
-| SnippetAccelerometerCollision | 1,823,032 | 73,444 |
-| SnippetAccelerometerFilter | 1,824,740 | 73,428 |
-| SnippetAddressableLED | 1,804,648 | 75,428 |
-| SnippetAnalogAccelerometer | 1,804,984 | 72,596 |
-| SnippetAnalogEncoder | 1,806,124 | 72,596 |
-| SnippetAnalogInput | 1,804,172 | 72,596 |
-| SnippetAnalogPotentiometer | 1,805,196 | 72,596 |
-| SnippetDifferentialDrive | 1,834,560 | 72,692 |
-| SnippetDigitalCommunication | 1,795,660 | 72,308 |
-| SnippetDigitalInput | 1,794,080 | 72,316 |
-| SnippetDutyCycleEncoder | 1,807,348 | 72,556 |
-| SnippetDutyCycleInput | 1,805,156 | 72,540 |
-| SnippetEncoder | 1,812,436 | 72,948 |
-| SnippetEncoderDrive | 1,847,048 | 73,284 |
-| SnippetEncoderHoming | 1,843,388 | 73,244 |
-| SnippetEventLoop | 1,863,316 | 73,332 |
-| SnippetFlywheelBangBangController | 1,886,168 | 75,836 |
-| SnippetI2CCommunication | 1,814,776 | 73,420 |
-| SnippetLimitSwitch | 1,829,276 | 72,644 |
-| SnippetMecanumDrive | 1,867,772 | 73,836 |
-| SnippetMotorControl | 1,848,056 | 73,340 |
-| SnippetOnboardIMU | 1,825,808 | 73,444 |
-| SnippetProfiledPIDFeedforward | 1,861,664 | 73,276 |
-| SnippetSelectCommand | 1,840,848 | 72,484 |
-| StateSpaceArm | 2,179,660 | 73,332 |
-| StateSpaceElevator | 2,179,668 | 73,332 |
-| StateSpaceFlywheel | 2,017,596 | 73,332 |
-| StateSpaceFlywheelSysId | 2,017,584 | 73,332 |
-| SwerveBot | 2,044,648 | 74,484 |
-| SwerveDrivePoseEstimator | 2,055,412 | 76,980 |
-| SysIdRoutine | 2,008,384 | 76,220 |
-| TankDriveGamepad | 1,833,004 | 72,692 |
-| TemplateCommandItems | 1,850,556 | 72,484 |
-| TemplateCommandV2 | 1,857,364 | 72,540 |
-| TemplateCommandV2Skeleton | 1,831,536 | 72,484 |
-| TemplateOpMode | 1,798,108 | 72,292 |
-| TemplateTimed | 1,798,684 | 72,308 |
-| TemplateTimedSkeleton | 1,786,708 | 72,292 |
-| TemplateTimeslice | 1,801,948 | 72,308 |
-| TemplateTimesliceSkeleton | 1,790,092 | 72,292 |
-| TimedRobotDifferential | 1,873,636 | 73,332 |
-| TimesliceRobotExample | 1,849,924 | 73,276 |
+| AprilTagFieldPose | 2,038,974 | 73,448 |
+| ArcadeDriveGamepad | 1,847,390 | 73,776 |
+| ArmSimulation | 1,941,966 | 76,976 |
+| BoardozaClimate | 1,859,286 | 74,568 |
+| BoardozaEveDisplay | 1,862,690 | 74,116 |
+| BoardozaGnss | 1,871,018 | 74,656 |
+| BoardozaLoadCell | 1,847,766 | 74,592 |
+| BoardozaLoRa | 1,861,942 | 74,116 |
+| BoardozaMultizoneToF | 1,936,246 | 74,600 |
+| BoardozaRotaryArgb | 1,868,166 | 74,780 |
+| BoardozaSdLog | 1,985,302 | 77,020 |
+| BoardozaThermalCamera | 1,846,226 | 74,592 |
+| CommandBasedRobot | 2,029,690 | 77,552 |
+| DifferentialDriveBot | 1,913,518 | 75,568 |
+| DifferentialDrivePoseEstimator | 2,035,450 | 78,128 |
+| DriveDistanceOffboard | 1,893,746 | 73,880 |
+| DriversShowcase | 1,946,210 | 75,048 |
+| DriverStationDisplayAnsi | 1,812,762 | 73,512 |
+| DriverStationDisplayLines | 1,833,482 | 73,512 |
+| DSGamepadChooser | 1,852,762 | 73,576 |
+| DutyCycleEncoder | 1,822,134 | 73,712 |
+| ElevatorExponentialProfile | 1,814,950 | 73,504 |
+| ElevatorExponentialSimulation | 1,937,382 | 76,976 |
+| ElevatorProfiledPID | 1,883,706 | 74,416 |
+| ElevatorSimulation | 1,947,138 | 76,976 |
+| ElevatorTrapezoidProfile | 1,813,054 | 73,504 |
+| Encoder | 1,826,506 | 74,104 |
+| GettingStarted | 1,847,894 | 73,776 |
+| Gyro | 1,881,774 | 74,920 |
+| HalSmoke | 1,636,479 | 75,600 |
+| MecanumBot | 1,999,154 | 75,632 |
+| MecanumDrive | 1,881,670 | 74,920 |
+| MecanumDrivePoseEstimator | 2,007,918 | 78,128 |
+| Mechanism2d | 1,888,374 | 74,728 |
+| OpModeRobotExample | 1,878,966 | 74,424 |
+| SimpleDifferentialDriveSimulation | 2,229,814 | 78,128 |
+| SnippetAccelerometerCollision | 1,837,478 | 74,600 |
+| SnippetAccelerometerFilter | 1,839,214 | 74,584 |
+| SnippetAddressableLED | 1,818,858 | 76,520 |
+| SnippetADXLAccelerometers | 1,831,990 | 74,568 |
+| SnippetAnalogAccelerometer | 1,819,334 | 73,688 |
+| SnippetAnalogEncoder | 1,820,454 | 73,688 |
+| SnippetAnalogInput | 1,818,534 | 73,688 |
+| SnippetAnalogPotentiometer | 1,819,518 | 73,688 |
+| SnippetDifferentialDrive | 1,848,774 | 73,776 |
+| SnippetDigitalCommunication | 1,810,154 | 73,456 |
+| SnippetDigitalInput | 1,808,514 | 73,472 |
+| SnippetDutyCycleEncoder | 1,821,674 | 73,712 |
+| SnippetDutyCycleInput | 1,819,478 | 73,696 |
+| SnippetEncoder | 1,826,726 | 74,104 |
+| SnippetEncoderDrive | 1,861,482 | 74,376 |
+| SnippetEncoderHoming | 1,857,806 | 74,400 |
+| SnippetEventLoop | 1,877,434 | 74,416 |
+| SnippetFlywheelBangBangController | 1,899,954 | 76,984 |
+| SnippetI2CCommunication | 1,829,642 | 74,568 |
+| SnippetLimitSwitch | 1,843,398 | 73,800 |
+| SnippetMecanumDrive | 1,882,022 | 74,920 |
+| SnippetMotorControl | 1,862,214 | 74,424 |
+| SnippetOnboardIMU | 1,840,250 | 74,600 |
+| SnippetProfiledPIDFeedforward | 1,876,266 | 74,368 |
+| SnippetSelectCommand | 1,855,050 | 73,576 |
+| StateSpaceArm | 2,192,730 | 74,480 |
+| StateSpaceElevator | 2,192,738 | 74,480 |
+| StateSpaceFlywheel | 2,030,774 | 74,480 |
+| StateSpaceFlywheelSysId | 2,030,766 | 74,480 |
+| SwerveBot | 2,058,002 | 75,632 |
+| SwerveDrivePoseEstimator | 2,068,646 | 78,128 |
+| SysIdRoutine | 2,060,086 | 77,488 |
+| TankDriveGamepad | 1,847,198 | 73,776 |
+| TemplateCommandItems | 1,864,642 | 73,576 |
+| TemplateCommandV2 | 1,871,546 | 73,696 |
+| TemplateCommandV2Skeleton | 1,845,610 | 73,576 |
+| TemplateOpMode | 1,809,238 | 73,448 |
+| TemplateTimed | 1,812,994 | 73,448 |
+| TemplateTimedSkeleton | 1,801,082 | 73,448 |
+| TemplateTimeslice | 1,816,258 | 73,448 |
+| TemplateTimesliceSkeleton | 1,804,354 | 73,448 |
+| TimedRobotDifferential | 1,887,930 | 74,416 |
+| TimesliceRobotExample | 1,864,470 | 74,368 |

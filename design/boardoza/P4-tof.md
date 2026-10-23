@@ -229,7 +229,7 @@ behaviour. That stays a hardware item.
 
 ## Example
 
-`examples/BoardozaMultizoneToF/BoardozaMultizoneToF.ino`: one board on port 1 (SDA 17, SCL 18,
+`examples/BoardozaMultizoneToF/BoardozaMultizoneToF.ino`: one board on port 1 (SDA 17, SCL 16,
 400 kHz), 8x8 at 15 Hz, with telemetry of the zones and the nearest valid distance. The
 comments show two boards with LPn on GPIO 38 and 39 at 0x30 and 0x31.
 

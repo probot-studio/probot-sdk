@@ -6,12 +6,12 @@
 // odometry (upstream wpilibcExamples/src/main/cpp/examples/DifferentialDriveBot), ported to prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   GPIO 4  left leader     GPIO 5  left follower    PWMSparkMax (or any PWM ESC)
-//   GPIO 12 right leader    GPIO 13 right follower
-//   GPIO 6/7 left encoder A/B             GPIO 15/16 right encoder A/B
+//   GPIO 38 left leader     GPIO 37 left follower    PWMSparkMax (or any PWM ESC)
+//   GPIO 36 right leader    GPIO 35 right follower
+//   GPIO 39/40 left encoder A/B           GPIO 41/42 right encoder A/B
 // Gamepad 0: left stick Y drives, right stick X turns.
 // The Probot board has no onboard IMU: upstream's OnboardIMU is replaced by the kit IMU,
-// prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 8 SDA, GPIO 9 SCL, the HAL default).
+// prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 1 SDA, GPIO 2 SCL: J3, the HAL default).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

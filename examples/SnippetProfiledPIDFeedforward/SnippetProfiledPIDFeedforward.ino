@@ -5,7 +5,7 @@
 // SnippetProfiledPIDFeedforward: ProfiledPIDController with SimpleMotorFeedforward
 // (upstream wpilibcExamples/src/main/cpp/snippets/ProfiledPIDFeedforward), ported to prosdk.
 //
-// Wiring (GPIO numbers; channel = GPIO): GPIO 6/7 encoder A/B, GPIO 4 PWMSparkMax (or any PWM
+// Wiring (GPIO numbers; channel = GPIO): GPIO 39/40 encoder A/B, GPIO 38 PWMSparkMax (or any PWM
 // ESC).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -51,8 +51,8 @@ class Robot : public prosdk::TimedRobot {
       1.0, 0.0, 0.0, {5_mps, 10_mps_sq}};
   prosdk::math::SimpleMotorFeedforward<prosdk::units::meters> feedforward{
       0.5_V, 1.5_V / 1_mps, 0.3_V / 1_mps_sq};
-  prosdk::Encoder encoder{6, 7};
-  prosdk::PWMSparkMax motor{4};
+  prosdk::Encoder encoder{39, 40};
+  prosdk::PWMSparkMax motor{38};
 
   prosdk::units::meters_per_second_t lastVelocity = 0_mps;
 };

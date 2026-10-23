@@ -6,7 +6,7 @@
 // wpilibcExamples/src/main/cpp/snippets/DutyCycleEncoder), ported to
 // prosdk.
 //
-// Wiring (GPIO numbers; channel = GPIO): GPIO 17 and GPIO 18, absolute (PWM output) encoders
+// Wiring (GPIO numbers; channel = GPIO): GPIO 17 and GPIO 16, absolute (PWM output) encoders
 // such as a REV Through Bore or CTRE Mag Encoder.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -36,10 +36,10 @@ class Robot : public prosdk::TimedRobot {
   // Initializes a duty cycle encoder on GPIO 17
   prosdk::DutyCycleEncoder encoder{17};
 
-  // Initializes a duty cycle encoder on GPIO 18 to return a value of 4 for
+  // Initializes a duty cycle encoder on GPIO 16 to return a value of 4 for
   // a full rotation, with the encoder reporting 0 half way through rotation (2
   // out of 4)
-  prosdk::DutyCycleEncoder encoderFR{18, 4.0, 2.0};
+  prosdk::DutyCycleEncoder encoderFR{16, 4.0, 2.0};
 };
 
 PROSDK_ROBOT_MAIN(Robot)

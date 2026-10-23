@@ -4,8 +4,8 @@
 // (/Tunables/Heading PID). Pose and wheel distances go to the Driver Station (/Telemetry).
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin):
-//   GPIO 4      left ESC signal         GPIO 5      right ESC signal
-//   GPIO 6/7    left encoder A/B        GPIO 15/16  right encoder A/B
+//   GPIO 38     left ESC signal         GPIO 37     right ESC signal
+//   GPIO 39/40  left encoder A/B        GPIO 41/42  right encoder A/B
 //
 // Teleop: left stick Y drives, right stick X turns. Hold the bottom face button (A on Xbox) to keep the heading.
 // Autonomous: drives forward for 2 s.
@@ -96,11 +96,11 @@ class Robot : public prosdk::TimedRobot {
     return prosdk::units::radian_t{(Right() - Left()).value() / kTrackWidthMeters};
   }
 
-  PwmEsc m_left{4};
-  PwmEsc m_right{5};
+  PwmEsc m_left{38};
+  PwmEsc m_right{37};
   prosdk::DifferentialDrive m_drive{m_left, m_right};
-  prosdk::Encoder m_leftEncoder{6, 7};
-  prosdk::Encoder m_rightEncoder{15, 16, true};
+  prosdk::Encoder m_leftEncoder{39, 40};
+  prosdk::Encoder m_rightEncoder{41, 42, true};
   prosdk::Gamepad m_gamepad{0};
   prosdk::math::PIDController m_headingPid{1.0, 0.0, 0.05};
   prosdk::math::DifferentialDriveOdometry m_odometry{Heading(), Left(), Right()};

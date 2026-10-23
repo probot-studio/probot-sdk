@@ -7,7 +7,7 @@
 // 5 V the board's pull-ups may pull SDA and SCL to 5 V, and the ESP32-S3 pins are not 5 V tolerant.
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin):
-//   SDA -> GPIO 17, SCL -> GPIO 18
+//   SDA -> GPIO 17, SCL -> GPIO 16
 // I2C port 1 runs at 400 kHz, the highest speed the MLX90640 datasheet allows for EEPROM access
 // (section 8, note 5). At 8 Hz one subpage takes about 40 ms of bus time, so keep other sensors
 // on this port few and slow.
@@ -41,7 +41,7 @@ class Robot : public prosdk::TimedRobot {
  private:
   // first member: the bus pins before the driver opens the bus
   bool m_pinsConfigured =
-      prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/18, /*frequencyHz=*/400000);
+      prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/16, /*frequencyHz=*/400000);
 
   prosdk::MLX90640 m_camera{prosdk::I2C::Port::PORT_1};  // address 0x33, 8 Hz
   std::array<float, prosdk::MLX90640::kPixelCount> m_frame{};

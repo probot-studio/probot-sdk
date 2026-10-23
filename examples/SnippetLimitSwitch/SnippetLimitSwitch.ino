@@ -6,9 +6,9 @@
 // wpilibcExamples/src/main/cpp/snippets/LimitSwitch), ported to prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   GPIO 17  top limit switch     GPIO 18  bottom limit switch
+//   GPIO 17  top limit switch     GPIO 16  bottom limit switch
 //   (both normally open, to GND, internal pull-up: open reads true, pressed reads false)
-//   GPIO 4   PWMVictorSPX (or any PWM ESC)
+//   GPIO 38  PWMVictorSPX (or any PWM ESC)
 // Joystick 0, axis 2 drives the motor.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -53,8 +53,8 @@ class Robot : public prosdk::TimedRobot {
 
  private:
   prosdk::DigitalInput toplimitSwitch{17};
-  prosdk::DigitalInput bottomlimitSwitch{18};
-  prosdk::PWMVictorSPX motor{4};
+  prosdk::DigitalInput bottomlimitSwitch{16};
+  prosdk::PWMVictorSPX motor{38};
   prosdk::Joystick joystick{0};
 };
 

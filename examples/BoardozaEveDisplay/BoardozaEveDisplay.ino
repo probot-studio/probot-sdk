@@ -3,11 +3,11 @@
 // a gauge, the robot state and a button; touching the button counts presses. The display state
 // goes to the Driver Station (/Telemetry/Display).
 //
-// Wiring (change the pins to match your robot; none may be a probot-core pin). SPI uses the SPI2
-// IO_MUX pins of the ESP32-S3:
-//   J6: 1 CS -> GPIO 10, 2 MISO -> GPIO 13, 3 MOSI -> GPIO 11, 4 SCK -> GPIO 12
+// Wiring (change the pins to match your robot; none may be a probot-core pin). SPI bus 0 on the
+// Probot main board's J5 header (Boardoza ESP32-S3 Pulse; the HAL's default bus 0 pins):
+//   J6: 1 CS -> GPIO 7, 2 MISO -> GPIO 16, 3 MOSI -> GPIO 15, 4 SCK -> GPIO 17
 //   J1: 1 3V3 -> leave open (an output of the board), 2 5V -> 5 V, 3 GND -> GND,
-//       4 PD -> GPIO 4, 5 INT -> GPIO 5 (optional; pass -1 when it is not wired)
+//       4 PD -> GPIO 38, 5 INT -> GPIO 37 (optional; pass -1 when it is not wired)
 // The board needs 5 V (about 150 mA plus the backlight; a 7 inch panel draws more). Its logic is
 // 3.3 V, and the host lines go through 5 V tolerant buffers, so the ESP32-S3 pins connect
 // directly. Never feed 3.3 V into the J1 3V3 pin. The panel plugs into the 40-pin FPC socket.
@@ -43,12 +43,12 @@
 namespace {
 
 constexpr int kSpiBus = 0;  // SPI2
-constexpr int kSck = 12;
-constexpr int kMosi = 11;
-constexpr int kMiso = 13;
-constexpr int kChipSelect = 10;
-constexpr int kPowerDown = 4;
-constexpr int kInterrupt = 5;
+constexpr int kSck = 17;
+constexpr int kMosi = 15;
+constexpr int kMiso = 16;
+constexpr int kChipSelect = 7;
+constexpr int kPowerDown = 38;
+constexpr int kInterrupt = 37;
 
 constexpr bool kCalibrateTouch = false;
 constexpr std::array<int32_t, 6> kTouchTransform{};  // from Display/Transform A-F; all 0: unset

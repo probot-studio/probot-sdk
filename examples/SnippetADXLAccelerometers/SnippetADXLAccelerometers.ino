@@ -6,7 +6,7 @@
 // wpilibcExamples/src/main/cpp/snippets/ADXLAccelerometers),
 // ported to prosdk.
 //
-// Wiring: an ADXL345 on I2C port 0 (GPIO 8 SDA, GPIO 9 SCL, the HAL default; address 0x1D).
+// Wiring: an ADXL345 on I2C port 0 (GPIO 1 SDA, GPIO 2 SCL: J3, the HAL default; address 0x1D).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

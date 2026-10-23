@@ -5,7 +5,7 @@
 // TankDriveGamepad: tank drive with a gamepad (upstream
 // wpilibcExamples/src/main/cpp/examples/TankDriveGamepad), ported to prosdk.
 //
-// Wiring (GPIO numbers; channel = GPIO): GPIO 4 left, GPIO 5 right PWMSparkMax (or any PWM
+// Wiring (GPIO numbers; channel = GPIO): GPIO 38 left, GPIO 37 right PWMSparkMax (or any PWM
 // ESC). Gamepad 0: left stick Y left side, right stick Y right side.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -22,8 +22,8 @@
  * Runs the motors with tank steering and a gamepad.
  */
 class Robot : public prosdk::TimedRobot {
-  prosdk::PWMSparkMax leftMotor{4};
-  prosdk::PWMSparkMax rightMotor{5};
+  prosdk::PWMSparkMax leftMotor{38};
+  prosdk::PWMSparkMax rightMotor{37};
   prosdk::DifferentialDrive robotDrive{
       [&](double output) { leftMotor.SetThrottle(output); },
       [&](double output) { rightMotor.SetThrottle(output); }};

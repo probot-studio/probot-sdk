@@ -8,9 +8,9 @@
 // pins are not 5 V tolerant.
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin):
-//   SAM-M8Q  J2: SDA -> GPIO 17, SCL -> GPIO 18   (pins: 1 GND, 2 SDA, 3 SCL, 4 VCC)
-//   SAM-M10Q J2: SDA -> GPIO 17, SCL -> GPIO 18   (pins: 1 VCC, 2 SCL, 3 SDA, 4 GND)
-//   GP-02    J1: TX -> GPIO 15 (host RX), RX -> GPIO 16 (host TX)   (pins: 1 VCC, 2 RX, 3 TX, 4 GND)
+//   SAM-M8Q  J2: SDA -> GPIO 17, SCL -> GPIO 16   (pins: 1 GND, 2 SDA, 3 SCL, 4 VCC)
+//   SAM-M10Q J2: SDA -> GPIO 17, SCL -> GPIO 16   (pins: 1 VCC, 2 SCL, 3 SDA, 4 GND)
+//   GP-02    J1: TX -> GPIO 10 (host RX), RX -> GPIO 11 (host TX)   (pins: 1 VCC, 2 RX, 3 TX, 4 GND)
 //            connect the active antenna to J2 before powering the board.
 // I2C port 1 runs at 100 kHz: the SAM-M10Q allows at most 320 kHz.
 //
@@ -32,8 +32,8 @@
 namespace {
 
 bool ConfigureGnssPins() {
-  bool ok = prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/18, /*frequencyHz=*/100000);
-  ok &= prosdk::platform::SetSerialPins(0, /*rx=*/15, /*tx=*/16);
+  bool ok = prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/16, /*frequencyHz=*/100000);
+  ok &= prosdk::platform::SetSerialPins(0, /*rx=*/10, /*tx=*/11);
   return ok;
 }
 

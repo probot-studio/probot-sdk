@@ -8,7 +8,7 @@
 // Driver Station (/Tunables and /Telemetry BangBangController). SimulationPeriodic (FlywheelSim)
 // only runs on the host; on the robot it is inert.
 //
-// Wiring (GPIO numbers; channel = GPIO): GPIO 4 flywheel PWMSparkMax, GPIO 6/7 encoder A/B.
+// Wiring (GPIO numbers; channel = GPIO): GPIO 38 flywheel PWMSparkMax, GPIO 39/40 encoder A/B.
 // Joystick 0, axis 0 sets the velocity.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -76,9 +76,9 @@ class Robot : public prosdk::TimedRobot {
   }
 
  private:
-  static constexpr int MOTOR_PORT = 4;
-  static constexpr int ENCODER_A_CHANNEL = 6;
-  static constexpr int ENCODER_B_CHANNEL = 7;
+  static constexpr int MOTOR_PORT = 38;
+  static constexpr int ENCODER_A_CHANNEL = 39;
+  static constexpr int ENCODER_B_CHANNEL = 40;
 
   // Max setpoint for joystick control
   static constexpr prosdk::units::radians_per_second_t MAX_SETPOINT_VALUE =

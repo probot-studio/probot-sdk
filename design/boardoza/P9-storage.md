@@ -36,8 +36,9 @@ No vendor code was used. The Boardoza W25Q40 library (CC BY-SA 4.0) and W25N01GV
 ## 1. Wiring and hazards
 
 All three boards share one SPI bus and differ only in the chip select. Set the bus pins once with
-`prosdk::platform::SetSPIPins(bus, sck, mosi, miso)` before the first device opens. The SPI2
-IO_MUX pins (SCK 12, MOSI 11, MISO 13, CS 10) are a good default. Tie every board's GND to the
+`prosdk::platform::SetSPIPins(bus, sck, mosi, miso)` before the first device opens. On the Pulse
+(the Probot main board) bus 0 defaults to its J5 header (SCK 17, MOSI 15, MISO 16, CS 7); on another
+board the SPI2 IO_MUX pins (SCK 12, MOSI 11, MISO 13, CS 10) are a good choice. Tie every board's GND to the
 controller's GND.
 
 | Board | Connector | Pins |
@@ -267,7 +268,7 @@ Unverified (needs hardware or the board schematics' nets):
 - MountSdCard: one bus user and the chip-select pin, the ESP-IDF SD SPI device and FATFS volume
   (one of 2), and FATFS's per-file buffers (`CONFIG_FATFS_PER_FILE_CACHE`, up to 5 open files).
   Long file names use the stack of the calling task (`CONFIG_FATFS_LFN_STACK`).
-- Example `BoardozaSdLog`: SPI2 on GPIO 10 to 13.
+- Example `BoardozaSdLog`: SPI2 on GPIO 7 and 15-17 (Pulse J5).
 
 ## 8. Tests
 

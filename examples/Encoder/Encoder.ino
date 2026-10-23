@@ -6,7 +6,7 @@
 // (upstream wpilibcExamples/src/main/cpp/examples/Encoder), ported to prosdk. Values go to
 // /Telemetry in teleop.
 //
-// Wiring (GPIO numbers; channel = GPIO): GPIO 6/7 encoder A/B. The ESP32-S3 decodes every
+// Wiring (GPIO numbers; channel = GPIO): GPIO 39/40 encoder A/B. The ESP32-S3 decodes every
 // encoder in hardware (PCNT, 4 encoders or counters at most).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -62,7 +62,7 @@ class Robot : public prosdk::TimedRobot {
    * The Encoder object is constructed with 4 parameters, the last two being
    * optional.
    *
-   * The first two parameters (6, 7 in this case) refer to the GPIO pins of
+   * The first two parameters (39, 40 in this case) refer to the GPIO pins of
    * the ESP32-S3 which the encoder uses. Because a quadrature encoder has two
    * signal wires, two GPIO pins are used.
    *
@@ -74,7 +74,7 @@ class Robot : public prosdk::TimedRobot {
    * and defaults to X4. Faster (X4) encoding gives greater positional
    * precision but more noise in the rate.
    */
-  prosdk::Encoder encoder{6, 7, false, prosdk::Encoder::EncodingType::X4};
+  prosdk::Encoder encoder{39, 40, false, prosdk::Encoder::EncodingType::X4};
 };
 
 PROSDK_ROBOT_MAIN(Robot)

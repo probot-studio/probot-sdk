@@ -10,7 +10,7 @@
 //   | Drive feedback  | 6 ms   | 2 ms       |
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin):
-//   GPIO 4  arm servo/ESC signal    GPIO 6/7  arm encoder A/B
+//   GPIO 38 arm servo/ESC signal    GPIO 39/40 arm encoder A/B
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6
@@ -59,8 +59,8 @@ class Robot : public prosdk::TimesliceRobot {
     }
   }
 
-  PwmEsc m_arm{4};
-  prosdk::Encoder m_encoder{6, 7};
+  PwmEsc m_arm{38};
+  prosdk::Encoder m_encoder{39, 40};
   prosdk::math::PIDController m_armPid{2.0, 0.0, 0.0, 10_ms};
   double m_setpoint = 0.0;
   uint32_t m_samples = 0;

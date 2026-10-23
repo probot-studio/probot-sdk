@@ -4,7 +4,7 @@
 // enable and ends it on disable, as with WPILib's Driver Station.
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin):
-//   GPIO 4  left ESC signal    GPIO 5  right ESC signal    GPIO 6/7  arm encoder A/B
+//   GPIO 38 left ESC signal    GPIO 37 right ESC signal    GPIO 39/40 arm encoder A/B
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6
@@ -34,10 +34,10 @@ class Robot : public prosdk::OpModeRobot<Robot> {
  public:
   Robot();
 
-  PwmEsc left{4};
-  PwmEsc right{5};
+  PwmEsc left{38};
+  PwmEsc right{37};
   prosdk::DifferentialDrive drive{left, right};
-  prosdk::Encoder encoder{6, 7};
+  prosdk::Encoder encoder{39, 40};
   prosdk::Gamepad gamepad{0};
 };
 

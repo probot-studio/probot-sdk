@@ -8,12 +8,13 @@
 //
 // Wiring (GPIO numbers; channel = GPIO), module = drive PWM, turning PWM, drive encoder A/B,
 // turning encoder A/B:
-//   front left  4, 14,  6/7,   40/41      front right 5, 21, 15/16, 42/1
-//   back left  12, 47, 17/18,  2/10       back right 13, 48, 38/39, 11/46
+//   front left  4, 14,  6/7,   40/41      front right 5, 21, 15/16, 42/8
+//   back left  12, 47, 17/18,  9/10       back right 13, 48, 38/39, 11/46
 // GPIO 46 is a strapping pin, used for lack of free pins. It counts at reset only while BOOT
 // (GPIO 0) is held, where a high level blocks download mode; a normal boot ignores it. GPIO 45
 // (flash voltage) is avoided: an encoder line high at reset can stop a 3.3 V-flash module from
-// booting.
+// booting. The 24 signals do not fit the 20 header pins of the Probot main board (Boardoza
+// ESP32-S3 Pulse) either; GPIO 1/2 stay free for the IMU's I2C (J3).
 // Does not fit the ESP32-S3 as written: upstream uses 8 quadrature encoders and the chip has 4
 // PCNT units (encoders and counters together), so on the robot the fifth Encoder fails and the
 // program halts with the error on the Driver Station console (there is no desktop simulation of
@@ -21,7 +22,7 @@
 // (DutyCycleEncoder, 6 inputs; AnalogEncoder, GPIO 1-10).
 // Gamepad 0: left stick drives (field relative in teleop), right stick X turns.
 // The Probot board has no onboard IMU: upstream's OnboardIMU is replaced by the kit IMU,
-// prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 8 SDA, GPIO 9 SCL, the HAL default).
+// prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 1 SDA, GPIO 2 SCL: J3, the HAL default).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

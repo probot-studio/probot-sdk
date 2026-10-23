@@ -21,10 +21,10 @@
 
 namespace DriveConstants {
 inline constexpr prosdk::units::second_t DT{0.02};
-inline constexpr int LEFT_MOTOR1_PORT = 4;
-inline constexpr int LEFT_MOTOR2_PORT = 5;
-inline constexpr int RIGHT_MOTOR1_PORT = 12;
-inline constexpr int RIGHT_MOTOR2_PORT = 13;
+inline constexpr int LEFT_MOTOR1_PORT = 38;
+inline constexpr int LEFT_MOTOR2_PORT = 37;
+inline constexpr int RIGHT_MOTOR1_PORT = 36;
+inline constexpr int RIGHT_MOTOR2_PORT = 35;
 
 // These are example values only - DO NOT USE THESE FOR YOUR OWN ROBOT!
 // These characterization values MUST be determined either experimentally or

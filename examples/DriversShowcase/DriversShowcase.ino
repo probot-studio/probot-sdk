@@ -5,10 +5,10 @@
 // sensor goes to the Driver Station (/Telemetry).
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin):
-//   GPIO 4           Spark (or any 1000-2000 us PWM motor controller) signal
-//   GPIO 5           hobby servo signal
-//   GPIO 6/7/15      BTS7960 RPWM / LPWM / R_EN+L_EN (tied together)
-//   GPIO 16/17/18/21 VNH5019 INA / INB / PWM / ENA+ENB (through series resistors, design/drivers.md)
+//   GPIO 38          Spark (or any 1000-2000 us PWM motor controller) signal
+//   GPIO 37          hobby servo signal
+//   GPIO 39/40/41    BTS7960 RPWM / LPWM / R_EN+L_EN (tied together)
+//   GPIO 16/17/47/48 VNH5019 INA / INB / PWM / ENA+ENB (through series resistors, design/drivers.md)
 //   ProHub board     I2C on GPIO 1/2 (PCA9685 0x40, MPU-6050 0x68, goBILDA Pinpoint 0x31),
 //                    encoder stream on GPIO 10 (RX) / 11 (TX)
 //
@@ -86,10 +86,10 @@ class Robot : public prosdk::TimedRobot {
   // first member: the ProHub I2C and encoder UART pins before any driver opens the buses
   bool m_pinsConfigured = prohub::ConfigurePins();
 
-  prosdk::Spark m_spark{4};
-  prosdk::Servo m_servo{5};
-  prosdk::BTS7960 m_bts{6, 7, 15};
-  prosdk::VNH5019 m_vnh{16, 17, 18, 21, 21};
+  prosdk::Spark m_spark{38};
+  prosdk::Servo m_servo{37};
+  prosdk::BTS7960 m_bts{39, 40, 41};
+  prosdk::VNH5019 m_vnh{16, 17, 47, 48, 48};
 
   prosdk::PCA9685 m_hub{prosdk::I2C::Port::PORT_0, prohub::kPcaAddress0, 50_Hz};
   prosdk::ProHubMotor m_hubMotor{m_hub, 1};

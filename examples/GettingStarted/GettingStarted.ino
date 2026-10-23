@@ -5,7 +5,7 @@
 // GettingStarted: a differential-drive robot with split-stick arcade drive and a 2 s timed
 // autonomous (upstream wpilibcExamples/src/main/cpp/examples/GettingStarted), ported to prosdk.
 //
-// Wiring (GPIO numbers; channel = GPIO): GPIO 4 left, GPIO 5 right PWMSparkMax (or any PWM
+// Wiring (GPIO numbers; channel = GPIO): GPIO 38 left, GPIO 37 right PWMSparkMax (or any PWM
 // ESC). Gamepad 0: left stick Y drives, right stick X steers.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -55,8 +55,8 @@ class Robot : public prosdk::TimedRobot {
 
  private:
   // Robot drive system
-  prosdk::PWMSparkMax left{4};
-  prosdk::PWMSparkMax right{5};
+  prosdk::PWMSparkMax left{38};
+  prosdk::PWMSparkMax right{37};
   prosdk::DifferentialDrive robotDrive{
       [&](double output) { left.SetThrottle(output); },
       [&](double output) { right.SetThrottle(output); }};

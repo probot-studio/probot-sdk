@@ -7,8 +7,8 @@
 // first-principles flywheel model (upstream
 // wpilibcExamples/src/main/cpp/examples/StateSpaceFlywheel), ported to prosdk.
 //
-// Wiring (GPIO numbers; channel = GPIO): PWMSparkMax (or any PWM ESC) on GPIO 4, quadrature
-// encoder A/B on GPIO 6/7 (upstream: PWM 0, DIO 0/1).
+// Wiring (GPIO numbers; channel = GPIO): PWMSparkMax (or any PWM ESC) on GPIO 38,
+// quadrature encoder A/B on GPIO 39/40 (upstream: PWM 0, DIO 0/1).
 // Gamepad 0: hold the right bumper to spin up to 500 rpm, release to spin down.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -33,9 +33,9 @@
  * to control a flywheel.
  */
 class Robot : public prosdk::TimedRobot {
-  static constexpr int MOTOR_PORT = 4;
-  static constexpr int ENCODER_A_CHANNEL = 6;
-  static constexpr int ENCODER_B_CHANNEL = 7;
+  static constexpr int MOTOR_PORT = 38;
+  static constexpr int ENCODER_A_CHANNEL = 39;
+  static constexpr int ENCODER_B_CHANNEL = 40;
   static constexpr int JOYSTICK_PORT = 0;
   static constexpr prosdk::units::radians_per_second_t SPINUP = 500_rpm;
 

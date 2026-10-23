@@ -36,8 +36,8 @@ class Drivetrain {
   prosdk::math::Translation2d backRightLocation{-0.381_m, -0.381_m};
 
   SwerveModule frontLeft{4, 14, 6, 7, 40, 41};
-  SwerveModule frontRight{5, 21, 15, 16, 42, 1};
-  SwerveModule backLeft{12, 47, 17, 18, 2, 10};
+  SwerveModule frontRight{5, 21, 15, 16, 42, 8};
+  SwerveModule backLeft{12, 47, 17, 18, 9, 10};
   SwerveModule backRight{13, 48, 38, 39, 11, 46};
 
   prosdk::MPU6050 imu{prosdk::I2C::Port::PORT_0};  // kit IMU (upstream: OnboardIMU)

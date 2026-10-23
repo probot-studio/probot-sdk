@@ -11,8 +11,8 @@
 // /Telemetry/Scheduler and /Tunables/Scheduler.
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin):
-//   GPIO 4      left ESC signal         GPIO 5      right ESC signal
-//   GPIO 6/7    left encoder A/B        GPIO 15/16  right encoder A/B
+//   GPIO 38     left ESC signal         GPIO 37     right ESC signal
+//   GPIO 39/40  left encoder A/B        GPIO 41/42  right encoder A/B
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6
@@ -99,11 +99,11 @@ class Drive : public prosdk::cmd::SubsystemBase {
         .velocity(prosdk::units::meters_per_second_t{m_rightEncoder.GetRate()});
   }
 
-  PwmEsc m_left{4};
-  PwmEsc m_right{5};
+  PwmEsc m_left{38};
+  PwmEsc m_right{37};
   prosdk::DifferentialDrive m_drive{m_left, m_right};
-  prosdk::Encoder m_leftEncoder{6, 7};
-  prosdk::Encoder m_rightEncoder{15, 16, true};
+  prosdk::Encoder m_leftEncoder{39, 40};
+  prosdk::Encoder m_rightEncoder{41, 42, true};
   prosdk::cmd::sysid::SysIdRoutine m_sysId{
       prosdk::cmd::sysid::Config{std::nullopt, std::nullopt, std::nullopt, nullptr},
       prosdk::cmd::sysid::Mechanism{[this](prosdk::units::volt_t v) { SetVoltage(v); },

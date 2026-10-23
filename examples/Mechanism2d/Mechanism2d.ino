@@ -8,8 +8,8 @@
 // as a Mechanism2d widget (probot-core #40, design/core-requests.md R5).
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   GPIO 4  elevator PWMSparkMax    GPIO 5  wrist PWMSparkMax
-//   GPIO 6/7 elevator encoder A/B   GPIO 1  wrist potentiometer (analog, 0-3.1 V)
+//   GPIO 38 elevator PWMSparkMax     GPIO 37 wrist PWMSparkMax
+//   GPIO 39/40 elevator encoder A/B  GPIO 1  wrist potentiometer (analog, 0-3.1 V)
 // Joystick 0: axis 0 elevator, axis 1 wrist.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
@@ -61,9 +61,9 @@ class Robot : public prosdk::TimedRobot {
   }
 
  private:
-  prosdk::PWMSparkMax elevatorMotor{4};
-  prosdk::PWMSparkMax wristMotor{5};
-  prosdk::Encoder elevatorEncoder{6, 7};
+  prosdk::PWMSparkMax elevatorMotor{38};
+  prosdk::PWMSparkMax wristMotor{37};
+  prosdk::Encoder elevatorEncoder{39, 40};
   prosdk::AnalogPotentiometer wristPotentiometer{1, 90};
   prosdk::Joystick joystick{0};
 
