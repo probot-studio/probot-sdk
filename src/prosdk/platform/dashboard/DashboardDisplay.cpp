@@ -99,6 +99,8 @@ struct Display {
   char seq[4] = {};
   size_t seqLen = 0;
   size_t seqNeed = 0;
+  // a newline on the last row whose scroll has not happened yet (NewLine)
+  bool pendingScroll = false;
   std::string logged;
   bool hasLogged = false;
 
@@ -129,14 +131,26 @@ struct Display {
     ++col;
   }
 
-  void SetRow(size_t r) {
-    if (r >= kDisplayMaxRows) {
-      // scroll: the screen keeps its last kDisplayMaxRows rows
-      size_t drop = r - kDisplayMaxRows + 1;
-      rows.erase(rows.begin(), rows.begin() + std::min(drop, rows.size()));
-      r = kDisplayMaxRows - 1;
+  // cursor position and moves stop at the last row, as in a terminal (they never scroll)
+  void SetRow(size_t r) { row = std::min(r, kDisplayMaxRows - 1); }
+
+  // newline: the next row; on the last row the screen scrolls one row up. That scroll waits for
+  // the next byte, so a screen that ends with a newline (upstream's line mode ends every line with
+  // one) keeps all kDisplayMaxRows rows.
+  void NewLine() {
+    if (row + 1 < kDisplayMaxRows) {
+      ++row;
+    } else {
+      pendingScroll = true;
     }
-    row = r;
+    col = 0;
+  }
+
+  void Scroll() {
+    pendingScroll = false;
+    if (!rows.empty()) {
+      rows.erase(rows.begin());
+    }
   }
 
   void Erase(char final, int mode) {
@@ -222,6 +236,9 @@ struct Display {
     for (size_t i = 0; i < ansi.size(); ++i) {
       const char c = ansi[i];
       const auto u = static_cast<unsigned char>(c);
+      if (pendingScroll) {
+        Scroll();
+      }
       if (seqNeed != 0) {
         if (Continues(static_cast<unsigned char>(seq[0]), seqLen, u)) {
           seq[seqLen++] = c;
@@ -256,8 +273,7 @@ struct Display {
           ++i;  // two-byte escape
         }
       } else if (c == '\n') {
-        SetRow(row + 1);
-        col = 0;
+        NewLine();
       } else if (c == '\r') {
         col = 0;
       } else if (c == '\b') {
@@ -362,6 +378,7 @@ void ResetDisplayForTest() {
   display.col = 0;
   display.seqLen = 0;
   display.seqNeed = 0;
+  display.pendingScroll = false;
   display.logged.clear();
   display.hasLogged = false;
 }

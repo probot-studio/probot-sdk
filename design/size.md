@@ -450,7 +450,8 @@ was also linked against 73c7e10 with the same archive, which splits off core's s
 - Heap, not in the table: the display text is capped at `min(PROBOT_DASH_MAX_VALUE, 30,767)` bytes
   (default 1024). Raising core's limit to 8192 (a full 48 x 160 ASCII screen, 7,727 B) costs about
   11.3 KB of core heap (its WebSocket receive buffer, value + 4, and the DS frame buffer,
-  max(value + 520, schema + 515), from about 5.6 KB at 1024 to about 16.9 KB) plus an 8 KB pool slot
+  max(value + 519, schema + 515, 1400) as core's `frameCapacity()` computes it, from about 5.6 KB at
+  1024 to about 16.9 KB) plus an 8 KB pool slot
   for the text out of core's 32 KB pool; prosdk holds up to three copies of the text (the terminal's
   rows, the last logged text, the telemetry buffer, about 7.7 KB each) and one temporary render copy
   while it publishes. At the default 1024 the prosdk copies stay under 1 KB each.

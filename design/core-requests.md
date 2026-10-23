@@ -1045,8 +1045,11 @@ of two-byte characters was clipped at 80 columns and the 1024-byte cut could spl
   `DisplayMaxBytes()` = min(core's `PROBOT_DASH_MAX_VALUE` at run time, 30,767 = 48 x 160 four-byte
   characters plus 47 newlines); 1024 (core's default) while core's store is not set up or with no core.
   Over the cap whole rows are dropped from the top, then a single long row is cut on a character
-  boundary, so the store never refuses the text. A full ASCII screen is 7,727 B (fits 8192); a full
-  screen of two-byte characters is 15,359 B (needs 16384); at 1024 the last 6 full ASCII rows show.
+  boundary, so the store never refuses the text as too large (it can still refuse it with
+  `NoMemory` when core's pool, `PROBOT_DASH_POOL_BYTES`, cannot hold the slot: 8 KB at 8192, 16 KB
+  at 16384, out of 32 KB by default; API-DIFFERENCES.md says when to raise it). A full ASCII screen
+  is 7,727 B (fits 8192); a full screen of two-byte characters is 15,407 B (48 x 160 x 2 + 47; needs
+  16384); at 1024 the last 6 full ASCII rows show.
   RAM: design/size.md section 14 (about +11.3 KB of core heap and an 8 KB pool slot at 8192, plus
   prosdk's copies of the text).
 - CoreOps ABI 10: `dashMaxValue()`, last field. The bridge reads `dashboard::limits().maxValue` (R15)
@@ -1060,11 +1063,12 @@ of two-byte characters was clipped at 80 columns and the 1024-byte cut could spl
 - Tests: `prosdk_dashboard_tests` (columns in characters for two-, three- and four-byte characters,
   tabs, cursor edits and erase in UTF-8 rows, a sequence split across writes, invalid bytes, the cut on
   a character boundary; `DashboardDisplayStoreTest.cpp` through the fake store: 8192 keeps a full ASCII
-  screen, 16384 a full two-byte screen, 1024 the last 6 rows, 32 a row cut on a boundary, never
-  refused); `prosdk_tests` (CoreOps defaults for `dashMaxValue`, GUIDE from `Options` 16 with 17
+  screen, 16384 a full two-byte screen, 1024 the last 6 rows, 32 a row cut on a boundary, never too
+  large); `prosdk_tests` (CoreOps defaults for `dashMaxValue`, GUIDE from `Options` 16 with 17
   buttons and not with 16, `CopyCoreMapping` copies every field); `prosdk_gamepad_tests` (new, with the
   core clone, `PROSDK_TEST_PROBOT_CORE_GAMEPAD`: core's own profiles through `CopyCoreMapping` and
-  `CoreJoystick`, Home/Guide on R20 and none before); `prosdk_ds_pump_tests` (new: the robot's
+  `CoreJoystick`, Home/Guide on R20; the build sets which core is expected, see the review fixes
+  below); `prosdk_ds_pump_tests` (new: the robot's
   `hal/esp32/DriverStation.cpp` on the host over a fake CoreOps table: match info appears only after a
   pump pass and `HAL_RefreshDSData`, is read once per change and clears; button 16 reaches
   `HAL_GetJoystickButtons` as GUIDE); `ds_widget_check.js` decodes the panel's `dsdFormat` with
@@ -1079,3 +1083,26 @@ of two-byte characters was clipped at 80 columns and the 1024-byte cut could spl
   design/hal-esp32.md, design/PORT.md, design/user-docs-handoff.md, design/examples.md,
   design/size.md section 14, and the DriverStationDisplayLines / DriverStationDisplayAnsi /
   DSGamepadChooser headers.
+- Review fixes (2026-10-23):
+  - Display rows: a newline on the last row scrolls only once more text follows, so line mode
+    (`UpdateLines()` ends every line, the last one too, with a newline) keeps all 48 rows; before, the
+    first line was lost. Cursor positions (`H`, `f`) and moves (`B`) stop at the last row instead of
+    scrolling, as in a terminal. Tests: `DashboardDisplayTest` (48 and 49 line-mode lines, text after a
+    last-row newline, `ESC[60;1H` and `ESC[100B`), `DashboardDisplayStoreTest` (a full line-mode
+    screen is 7,727 B at 8192; every column two bytes is 15,407 B at 16384), `ds_widget_check.js`
+    (the 15,407 B screen unchanged by the page).
+  - "Never refused" now reads "never refused as too large": core's `set()` can still refuse with
+    `NoMemory` when `PROBOT_DASH_POOL_BYTES` cannot hold the slot (powers of two up to the limit);
+    API-DIFFERENCES.md and user-docs-handoff.md say to raise the pool with 16384.
+  - `prosdk_gamepad_tests` no longer reads from the clone which behaviour to check: it expects R20
+    unless configured with `PROBOT_CORE_BEFORE_R20=1`, and without a clone it has one case that warns
+    (Catch2 fails a binary with no cases). `CoreJoystickTest` copies a profile whose fields all differ.
+  - The bridge's CoreOps table (`CoreBridge.hpp` `Install()`) uses designated initializers, so two
+    fields of the same type (e.g. `matchInfoSeq`, `dashMaxValue`) cannot be swapped silently.
+  - Docs: GUIDE on an older core is qualified for tuna-default (its button 10 on every core); the DS
+    frame buffer is max(value + 519, schema + 515, 1400); audit-final.md lists R19 and R20.
+  - Checked: `build.sh host all header_check --test` (every binary passes), `build.sh esp32s3 prosdk
+    header_check` (no warnings), the HAL link test against e0cb17f (1,733,881 / 76,972) and
+    `feat/dashboard-store` 9217ae4 (1,762,549 / 69,788; +24 B flash each), `prosdk_gamepad_tests`
+    against 9217ae4 (fails as expected without `PROBOT_CORE_BEFORE_R20=1`, passes with it), QEMU
+    smoke 8/8 on both boots, `ds_widget_check.js`.

@@ -485,7 +485,8 @@ Completeness critic, 2026-10-23 (five more gaps, checked against the tree and up
   table is not copied; the pair is linked only with DataLogManager. Not run on a board.
 - `DriverStationDisplay`: no longer console lines. A small terminal keeps the screen and publishes it
   as the telemetry table `DriverStationDisplay` (`prosdk/platform/dashboard/DashboardDisplay.hpp`, test
-  `test/prosdk/DashboardDisplayTest.cpp`); a DS panel for it is core request R19.
+  `test/prosdk/DashboardDisplayTest.cpp`); core's DS shows it as a text panel since R19 (#44), and
+  its text cap follows core's value limit (CoreOps ABI 10, `de95972`).
 - Alliance, station, game data and match info: done with core R18 (draft PR #43), CoreOps ABI 9
   (`8bf488e`): `MatchState` returns the values of the DS page's "Maç Bilgisi" card (API-DIFFERENCES.md
   section 3, core-requests.md "P1 R18 delivered and wired").
@@ -575,6 +576,8 @@ Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attac
     - R15: `9ec2023`, ABI 7.
     - R16 and R17: documented; they add no prosdk API.
     - R18: `8bf488e`, ABI 9 (match info).
+    - R19: `de95972`, ABI 10 (display text cap follows core's value limit).
+    - R20: `e87b4b1` (GUIDE from core's Home/Guide button; no ABI change).
 
     core-requests.md has the details. The core PRs are part of item 9. As written on 2026-10-22:
     **R11-R14 delivered and wired, or explicitly deferred** with the limitation in the user docs:

@@ -330,6 +330,22 @@ TEST_CASE("CopyCoreMapping copies every field of core's profile", "[prosdk][hal]
   };
   CHECK(fields(m) == fields(want));
 
+  // every field a value of its own (the standard profile repeats 0-3 in sticks and face buttons,
+  // so a field copied from the wrong source would not show there)
+  const Profile distinct{"distinct", 20, 21, 22, 23, true, false, 30, 31, 32, 33, 34, 35, 36, 37,
+                         38, 39, 40, 41, 42, true, 50, 51, 52, 53, 54};
+  std::memset(&m, 0x55, sizeof(m));
+  pf::CopyCoreMapping(distinct, &m);
+  CHECK(std::string{m.name} == "distinct");
+  CHECK(fields(m) == std::vector<int>{20, 21, 22, 23, 1, 0, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+                                      40, 41, 42, 1, 50, 51, 52, 53, 54});
+  const Profile flipped{"flipped", 20, 21, 22, 23, false, true, 30, 31, 32, 33, 34, 35, 36, 37,
+                        38, 39, 40, 41, 42, false, 50, 51, 52, 53, 54};
+  pf::CopyCoreMapping(flipped, &m);
+  CHECK(m.invertLeftY == 0);
+  CHECK(m.invertRightY == 1);
+  CHECK(m.dpadFromAxis == 0);
+
   // a null name reads as "", an index outside int8_t as none
   Profile odd = standard;
   odd.name = nullptr;

@@ -78,13 +78,17 @@ endif()
 
 # own executable: probot-core's own gamepad mapping profiles (header-only, no stubs needed) through
 # the bridge's copy and the HAL conversion: the R20 Home/Guide button as GUIDE, or none on an older
-# core. Needs the probot-core clone ($PROBOT_CORE, as above).
+# core. Needs the probot-core clone ($PROBOT_CORE, as above); it must have R20 unless
+# PROBOT_CORE_BEFORE_R20=1 is set while configuring (then it must not).
 file(GLOB _gamepad_tests CONFIGURE_DEPENDS "${PROSDK_ROOT}/test/prosdk/gamepad/*.cpp")
 prosdk_add_test(prosdk_gamepad_tests SOURCES "${PROSDK_ROOT}/test/prosdk/main.cpp" ${_gamepad_tests})
 if(TARGET prosdk_gamepad_tests AND
    EXISTS "${_probot_core}/src/probot/io/joystick_mappings/mapping.hpp")
   target_include_directories(prosdk_gamepad_tests PRIVATE "${_probot_core}/src")
   target_compile_definitions(prosdk_gamepad_tests PRIVATE PROSDK_TEST_PROBOT_CORE_GAMEPAD=1)
+  if("$ENV{PROBOT_CORE_BEFORE_R20}" STREQUAL "1")
+    target_compile_definitions(prosdk_gamepad_tests PRIVATE PROSDK_TEST_CORE_BEFORE_R20=1)
+  endif()
 elseif(TARGET prosdk_gamepad_tests)
   message(STATUS "prosdk_gamepad_tests: no probot-core at ${_probot_core}, core's profiles untested")
 endif()

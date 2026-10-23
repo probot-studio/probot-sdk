@@ -3,8 +3,9 @@
 // DriverStationDisplay through the Driver Station telemetry backend into the (fake) core store:
 // the text's byte cap follows core's value limit (PROBOT_DASH_MAX_VALUE, CoreOps dashMaxValue), so
 // a sketch that raises it to 8192 gets a full 48 x 160 screen, and the default 1024 bytes keep
-// working: the text is cut to fit (whole rows, then on a UTF-8 boundary) and the store never
-// refuses it.
+// working: the text is cut to fit (whole rows, then on a UTF-8 boundary), so the store never
+// refuses it as too large. (Core's store can still refuse a value with NoMemory when its pool,
+// PROBOT_DASH_POOL_BYTES, cannot hold the grown slot; this fake store has no pool.)
 
 #include <optional>
 #include <string>
@@ -76,17 +77,43 @@ TEST_CASE_METHOD(DisplayFixture, "Display text follows core's PROBOT_DASH_MAX_VA
     CHECK_FALSE(Refused());
   }
 
+  SECTION("8192: a full screen in line mode (a newline after every line, the last one too)") {
+    fake::SetMaxValue(8192);
+    std::string frame{kClear};
+    for (size_t r = 0; r < dash::kDisplayMaxRows; ++r) {
+      frame += std::to_string(r % 10) + Repeat("x", dash::kDisplayMaxColumns - 1) + "\033[0m\n";
+    }
+    dash::WriteDisplay(frame);
+    auto text = Text();
+    REQUIRE(text);
+    CHECK(text->size() == dash::kDisplayFullScreenAsciiBytes);
+    CHECK(text->starts_with("0" + Repeat("x", 159) + "\n1"));
+    CHECK(text->ends_with("\n7" + Repeat("x", 159)));
+    CHECK_FALSE(Refused());
+  }
+
   SECTION("16384: a full screen of two-byte characters") {
     fake::SetMaxValue(16384);
     CHECK(dash::DisplayMaxBytes() == 16384);
     dash::WriteDisplay(FullScreen("\xC5\x9F"));  // "ş"
     auto text = Text();
     REQUIRE(text);
-    CHECK(text->size() == 48 * (1 + 159 * 2) + 47);
+    CHECK(text->size() == 48 * (1 + 159 * 2) + 47);  // 15,359 B (each row starts with a digit)
+    CHECK_FALSE(Refused());
+    // every column two bytes: 48 x 160 x 2 + 47 = 15,407 B, also under 16384
+    std::string frame{kClear};
+    for (size_t r = 0; r < dash::kDisplayMaxRows; ++r) {
+      frame += Repeat("\xC5\x9F", dash::kDisplayMaxColumns) + "\n";
+    }
+    dash::WriteDisplay(frame);
+    text = Text();
+    REQUIRE(text);
+    CHECK(text->size() == 15407);
+    CHECK(text->starts_with(Repeat("\xC5\x9F", 160) + "\n"));
     CHECK_FALSE(Refused());
   }
 
-  SECTION("1024 (core's default): the last rows that fit, never refused") {
+  SECTION("1024 (core's default): the last rows that fit, never too large") {
     CHECK(dash::DisplayMaxBytes() == 1024);
     dash::WriteDisplay(FullScreen("x"));
     auto text = Text();

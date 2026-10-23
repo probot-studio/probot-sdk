@@ -16,8 +16,10 @@
 //     moves (A, B, C, D, G) and erase (J, K). Colors and every other sequence are dropped.
 //   - Text is UTF-8: one column per code point, as the Driver Station counts them; a sequence
 //     split across two writes is joined; invalid bytes and C0/C1 control characters are dropped.
-//   - It has at most kDisplayMaxRows rows (text below scrolls the top rows off) of at most
-//     kDisplayMaxColumns columns (more is dropped). The logged text has no trailing spaces or
+//   - It has at most kDisplayMaxRows rows of at most kDisplayMaxColumns columns (more is dropped).
+//     As in a terminal, a newline on the last row scrolls the top row off (once more text
+//     follows, so line mode's newline after its last line keeps all 48 rows), while cursor
+//     positions and moves stop at the last row. The logged text has no trailing spaces or
 //     empty rows and at most DisplayMaxBytes() bytes: top rows are left out to fit, and a single
 //     row longer than that is cut at a UTF-8 character boundary.
 //   - DisplayMaxBytes() follows core's PROBOT_DASH_MAX_VALUE (the largest value core's store

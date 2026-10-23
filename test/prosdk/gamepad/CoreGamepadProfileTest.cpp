@@ -6,7 +6,11 @@
 // Options = W3C standard button 16 in logitech-f310, standard and axis9-dpad), and stays
 // unavailable where it does not (a core before R20). Own executable: built with the probot-core
 // clone's src on the include path ($PROBOT_CORE, default .upstream/probot-core,
-// PROSDK_TEST_PROBOT_CORE_GAMEPAD); without a clone it has no cases.
+// PROSDK_TEST_PROBOT_CORE_GAMEPAD).
+//   - The expected core is set by the build, not read from the clone: R20 (CI's PROBOT_CORE_REF and
+//     the pinned clone), or a core before R20 when configured with PROBOT_CORE_BEFORE_R20=1 in the
+//     environment (PROSDK_TEST_CORE_BEFORE_R20). A clone that does not match fails.
+//   - Without a clone the one case only warns that core's profiles are untested.
 
 #include <cstdint>
 #include <cstring>
@@ -56,9 +60,14 @@ TEST_CASE("Core's profiles: the Home/Guide button is GUIDE where core names it",
       &jm::mapping_logitech_f310(), &jm::mapping_standard(), &jm::mapping_axis9_dpad(),
       jm::findByName("xbox"),       jm::findByName("ps"),
   };
-  // the clone decides which behavior is checked: CI and the pin have R20 (feat/gamepad-guide)
-  const bool r20 = jm::mapping_standard().Options >= 0;
-  INFO("probot-core clone " << (r20 ? "with" : "without") << " R20");
+  // the build says which core this is: R20 (feat/gamepad-guide, CI and the pin) unless configured
+  // for an older one
+#if PROSDK_TEST_CORE_BEFORE_R20
+  constexpr bool r20 = false;
+#else
+  constexpr bool r20 = true;
+#endif
+  INFO("expecting a probot-core " << (r20 ? "with" : "before") << " R20 (PROBOT_CORE_BEFORE_R20)");
   for (const auto* profile : standardProfiles) {
     CAPTURE(profile->name);
     pf::CoreJoystickData d;
@@ -84,5 +93,10 @@ TEST_CASE("Core's profiles: the Home/Guide button is GUIDE where core names it",
   pf::ConvertCoreGamepad(Frame(jm::mapping_tuna_default(), 1u << 10), &d);
   CHECK(Available(d, pf::kCoreJoystickGuide));
   CHECK(Pressed(d, pf::kCoreJoystickGuide));
+}
+#else
+TEST_CASE("Core's profiles: no probot-core clone", "[prosdk][hal][joystick]") {
+  WARN("no probot-core clone at $PROBOT_CORE: core's gamepad profiles are untested");
+  SUCCEED();
 }
 #endif

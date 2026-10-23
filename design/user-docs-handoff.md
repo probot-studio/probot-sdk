@@ -95,7 +95,8 @@ hardware validation is done.
   `CommandNiDs*` classes: legacy NI DS numbering, wrong on the Probot DS (`API-DIFFERENCES.md`,
   `NiDs*` row). Buttons are 0-based (`GetRawButton(0)` = FACE_DOWN); old "starting at 1" comments
   were fixed in prosdk (`wpilibc/0017`). GUIDE is the centre Home/Guide/PS button (core request R20, #45;
-  not available with an older core, and the operating system, Steam or the browser may keep the
+  not available with an older core except in core's tuna-default profile, where it has always been
+  button 10; the operating system, Steam or the browser may keep the
   button for itself, so do not rely on it for robot functions); `Joystick::GetTrigger()`/`GetTop()` read buttons 1/2 (B/X on a gamepad).
 - Alliance, game data and match info (core R18, `API-DIFFERENCES.md` section 3, `MatchState` row):
   entered on the DS Dashboard's "Maç Bilgisi" card (station Red 1-3 / Blue 1-3 / none, game data,
@@ -111,7 +112,9 @@ hardware validation is done.
   console. With core's default `PROBOT_DASH_MAX_VALUE` (1024 bytes) only the last rows that fit are
   shown (about six full rows); `#define PROBOT_DASH_MAX_VALUE 8192` before `#include <prosdk.h>`
   shows a full screen and costs about 11 KB more of core's heap plus up to about 23 KB on prosdk's
-  side for a full screen (`API-DIFFERENCES.md` section 3, `DriverStationDisplay` row).
+  side for a full screen; non-ASCII text (Turkish letters are two bytes) needs 16384, and then also a
+  larger `PROBOT_DASH_POOL_BYTES` (for example 49152), or core may refuse the text for lack of pool
+  memory (`API-DIFFERENCES.md` section 3, `DriverStationDisplay` row).
 
 ## 5. Telemetry, tunables and widgets
 

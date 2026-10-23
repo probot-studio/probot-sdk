@@ -32,6 +32,14 @@ std::optional<std::string> Text(const Mock& mock) {
   return value->value;
 }
 
+size_t CountOf(std::string_view text, std::string_view part) {
+  size_t n = 0;
+  for (size_t at = text.find(part); at != std::string_view::npos; at = text.find(part, at + 1)) {
+    ++n;
+  }
+  return n;
+}
+
 size_t TextLogs(const Mock& mock) {
   size_t n = 0;
   for (const auto& action : mock.GetActions()) {
@@ -90,7 +98,8 @@ TEST_CASE("DriverStationDisplay frames become one telemetry text", "[prosdk][das
   dash::WriteDisplay("\033[1;13H\033[K\033[2;1H\033[J");
   CHECK(Text(*mock) == "DriverStatio");
 
-  // a long screen scrolls: the last rows stay
+  // a long screen scrolls: the last 48 rows stay (the newline after the last one scrolls only
+  // once more text follows)
   dash::WriteDisplay(kClear);
   for (int i = 0; i < 200; ++i) {
     dash::WriteDisplay("line " + std::to_string(i) + "\n");
@@ -99,7 +108,7 @@ TEST_CASE("DriverStationDisplay frames become one telemetry text", "[prosdk][das
   REQUIRE(text);
   CHECK(dash::DisplayMaxBytes() == dash::kDisplayDefaultMaxBytes);
   CHECK(text->size() <= dash::DisplayMaxBytes());
-  CHECK(text->starts_with("line 153\n"));
+  CHECK(text->starts_with("line 152\n"));
   CHECK(text->ends_with("line 199"));
 
   // a row longer than the terminal is cut
@@ -195,6 +204,72 @@ TEST_CASE("DriverStationDisplay counts columns in characters, as the Driver Stat
   REQUIRE(text);
   CHECK(text->size() == 3 * 320 + 2);
   CHECK(ValidUtf8(*text));
+
+  dash::detail::ResetDisplayForTest();
+  prosdk::telemetry::TelemetryRegistry::Reset();
+}
+
+namespace {
+
+// a line-mode frame as DriverStationDisplay::UpdateLines() builds it: every line, the last one
+// too, followed by "\033[0m\n"
+std::string LineFrame(size_t lines) {
+  std::string frame{kClear};
+  for (size_t i = 0; i < lines; ++i) {
+    frame += "L" + std::to_string(i) + "\033[0m\n";
+  }
+  return frame;
+}
+
+}  // namespace
+
+TEST_CASE("DriverStationDisplay rows: all 48 in line mode, cursor positions stop at the last",
+          "[prosdk][dashboard]") {
+  prosdk::telemetry::TelemetryRegistry::Reset();
+  auto mock = std::make_shared<Mock>();
+  prosdk::telemetry::TelemetryRegistry::RegisterBackend("", mock);
+  dash::detail::ResetDisplayForTest();
+
+  // 48 lines, each with its newline: the first one (a title) stays on screen
+  dash::WriteDisplay(LineFrame(dash::kDisplayMaxRows));
+  auto text = Text(*mock);
+  REQUIRE(text);
+  CHECK(text->starts_with("L0\nL1\n"));
+  CHECK(text->ends_with("\nL47"));
+  CHECK(CountOf(*text, "\n") == dash::kDisplayMaxRows - 1);
+  // the next frame starts from a cleared screen, with nothing scrolled into it
+  dash::WriteDisplay(LineFrame(2));
+  CHECK(Text(*mock) == "L0\nL1");
+
+  // a 49th line scrolls the first one off
+  dash::WriteDisplay(LineFrame(dash::kDisplayMaxRows + 1));
+  text = Text(*mock);
+  REQUIRE(text);
+  CHECK(text->starts_with("L1\nL2\n"));
+  CHECK(text->ends_with("\nL48"));
+
+  // text after a newline on the last row lands on the new last row (raw mode, two writes)
+  dash::WriteDisplay(LineFrame(dash::kDisplayMaxRows));
+  dash::WriteDisplay("more");
+  text = Text(*mock);
+  REQUIRE(text);
+  CHECK(text->starts_with("L1\n"));
+  CHECK(text->ends_with("\nL47\nmore"));
+
+  // a cursor position past the last row stops there and scrolls nothing
+  dash::WriteDisplay("\033[2J\033[Htop\033[60;1Hbottom");
+  text = Text(*mock);
+  REQUIRE(text);
+  CHECK(text->starts_with("top\n"));
+  CHECK(text->ends_with("\nbottom"));
+  CHECK(CountOf(*text, "\n") == dash::kDisplayMaxRows - 1);
+  // so does a cursor move down
+  dash::WriteDisplay("\033[2J\033[Htop\033[100Bend");
+  text = Text(*mock);
+  REQUIRE(text);
+  CHECK(text->starts_with("top\n"));
+  CHECK(text->ends_with("\n" + std::string(3, ' ') + "end"));
+  CHECK(CountOf(*text, "\n") == dash::kDisplayMaxRows - 1);
 
   dash::detail::ResetDisplayForTest();
   prosdk::telemetry::TelemetryRegistry::Reset();

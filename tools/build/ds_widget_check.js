@@ -147,6 +147,7 @@ if (html.indexOf('function dsdFormat(') < 0) {
   for (const [label, text] of [
     ['full ASCII screen (7727 bytes)', screen('x')],
     ['full screen of two-byte characters', screen('\u015f')],
+    ['every column two bytes (15407 bytes)', Array(48).fill(rep('\u015f', 160)).join('\n')],
     ['160 x "\u00e7"', rep('\u00e7', 160)],
     ['"a" + 159 x "\u20ac"', 'a' + rep('\u20ac', 159)],
     ['tab expanded by prosdk', '\u015f\u011f      x'],
@@ -156,6 +157,8 @@ if (html.indexOf('function dsdFormat(') < 0) {
     check('DriverStationDisplay unchanged: ' + label, ctx.dsdFormat(text) === text, true);
   }
   check('DriverStationDisplay full ASCII screen bytes', new TextEncoder().encode(screen('x')).length, 7727);
+  check('DriverStationDisplay full two-byte screen bytes',
+        new TextEncoder().encode(Array(48).fill(rep('\u015f', 160)).join('\n')).length, 15407);
   // what prosdk never sends is clipped by the page at the same limits
   check('DriverStationDisplay 161 columns clipped', ctx.dsdFormat(rep('y', 161)), rep('y', 160));
   check('DriverStationDisplay 49 rows clipped', ctx.dsdFormat(rep('r\n', 48) + 'r').split('\n').length, 48);

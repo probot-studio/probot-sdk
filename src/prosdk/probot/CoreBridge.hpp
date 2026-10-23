@@ -310,16 +310,16 @@ inline void ConsoleWriteLevel(uint8_t level, const char* text, size_t len) {
                            len);
   }
 }
-#define PROSDK_CORE_CONSOLE_OP &ConsoleWriteLevel
+#define PROSDK_CORE_CONSOLE_OP .consoleWriteLevel = &ConsoleWriteLevel
 #else
-#define PROSDK_CORE_CONSOLE_OP nullptr
+#define PROSDK_CORE_CONSOLE_OP .consoleWriteLevel = nullptr
 #endif
 
 #if PROSDK_CORE_HAS_WALL_CLOCK
 inline bool SystemTimeValid() { return probot::ds::systemTimeValid(); }
-#define PROSDK_CORE_WALL_CLOCK_OP &SystemTimeValid
+#define PROSDK_CORE_WALL_CLOCK_OP .systemTimeValid = &SystemTimeValid
 #else
-#define PROSDK_CORE_WALL_CLOCK_OP nullptr
+#define PROSDK_CORE_WALL_CLOCK_OP .systemTimeValid = nullptr
 #endif
 
 #if PROSDK_CORE_HAS_SMALL_ITEMS
@@ -327,9 +327,13 @@ inline bool RequestStop() { return probot::requestStop(); }
 inline bool RslState() { return probot::ds::rslState(); }
 inline uint32_t CommsDisableCount() { return probot::ds::commsDisableCount(); }
 inline bool SetLowVoltage(float volts) { return probot::io::battery::setLowVoltage(volts); }
-#define PROSDK_CORE_SMALL_ITEMS_OPS &RequestStop, &RslState, &CommsDisableCount, &SetLowVoltage
+#define PROSDK_CORE_SMALL_ITEMS_OPS \
+  .requestStop = &RequestStop, .rslState = &RslState, .commsDisableCount = &CommsDisableCount, \
+  .setLowVoltage = &SetLowVoltage
 #else
-#define PROSDK_CORE_SMALL_ITEMS_OPS nullptr, nullptr, nullptr, nullptr
+#define PROSDK_CORE_SMALL_ITEMS_OPS \
+  .requestStop = nullptr, .rslState = nullptr, .commsDisableCount = nullptr, \
+  .setLowVoltage = nullptr
 #endif
 
 // R15 dashboard limits, looked up like clearPersisted below (persist_probe).
@@ -468,9 +472,12 @@ inline void DashStats(pf::CoreDashboardStats* out) {
 inline bool SetLoopPeriodMs(uint32_t ms) { return probot::setLoopPeriodMs(ms); }
 inline uint32_t LoopPeriodMs() { return probot::loopPeriodMs(); }
 inline uint32_t LoopOverruns() { return probot::loopOverruns(); }
-#define PROSDK_CORE_LOOP_RATE_OPS &SetLoopPeriodMs, &LoopPeriodMs, &LoopOverruns
+#define PROSDK_CORE_LOOP_RATE_OPS \
+  .setLoopPeriodMs = &SetLoopPeriodMs, .loopPeriodMs = &LoopPeriodMs, \
+  .loopOverruns = &LoopOverruns
 #else
-#define PROSDK_CORE_LOOP_RATE_OPS nullptr, nullptr, nullptr
+#define PROSDK_CORE_LOOP_RATE_OPS \
+  .setLoopPeriodMs = nullptr, .loopPeriodMs = nullptr, .loopOverruns = nullptr
 #endif
 
 // R15 grid restarts, looked up like clearPersisted (persist_probe). probot::loopGridRestarts() is
@@ -634,31 +641,56 @@ inline uint64_t SelectedOpModeId() { return probot::ds::selectedOpModeId(); }
 inline uint64_t ActiveOpModeId() { return probot::ds::activeOpModeId(); }
 inline bool UtilityAvailable() { return probot::ds::utilityAvailable(); }
 #define PROSDK_CORE_OPMODE_OPS \
-  &SetOpModeOptions, &SelectedOpModeId, &ActiveOpModeId, &UtilityAvailable
+  .setOpModeOptions = &SetOpModeOptions, .selectedOpModeId = &SelectedOpModeId, \
+  .activeOpModeId = &ActiveOpModeId, .utilityAvailable = &UtilityAvailable
 #else
-#define PROSDK_CORE_OPMODE_OPS nullptr, nullptr, nullptr, nullptr
+#define PROSDK_CORE_OPMODE_OPS \
+  .setOpModeOptions = nullptr, .selectedOpModeId = nullptr, .activeOpModeId = nullptr, \
+  .utilityAvailable = nullptr
 #endif
 
+// Designated initializers: several fields share a type (matchInfoSeq and dashMaxValue are both
+// uint32_t (*)()), so a positional table could swap two of them and still compile; a name that is
+// wrong or out of the struct's order does not.
 inline bool Install() {
   static constexpr pf::CoreOps kOps{
-      pf::kCoreOpsAbiVersion, sizeof(pf::CoreOps), PROBOT_VERSION, PROBOT_VERSION_STRING,
-      &Phase, &SelectedMode, &OutputsEnabled, &IsEStopped, &IsAttached, &MatchTimeSeconds,
-      &PacketSeq, &RawGamepad,
-      &BatteryVoltage,
-      &ConsoleWrite,
-      &DashPublish, &DashUnpublish, &DashSet, &DashSetProperties, &DashSetFlags, &DashHasSchema,
-      &DashAddSchema, &DashDrainWrites, &DashRejectWrite, &DashStats,
+      .abiVersion = pf::kCoreOpsAbiVersion,
+      .size = sizeof(pf::CoreOps),
+      .coreVersion = PROBOT_VERSION,
+      .coreVersionString = PROBOT_VERSION_STRING,
+      .phase = &Phase,
+      .selectedMode = &SelectedMode,
+      .outputsEnabled = &OutputsEnabled,
+      .isEStopped = &IsEStopped,
+      .isAttached = &IsAttached,
+      .matchTimeSeconds = &MatchTimeSeconds,
+      .packetSeq = &PacketSeq,
+      .rawGamepad = &RawGamepad,
+      .batteryVoltage = &BatteryVoltage,
+      .consoleWrite = &ConsoleWrite,
+      .dashPublish = &DashPublish,
+      .dashUnpublish = &DashUnpublish,
+      .dashSet = &DashSet,
+      .dashSetProperties = &DashSetProperties,
+      .dashSetFlags = &DashSetFlags,
+      .dashHasSchema = &DashHasSchema,
+      .dashAddSchema = &DashAddSchema,
+      .dashDrainWrites = &DashDrainWrites,
+      .dashRejectWrite = &DashRejectWrite,
+      .dashStats = &DashStats,
       PROSDK_CORE_LOOP_RATE_OPS,
       PROSDK_CORE_OPMODE_OPS,
       PROSDK_CORE_CONSOLE_OP,
       PROSDK_CORE_WALL_CLOCK_OP,
       PROSDK_CORE_SMALL_ITEMS_OPS,
-      DashMaxSchemaBytesOp<probot::dashboard::Limits>(),
-      DashClearPersistedOp(),
-      LoopGridRestartsOp(),
-      FilesShareOp(), FilesUnshareOp(),
-      MatchInfoSeqOp(), MatchInfoOp(),
-      &DashMaxValue<probot::dashboard::Limits>,
+      .dashMaxSchemaBytes = DashMaxSchemaBytesOp<probot::dashboard::Limits>(),
+      .dashClearPersisted = DashClearPersistedOp(),
+      .loopGridRestarts = LoopGridRestartsOp(),
+      .filesShare = FilesShareOp(),
+      .filesUnshare = FilesUnshareOp(),
+      .matchInfoSeq = MatchInfoSeqOp(),
+      .matchInfo = MatchInfoOp(),
+      .dashMaxValue = &DashMaxValue<probot::dashboard::Limits>,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   bool hooks = probot::framework::install(probot::framework::Hooks{
