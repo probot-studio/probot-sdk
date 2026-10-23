@@ -154,7 +154,7 @@ class DifferentialDrive : public RobotDriveBase,
    * @param xVelocity The velocity at which the robot should drive along the X
    *     axis [-1.0..1.0]. Forward is positive.
    * @param zRotation The rotation rate of the robot around the Z axis
-   *     [-1.0..1.0]. Clockwise is positive.
+   *     [-1.0..1.0]. Counterclockwise is positive.
    * @param squareInputs If set, decreases the input sensitivity at low
    *     velocities.
    * @return Wheel velocities [-1.0..1.0].
@@ -171,8 +171,8 @@ class DifferentialDrive : public RobotDriveBase,
    *
    * @param xVelocity The robot's velocity along the X axis [-1.0..1.0]. Forward
    *     is positive.
-   * @param zRotation The normalized curvature [-1.0..1.0]. Clockwise is
-   *     positive.
+   * @param zRotation The normalized curvature [-1.0..1.0].
+   *     Counterclockwise is positive.
    * @param allowTurnInPlace If set, overrides constant-curvature turning for
    *     turn-in-place maneuvers. zRotation will control turning rate instead of
    *     curvature.
