@@ -84,6 +84,8 @@ uint32_t DefCommsDisableCount() { return 0; }
 bool DefSetLowVoltage(float) { return false; }
 // No core, or core without R13 (0: the limit is unknown).
 uint32_t DefMaxSchemaBytes() { return 0; }
+// No core (0: the value limit is unknown).
+uint32_t DefMaxValue() { return 0; }
 // No core, or core without dashboard persistence (DashPersistenceSupported() recognizes it).
 bool DefClearPersisted() { return false; }
 // No core, or core without R15 (GetLoopGridRestarts() recognizes it).
@@ -113,6 +115,7 @@ constexpr CoreOps kDefaultOps{
     DefLoopGridRestarts,
     DefFilesShare, DefFilesUnshare,
     DefSeq, DefMatchInfo,
+    DefMaxValue,
 };
 
 // Written once (static initialization, single-threaded) before gInstalled is set.
@@ -266,6 +269,7 @@ bool InstallCoreOps(const CoreOps* ops) noexcept {
   PROSDK_COREOPS_FILL(filesUnshare);
   PROSDK_COREOPS_FILL(matchInfoSeq);
   PROSDK_COREOPS_FILL(matchInfo);
+  PROSDK_COREOPS_FILL(dashMaxValue);
 #undef PROSDK_COREOPS_FILL
   if (copy.coreVersionString == nullptr) {
     copy.coreVersionString = "";

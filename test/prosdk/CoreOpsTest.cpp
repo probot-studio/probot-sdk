@@ -139,6 +139,8 @@ TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][plat
     CHECK(match.matchNumber == 0);
     CHECK(match.eventName[0] == '\0');
     CHECK(match.gameData[0] == '\0');
+    // no core: the dashboard value limit is unknown (ABI 10)
+    CHECK(pf::GetCoreOps().dashMaxValue() == 0);
 
     // ---- fake core (unset entries fall back to the defaults) ----
     pf::CoreOps ops{};
@@ -229,6 +231,8 @@ TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][plat
   pf::GetCoreOps().matchInfo(&match);
   CHECK(match.station == 0);
   CHECK(match.gameData[0] == '\0');
+  // ABI 10 left null: the value limit is unknown
+  CHECK(pf::GetCoreOps().dashMaxValue() == 0);
 
   SECTION("invalid options are dropped, long strings truncated at a UTF-8 boundary") {
     std::string longName(70, 'a');

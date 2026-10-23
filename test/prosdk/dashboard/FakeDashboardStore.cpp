@@ -285,6 +285,12 @@ uint32_t MaxSchemaBytes() {
   return static_cast<uint32_t>(S().maxSchemaBytes);
 }
 
+// core's limits().maxValue: 0 until runtime_setup() configured the store
+uint32_t MaxValue() {
+  std::scoped_lock lock{S().mutex};
+  return S().ready ? static_cast<uint32_t>(S().maxValue) : 0;
+}
+
 void ConsoleWriteFn(const char* text, size_t len) {
   std::scoped_lock lock{S().mutex};
   S().console.append(text, len);
@@ -312,6 +318,8 @@ void InstallOnce() {
     ops.dashRejectWrite = RejectWrite;
     ops.dashStats = Stats;
     ops.dashMaxSchemaBytes = MaxSchemaBytes;
+    // ABI 10: every core has the value limit
+    ops.dashMaxValue = MaxValue;
     // ABI 6: left null for a core without persistence
     ops.dashClearPersisted = kPersistence ? ClearPersisted : nullptr;
     return prosdk::platform::InstallCoreOps(&ops);

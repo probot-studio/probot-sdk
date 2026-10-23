@@ -7,7 +7,8 @@
 // limit; set copies at most the value limit and drops values equal to the last one unless the
 // topic has KEEP_DUPLICATES; schemas are idempotent per name and limited in number and size
 // (core R13: PROBOT_DASH_MAX_SCHEMA_BYTES, 4096; SetMaxSchemaBytes(0) plays a core without R13,
-// whose schemas are limited by the value limit).
+// whose schemas are limited by the value limit). dashMaxValue reports the value limit (0 while
+// the store is not ready, as core before runtime_setup()).
 //
 // Persistence (core R12 part 2, feat/dash-persist 3e9189b): a "flash" of stored values by path.
 // publish() of a new topic whose initial flags have PERSISTENT queues the stored value (same

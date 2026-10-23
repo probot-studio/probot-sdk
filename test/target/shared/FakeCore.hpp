@@ -194,6 +194,10 @@ inline bool Install() {
       // ABI 9 (R18 matchInfoSeq/matchInfo) recorded, never set until CaseRobot sets it (counter
       // 0, so the same empty values as the null fallback, which prosdk_match_tests covers)
       &MatchInfoSeq, &MatchInfo,
+      // ABI 10 (dashMaxValue) null: the value limit is unknown, so the archive assumes core's
+      // default 1024 bytes (the fake's DashSet takes any size; the limit is covered by
+      // prosdk_dashboard_tests)
+      nullptr,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   // what CoreBridge.hpp reports after probot::framework::install succeeded

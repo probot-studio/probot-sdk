@@ -42,7 +42,7 @@
 namespace prosdk::platform {
 
 /** Layout/meaning version of CoreOps; both sides must agree. */
-inline constexpr uint32_t kCoreOpsAbiVersion = 9;
+inline constexpr uint32_t kCoreOpsAbiVersion = 10;
 
 /** probot-core robot::Phase values (probot/robot/state.hpp). */
 enum CorePhase : uint8_t {
@@ -356,6 +356,14 @@ struct CoreOps {
   // station, no game data, match type none).
   uint32_t (*matchInfoSeq)();
   void (*matchInfo)(CoreMatchInfo* out);
+
+  // ---- ABI 10 ----
+  // dashboard value limit: the store's per-value byte limit as configured (PROBOT_DASH_MAX_VALUE,
+  // default 1024, 16-16384), 0 before core's runtime_setup(). Every core with the dashboard store
+  // has it (the bridge reads probot::dashboard::limits() with R15, the store's own maxValue()
+  // before). The Driver Station display sizes its text by it
+  // (prosdk/platform/dashboard/DashboardDisplay.hpp). Null: 0 (unknown).
+  uint32_t (*dashMaxValue)();
 };
 
 /**

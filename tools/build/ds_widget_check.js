@@ -1,7 +1,9 @@
 // Copyright (c) Probot Studio. Hand-written; see LICENSE.
 //
 // Cross-check of the Field2d, Mechanism2d and Scheduler widget layouts (design/core-requests.md,
-// "Widget layouts for Field2d, Mechanism2d, Scheduler"): decodes the golden values of
+// "Widget layouts for Field2d, Mechanism2d, Scheduler") and of the DriverStationDisplay panel
+// (R19: the page's dsdFormat() must show prosdk's display text unchanged, so the terminal's 48 x 160
+// limit, counted in code points, matches the page's): decodes the golden values of
 // test/prosdk/commands2/WidgetLayoutTest.cpp with probot-core's own Driver Station functions,
 // extracted from its ui/index.html, and encodes the DS write-backs (pose write, cancel) to compare
 // them with the bytes prosdk's tests push. No browser: the canvas is a stub that records strokes.
@@ -128,6 +130,36 @@ check('Mechanism2d segments', segs.map(s => [s.color, s.width, s.from.map(r), s.
    [r(100 + 125 * Math.SQRT1_2 + 50 * Math.cos(Math.PI / 12)),
     r(150 - 125 * Math.SQRT1_2 - 50 * Math.sin(Math.PI / 12))]],
 ]);
+
+// ---- DriverStationDisplay (R19): folder .type "DriverStationDisplay", string (vt 5) "text" ----
+// prosdk publishes /Telemetry/DriverStationDisplay (prosdk/platform/dashboard/DashboardDisplay.hpp),
+// the path the Dashboard's "Robot Ekranı" card prefers. Goldens as test/prosdk/DashboardDisplayTest.cpp
+// and test/prosdk/dashboard/DashboardDisplayStoreTest.cpp log them.
+if (html.indexOf('function dsdFormat(') < 0) {
+  console.log('SKIP DriverStationDisplay: this page has no display panel (probot-core before R19)');
+} else {
+  vm.runInContext(extract('dsdFormat'), ctx);
+  check('DriverStationDisplay widget type', html.includes("ty==='DriverStationDisplay'") &&
+        html.includes("w=dkKid(n,'text');") && html.includes('if(!w||w.vt!==5) return null;'), true);
+  check('DriverStationDisplay card path', html.includes("'/Telemetry/DriverStationDisplay'"), true);
+  const rep = (str, n) => str.repeat(n);
+  const screen = fill => Array.from({length: 48}, (_, r) => String(r % 10) + rep(fill, 159)).join('\n');
+  for (const [label, text] of [
+    ['full ASCII screen (7727 bytes)', screen('x')],
+    ['full screen of two-byte characters', screen('\u015f')],
+    ['160 x "\u00e7"', rep('\u00e7', 160)],
+    ['"a" + 159 x "\u20ac"', 'a' + rep('\u20ac', 159)],
+    ['tab expanded by prosdk', '\u015f\u011f      x'],
+    ['four-byte character', '\u{1F642} 4'],
+    ['cursor-edited row', 'H\u20acz: 34'],
+  ]) {
+    check('DriverStationDisplay unchanged: ' + label, ctx.dsdFormat(text) === text, true);
+  }
+  check('DriverStationDisplay full ASCII screen bytes', new TextEncoder().encode(screen('x')).length, 7727);
+  // what prosdk never sends is clipped by the page at the same limits
+  check('DriverStationDisplay 161 columns clipped', ctx.dsdFormat(rep('y', 161)), rep('y', 160));
+  check('DriverStationDisplay 49 rows clipped', ctx.dsdFormat(rep('r\n', 48) + 'r').split('\n').length, 48);
+}
 
 console.log(fail ? fail + ' FAILED' : 'all golden layouts decode as prosdk means them');
 process.exit(fail ? 1 : 0);

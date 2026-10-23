@@ -1,7 +1,10 @@
 // Copyright (c) Probot Studio. Hand-written; see LICENSE.
 //
 // DriverStationDisplay on the dashboard (prosdk/platform/dashboard/DashboardDisplay.hpp): the
-// screen as plain text in the telemetry table DriverStationDisplay.
+// screen as plain text in the telemetry table DriverStationDisplay. No core value limit in this
+// process (CoreOps dashMaxValue unset): the text is capped at core's default 1024 bytes; the cap
+// that follows core's PROBOT_DASH_MAX_VALUE is tested with the fake store
+// (test/prosdk/dashboard/DashboardDisplayStoreTest.cpp).
 
 #include <memory>
 #include <optional>
@@ -94,7 +97,8 @@ TEST_CASE("DriverStationDisplay frames become one telemetry text", "[prosdk][das
   }
   auto text = Text(*mock);
   REQUIRE(text);
-  CHECK(text->size() <= dash::kDisplayMaxBytes);
+  CHECK(dash::DisplayMaxBytes() == dash::kDisplayDefaultMaxBytes);
+  CHECK(text->size() <= dash::DisplayMaxBytes());
   CHECK(text->starts_with("line 153\n"));
   CHECK(text->ends_with("line 199"));
 
@@ -102,6 +106,95 @@ TEST_CASE("DriverStationDisplay frames become one telemetry text", "[prosdk][das
   dash::WriteDisplay(kClear);
   dash::WriteDisplay(std::string(500, 'x'));
   CHECK(Text(*mock) == std::string(dash::kDisplayMaxColumns, 'x'));
+
+  dash::detail::ResetDisplayForTest();
+  prosdk::telemetry::TelemetryRegistry::Reset();
+}
+
+namespace {
+
+std::string Repeat(std::string_view s, size_t n) {
+  std::string out;
+  for (size_t i = 0; i < n; ++i) {
+    out.append(s);
+  }
+  return out;
+}
+
+// well-formed UTF-8 (no sequence cut short, no stray continuation byte)
+bool ValidUtf8(std::string_view s) {
+  for (size_t i = 0; i < s.size();) {
+    const auto c = static_cast<unsigned char>(s[i]);
+    size_t n = c < 0x80 ? 1 : c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC2 ? 2 : 0;
+    if (n == 0 || i + n > s.size()) {
+      return false;
+    }
+    for (size_t k = 1; k < n; ++k) {
+      if ((static_cast<unsigned char>(s[i + k]) & 0xC0) != 0x80) {
+        return false;
+      }
+    }
+    i += n;
+  }
+  return true;
+}
+
+}  // namespace
+
+TEST_CASE("DriverStationDisplay counts columns in characters, as the Driver Station does",
+          "[prosdk][dashboard]") {
+  prosdk::telemetry::TelemetryRegistry::Reset();
+  auto mock = std::make_shared<Mock>();
+  prosdk::telemetry::TelemetryRegistry::RegisterBackend("", mock);
+  dash::detail::ResetDisplayForTest();
+
+  // a row is cut at 160 characters, not 160 bytes, and never inside one
+  dash::WriteDisplay(kClear);
+  dash::WriteDisplay(Repeat("\xC3\xA7", 200));  // "ç" x 200
+  CHECK(Text(*mock) == Repeat("\xC3\xA7", dash::kDisplayMaxColumns));
+  dash::WriteDisplay(kClear);
+  dash::WriteDisplay("a" + Repeat("\xE2\x82\xAC", 200));  // "a" and "€" x 200
+  CHECK(Text(*mock) == "a" + Repeat("\xE2\x82\xAC", dash::kDisplayMaxColumns - 1));
+
+  // a tab stops at the next multiple of 8 characters
+  dash::WriteDisplay(kClear);
+  dash::WriteDisplay("\xC5\x9F\xC4\x9F\tx");  // "şğ", tab, "x"
+  CHECK(Text(*mock) == "\xC5\x9F\xC4\x9F      x");
+
+  // cursor positioning and erase work on characters in a row with multi-byte text
+  dash::WriteDisplay(kClear);
+  dash::WriteDisplay("H\xC4\xB1z: 12 \xC3\xBC/s");  // "Hız: 12 ü/s"
+  dash::WriteDisplay("\033[1;6H34");
+  CHECK(Text(*mock) == "H\xC4\xB1z: 34 \xC3\xBC/s");
+  dash::WriteDisplay("\033[1;2H\xE2\x82\xAC");  // "ı" -> "€"
+  CHECK(Text(*mock) == "H\xE2\x82\xACz: 34 \xC3\xBC/s");
+  dash::WriteDisplay("\033[1;9H\033[K");
+  CHECK(Text(*mock) == "H\xE2\x82\xACz: 34");
+  dash::WriteDisplay("\033[1;2H\033[1K");
+  CHECK(Text(*mock) == "  z: 34");
+
+  // a character split across two writes is joined; invalid bytes and C1 controls are dropped
+  dash::WriteDisplay(kClear);
+  dash::WriteDisplay("x\xC3");
+  dash::WriteDisplay("\xA7y");
+  CHECK(Text(*mock) == "x\xC3\xA7y");
+  dash::WriteDisplay(kClear);
+  dash::WriteDisplay("a\xFF" "b\x80" "c\xC3" "d\xC2\x85" "e\xE0\x80\x80" "f\xED\xA0\x80" "g");
+  CHECK(Text(*mock) == "abcdefg");
+  dash::WriteDisplay(kClear);
+  dash::WriteDisplay("\xF0\x9F\x99\x82 4");  // a 4-byte character
+  CHECK(Text(*mock) == "\xF0\x9F\x99\x82 4");
+
+  // over the default 1024 bytes the top rows are left out, whole: 48 rows of 160 "ş" (320 bytes
+  // each) keep the last three
+  dash::WriteDisplay(kClear);
+  for (size_t r = 0; r < dash::kDisplayMaxRows; ++r) {
+    dash::WriteDisplay((r == 0 ? "" : "\n") + Repeat("\xC5\x9F", dash::kDisplayMaxColumns));
+  }
+  auto text = Text(*mock);
+  REQUIRE(text);
+  CHECK(text->size() == 3 * 320 + 2);
+  CHECK(ValidUtf8(*text));
 
   dash::detail::ResetDisplayForTest();
   prosdk::telemetry::TelemetryRegistry::Reset();

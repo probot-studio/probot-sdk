@@ -60,6 +60,8 @@
 //     <probot/ds.hpp> includes, and requires-checks on probot::ds::matchInfoSeq() and
 //     probot::ds::matchInfo(): kCoreHasMatchInfo). Without it matchInfoSeq/matchInfo stay null:
 //     the HAL reports an unknown alliance station and empty game data and match info.
+// The dashboard value limit (dashMaxValue, CoreOps ABI 10) needs no detection: every supported
+// core has it (dashboard::limits() with R15, the store's detail::maxValue() before).
 //
 // ODR: every function here only calls core's config-free headers, so all definitions are the same
 // in every translation unit. The pin reservation depends on the sketch's configuration macros and
@@ -387,6 +389,19 @@ inline uint32_t DashMaxSchemaBytes() {
     return st.configured ? lim.maxSchemaBytes : 0;
   }
 }
+// The store's per-value limit (PROBOT_DASH_MAX_VALUE as configured), 0 before runtime_setup().
+// Every core has it: with R15 from dashboard::limits(), before that from the store's own
+// detail::maxValue() (what core's set() checks against). Read on every call, as above.
+template <typename L>
+inline uint32_t DashMaxValue() {
+  if constexpr (limits_probe::kHasLimits<>) {
+    const L lim = limits_probe::CurrentLimits<L>();
+    return lim.maxValue;
+  } else {
+    return probot::dashboard::detail::maxValue();
+  }
+}
+
 template <typename L>
 constexpr uint32_t (*DashMaxSchemaBytesOp())() {
   if constexpr (requires(const L& lim) { lim.maxSchemaBytes; }) {
@@ -670,6 +685,7 @@ inline bool Install() {
       LoopGridRestartsOp(),
       FilesShareOp(), FilesUnshareOp(),
       MatchInfoSeqOp(), MatchInfoOp(),
+      &DashMaxValue<probot::dashboard::Limits>,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   bool hooks = probot::framework::install(probot::framework::Hooks{

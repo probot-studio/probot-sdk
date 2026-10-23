@@ -533,8 +533,8 @@ int32_t ProbotCoreDs::getSystemTimeValid(bool* systemTimeValid) {
   return 0;
 }
 
-// The Driver Station page has no display panel: the screen is kept as plain text and logged as
-// the telemetry table DriverStationDisplay (prosdk/platform/dashboard/DashboardDisplay.hpp).
+// The screen is kept as plain text and logged as the telemetry table DriverStationDisplay
+// (prosdk/platform/dashboard/DashboardDisplay.hpp), which core's DS page (R19, #44) draws as a panel.
 int32_t ProbotCoreDs::writeDisplayAnsi(const struct WPI_String* line) {
   if (line == nullptr || line->str == nullptr) {
     return 0;
