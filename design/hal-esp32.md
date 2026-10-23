@@ -535,6 +535,15 @@ sdkconfig, not the configuration the archive is compiled against.
   `PROBOT_RSL_PIN`). `HAL_GetCommsDisableCount` = core's `ds::commsDisableCount()` (times the DS
   timeout stopped an enabled robot since boot, PB-E303; a timeout during INIT and PB-E304 are not
   counted). With a core without R12 both report `HAL_HANDLE_ERROR` (as on systemcore).
+- Flash file system (platform, not HAL; `src/prosdk/platform/Storage.cpp`): LittleFS at `/littlefs`
+  on the `spiffs` data partition (huge_app: 896 KiB). `GetLogDirectory()` (DataLogManager's
+  default directory) mounts it once with ESP-IDF's `esp_vfs_littlefs_register` when nothing is
+  mounted there and no log directory was set: an existing LittleFS as it is, a blank partition (all
+  0xFF, read in 4 KiB chunks; a used one is usually told apart by its first sector) after
+  `esp_littlefs_format_partition` (core 0's idle task is taken off the task watchdog meanwhile, as
+  Arduino's `LittleFS.format()` does), anything else never (console line, no log). Skipped after
+  `SetLogAutoMount(false)` and when the sketch links Arduino's LittleFS library (weak reference to
+  its `LittleFS` object). Default applied 2026-10-23, Tuna can override.
 - Framework install: `<prosdk.h>` installs prosdk's hooks into probot-core at static
   initialization. If another framework already holds core's hooks (`probot::framework::install`
   returns false), prosdk prints an error to the console at once and again from `HAL_Initialize`,

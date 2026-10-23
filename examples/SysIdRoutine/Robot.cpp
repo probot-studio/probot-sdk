@@ -8,8 +8,8 @@
 #include <prosdk/system/DataLogManager.hpp>
 
 Robot::Robot() {
-  // prosdk: start the log now (LittleFS is already mounted by m_fs) so the Driver Station
-  // lists the "logs" folder after every boot, before the first SysId test.
+  // prosdk: start the log now (this mounts LittleFS, see SysIdRoutine.ino) so the Driver
+  // Station lists the "logs" folder after every boot, before the first SysId test.
   prosdk::DataLogManager::Start();
 }
 

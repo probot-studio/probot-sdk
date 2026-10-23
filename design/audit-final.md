@@ -697,3 +697,16 @@ Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attac
     API-DIFFERENCES.md section 5 and the README say so; `.wpilog` files still open in AdvantageScope.
     The question was: is an NT4-compatible server for AdvantageScope/Elastic in the first stable
     release (ntcore is excluded as "a later work item")?
+21. **Default applied 2026-10-23, Tuna can override** (open decision 1, asked and not answered yet).
+    The question: should `DataLogManager` mount the robot's flash file system itself? Until then it
+    logged only when the sketch had mounted LittleFS (`LittleFS.begin(true)`), else nothing was
+    written. Default applied: `GetLogDirectory()` mounts LittleFS (`spiffs` partition, `/littlefs`,
+    ESP-IDF `esp_littlefs` from the archive) when nothing is mounted there and no other log
+    directory was set. It formats only a blank partition (every byte 0xFF, the first boot), mounts
+    an existing LittleFS as it is, and never formats a partition holding other data (one console
+    line naming `LittleFS.begin(true)`, nothing logged). Opt-out
+    `prosdk::platform::SetLogAutoMount(false)`; a sketch that links Arduino's LittleFS library
+    mounts it itself. Details: `src/prosdk/platform/Storage.hpp`, API-DIFFERENCES.md `DataLogManager` row,
+    user-docs-handoff.md section 6. Evidence: `test/prosdk/StorageAutoMountTest.cpp` (decision
+    logic), QEMU case f (boot 1 formats the blank partition, boot 2 mounts without formatting).
+    To override: revert to "the sketch mounts" by making `SetLogAutoMount(false)` the default.

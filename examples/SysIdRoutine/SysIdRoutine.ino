@@ -14,12 +14,13 @@
 // Gamepad 0: arcade drive on the sticks, shooter on the left trigger. Right bumper + face
 // down/right/left/up runs the drive's quasistatic forward/reverse and dynamic forward/reverse
 // tests; left bumper + the same buttons runs them for the shooter.
-// The SysId log goes to the DataLog: on the robot to /littlefs/logs. prosdk does not mount
-// LittleFS; Robot's first member does (LittleFS.begin(true): formats the partition only when it
-// cannot be mounted, e.g. blank on the first boot), and the constructor calls
-// DataLogManager::Start() so the "logs" folder is shared from boot on, not only after the first
-// test. Without the mount the log is discarded with a console line (design/API-DIFFERENCES.md,
-// DataLogManager).
+// The SysId log goes to the DataLog: on the robot to /littlefs/logs. The Robot constructor calls
+// DataLogManager::Start(), which mounts LittleFS (the "spiffs" partition; formatted only while it
+// is blank, on the first boot; a partition holding other data is left alone and the log is
+// discarded with a console line), so the "logs" folder is shared from boot on, not only after the
+// first test (design/API-DIFFERENCES.md, DataLogManager). A sketch that uses Arduino's LittleFS
+// library itself mounts it first instead: #include <LittleFS.h> and a first Robot member
+// bool m_fs = LittleFS.begin(true);
 // While the robot is idle the .wpilog files can be downloaded from the Driver Station's Logs page,
 // "Dosyalar" card ("logs"), also after a reboot or an e-stop restart.
 

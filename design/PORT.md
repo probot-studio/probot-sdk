@@ -422,8 +422,9 @@ and the spline trajectory give the host's numbers on Xtensa (the Kalman estimate
 x86_64 host build to 17 digits); exceptions unwind across archive and sketch under `-fno-rtti`;
 `std::format`/`println` and the platform console work; `ScopedThreadConfig` sets name, priority,
 core and stack; `Notifier` periodic and one-shot timing on esp_timer; `Preferences` on NVS and
-`DataLogManager` on LittleFS survive a restart; `CommandScheduler`; the hosted `TimedRobot`
-through disabled/auto/teleop/e-stop with `AddPeriodic`; stack and heap use. It does not prove any
+`DataLogManager` on LittleFS (auto-mounted: formatted while blank on boot 1, mounted as it is on
+boot 2) survive a restart; `CommandScheduler`; the hosted `TimedRobot` through
+disabled/auto/teleop/e-stop with `AddPeriodic`; stack and heap use. It does not prove any
 peripheral HAL path (MCPWM, LEDC, PCNT, RMT, TWAI, ADC, I2C, UART devices, GPIO electrical
 behaviour, `drivers/`), probot-core (WiFi, Driver Station, gamepads, real hooks, e-stop line,
 battery) or real-time performance (QEMU's clock counts guest instructions, `-icount shift=2`, 4 ns

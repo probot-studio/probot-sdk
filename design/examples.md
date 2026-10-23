@@ -133,9 +133,11 @@ HAL that the example tests use, which follows the ESP32-S3 HAL: DIO and PWM 0-48
     Upstream leaves both with the base name, and without RTTI both would be
     `prosdk::cmd::SubsystemBase` (API-DIFFERENCES.md, SubsystemBase default name). It has to be the
     base initializer: the `sysIdRoutine` member reads `GetName()` before the constructor body.
-  - `Robot`'s first member mounts LittleFS (`bool m_fs = LittleFS.begin(true);`), so the log
-    reaches /littlefs/logs; prosdk does not mount it. BoardozaSdLog mounts it as its no-card
-    fallback.
+  - The log reaches /littlefs/logs through DataLogManager's LittleFS auto-mount (2026-10-23
+    default; formats only a blank partition, `prosdk/platform/Storage.hpp`); until then `Robot`'s
+    first member mounted it (`bool m_fs = LittleFS.begin(true);`), which the sketch comment still
+    shows for sketches that use Arduino's LittleFS library. BoardozaSdLog relies on the same
+    auto-mount as its no-card fallback.
   - The `Robot` constructor calls `DataLogManager::Start()` (upstream starts the log lazily at the
     first SysId test). The start shares the "logs" folder with the Driver Station, so logs of an
     earlier boot can be downloaded after a reboot or e-stop restart without running a test first.

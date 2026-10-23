@@ -176,14 +176,30 @@ hardware validation is done.
 
 - Source: `API-DIFFERENCES.md` section 3 (`DataLogManager` rows, `DataLog` buffers),
   `examples/SysIdRoutine`, `examples/BoardozaSdLog`, `core-requests.md` "P1 R11 wired", R17.
-- `DataLogManager::Start()` logs to `/littlefs/logs` when the sketch mounted LittleFS, else nothing
-  is written (console line says so). prosdk never mounts it. Pattern (`examples/SysIdRoutine`):
-  `#include <LittleFS.h>`, first member of the Robot class `bool m_fs = LittleFS.begin(true);`
-  (above RobotContainer, subsystems and DataLog entries; the log directory is fixed at the first
-  DataLogManager call), then `DataLogManager::Start()` in the constructor so the "logs" share exists
-  after every boot (the example does both; without `Start()` the folder appears only at the first
-  DataLogManager call, e.g. the first SysId test, which opens a new log). `begin(true)` formats only a partition it cannot mount (blank on first boot).
-  SD card: `prosdk::platform::MountSdCard()` and `SetLogDirectory("/sd/logs")`.
+- `DataLogManager::Start()` logs to `/littlefs/logs`. When nothing is mounted at `/littlefs` and no
+  other log directory was set, the first DataLogManager call mounts LittleFS itself (the huge_app
+  `spiffs` partition, 896 KiB, the partition and mount point of Arduino's `LittleFS.begin()`;
+  `prosdk/platform/Storage.hpp`). Default applied 2026-10-23, Tuna can override (open decision 1,
+  `audit-final.md` item 21). What users need to know:
+  - First boot: the partition is blank (every byte 0xFF) and is formatted; one console line says
+    so. Later boots mount the existing file system without formatting.
+  - It never erases data: a partition holding anything else (SPIFFS files, another program's data,
+    a damaged file system) is left alone, nothing is logged, and one console line says how to erase
+    it on purpose: `LittleFS.begin(true)` (`#include <LittleFS.h>`) before `Start()`.
+  - Opt-out: `prosdk::platform::SetLogAutoMount(false)` before the first DataLogManager call; then
+    only a directory the sketch mounted or set is used (else nothing is written, console line).
+  - A sketch that uses Arduino's LittleFS library (includes `<LittleFS.h>`) mounts it itself, before
+    `Start()`: first member of the Robot class `bool m_fs = LittleFS.begin(true);` (above
+    RobotContainer, subsystems and DataLog entries; the log directory is fixed at the first
+    DataLogManager call). prosdk does not mount it for such a sketch (one console line if it is
+    not mounted at `Start()`): after a mount by prosdk, Arduino-ESP32 3.3.10's `LittleFS.begin()`
+    returns true but the `LittleFS` object cannot open files. `begin(true)` formats any partition
+    it cannot mount, not only a blank one.
+  - `examples/SysIdRoutine` calls `DataLogManager::Start()` in the Robot constructor so the "logs"
+    share exists after every boot (without `Start()` the folder appears only at the first
+    DataLogManager call, e.g. the first SysId test, which opens a new log).
+  SD card: `prosdk::platform::MountSdCard()` and `SetLogDirectory("/sd/logs")` (no LittleFS mount
+  then; `examples/BoardozaSdLog` falls back to the auto-mounted LittleFS without a card).
 - E-stop: logs survive. The e-stop needs a reboot, and neither the DS reboot nor a PB-E305 restart
   erases flash; the writer fsyncs every 0.25 s on its own task. A sketch upload keeps the partition
   unless "Erase All Flash" is on or the partition scheme changes. Only dated

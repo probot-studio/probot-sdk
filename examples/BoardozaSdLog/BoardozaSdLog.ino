@@ -13,8 +13,8 @@
 // or FAT32 file system (exFAT is not supported, so format cards over 32 GB as FAT32); it is never
 // formatted.
 //
-// Without a card the log goes to /littlefs/logs (the sketch mounts LittleFS first; prosdk does not
-// mount it). Old logs on the card are not deleted automatically.
+// Without a card the log goes to /littlefs/logs (DataLogManager mounts LittleFS; it formats the
+// partition only while it is blank). Old logs on the card are not deleted automatically.
 //
 // While the robot is idle the .wpilog files in the log folder can be downloaded from the Driver
 // Station's Logs page, "Dosyalar" card ("logs"); no card reader needed.
@@ -23,7 +23,6 @@
 #define PROBOT_WIFI_AP_CHANNEL 6
 #include <prosdk.h>
 
-#include <LittleFS.h>
 #include <prosdk/datalog/DataLog.hpp>
 #include <prosdk/framework/TimedRobot.hpp>
 #include <prosdk/platform/HalConfig.hpp>
@@ -42,7 +41,6 @@ constexpr int kSdChipSelect = 7;
 
 // Mounts the card, points the log directory at it (else LittleFS) and starts DataLogManager.
 bool StartSdLog() {
-  LittleFS.begin(true);  // the fallback log storage, /littlefs/logs
   bool mounted = prosdk::platform::SetSPIPins(kSpiBus, kSck, kMosi, kMiso) &&
                  prosdk::platform::MountSdCard(kSpiBus, kSdChipSelect, "/sd");
   if (mounted) {
