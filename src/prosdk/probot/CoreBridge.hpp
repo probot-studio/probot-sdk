@@ -66,8 +66,9 @@
 
 #if !defined(PROBOT_VERSION) || !__has_include(<probot/framework.hpp>) || \
     !__has_include(<probot/dashboard/dashboard.hpp>)
-#error "prosdk needs probot-core >= 0.4.0 with the framework API (probot/framework.hpp, probot/dashboard/dashboard.hpp, probot/version.hpp: probot-core PRs #26-#28, branch sdk-target). Install that probot-core library and include <prosdk.h> (it includes <probot.h> itself)."
-#endif
+// One error only: the rest of the file is skipped, so a missing core header does not add a second one.
+#error "prosdk requires probot-core 0.5.0 or later (until its release: the probot-core draft PR stack with the framework API, <probot/framework.hpp>). Install that probot-core library and include <prosdk.h> (it includes <probot.h> itself)."
+#else
 
 #include <probot/dashboard/dashboard.hpp>
 #include <probot/ds.hpp>
@@ -81,7 +82,7 @@
 #include "prosdk/platform/CoreOps.hpp"
 
 #if PROBOT_VERSION < PROBOT_VERSION_OF(0, 4, 0)
-#error "prosdk needs probot-core >= 0.4.0 (found older PROBOT_VERSION)."
+#error "prosdk requires probot-core 0.5.0 or later (found a PROBOT_VERSION below 0.4.0)."
 #endif
 
 #if __has_include(<probot/core/loop_timing.hpp>)
@@ -655,3 +656,5 @@ const bool kPinsReserved = ReservePinsOfThisUnit();
 }  // namespace
 
 }  // namespace prosdk::corebridge
+
+#endif  // probot-core with the framework API
