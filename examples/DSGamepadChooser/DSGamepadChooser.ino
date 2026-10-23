@@ -8,9 +8,9 @@
 // ported to prosdk.
 // No wiring. Gamepad 0 drives the chooser; select "Score Auto" or "Balance Auto" on the Driver
 // Station, pick options while disabled, then enable.
-// On the Probot Driver Station, DriverStationDisplay frames go to the Driver Station console
-// with ANSI sequences removed (there is no display panel); a frame equal to the previous one is
-// not repeated (design/API-DIFFERENCES.md).
+// On the Probot Driver Station there is no display panel: the DriverStationDisplay screen shows
+// as plain text in the topic tree, /Telemetry/DriverStationDisplay/text, updated in place
+// (design/API-DIFFERENCES.md).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

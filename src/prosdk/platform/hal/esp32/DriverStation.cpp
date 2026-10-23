@@ -28,7 +28,8 @@
 //    the standard-mapping flag go to the descriptor (prosdk/platform/hal/CoreJoystick.hpp).
 //    Rumble and LEDs are not supported (ignored).
 //  - no alliance station, match info or game data (zero/unknown); match time from core.
-//  - DriverStationDisplay (HAL_WriteDisplayAnsi): to the console, ANSI removed, repeats dropped.
+//  - DriverStationDisplay (HAL_WriteDisplayAnsi): the screen as plain text in the telemetry table
+//    DriverStationDisplay (prosdk/platform/dashboard/DashboardDisplay.hpp), not the console.
 
 #include <atomic>
 #include <cstdio>
@@ -45,6 +46,7 @@
 #include "prosdk/hal/cpp/MrcLibDs.hpp"
 #include "prosdk/platform/Console.hpp"
 #include "prosdk/platform/CoreOps.hpp"
+#include "prosdk/platform/dashboard/DashboardDisplay.hpp"
 #include "prosdk/platform/hal/CoreJoystick.hpp"
 #include "prosdk/util/EventVector.hpp"
 #include "prosdk/util/string.hpp"
@@ -174,10 +176,6 @@ class ProbotCoreDs final : public MrcLibDs {
   uint32_t m_lastSeq = 0;
   uint64_t m_lastWord = ~uint64_t{0};
   uint8_t m_connected = 0;  // ports (bit n = port n) connected in m_latest
-
-  // DriverStationDisplay frames (ANSI stripped), last one written to the console
-  std::mutex m_displayMutex;
-  std::string m_lastDisplay;
 };
 
 ProbotCoreDs::ProbotCoreDs() {
@@ -503,45 +501,13 @@ int32_t ProbotCoreDs::getSystemTimeValid(bool* systemTimeValid) {
   return 0;
 }
 
-// The Driver Station page has no display panel: DriverStationDisplay text goes to the console with
-// the ANSI escape sequences removed. DriverStationDisplay::UpdateLines() resends the whole frame
-// every 230 ms; a frame equal to the previous one (and an empty one: a clear) is not repeated.
+// The Driver Station page has no display panel: the screen is kept as plain text and logged as
+// the telemetry table DriverStationDisplay (prosdk/platform/dashboard/DashboardDisplay.hpp).
 int32_t ProbotCoreDs::writeDisplayAnsi(const struct WPI_String* line) {
-  if (line == nullptr || line->str == nullptr || line->len == 0) {
+  if (line == nullptr || line->str == nullptr) {
     return 0;
   }
-  std::string text;
-  text.reserve(line->len);
-  for (size_t i = 0; i < line->len; ++i) {
-    const char c = line->str[i];
-    if (c == '\033') {
-      // CSI: ESC [ parameters/intermediates, then one final byte in 0x40..0x7E
-      if (i + 1 < line->len && line->str[i + 1] == '[') {
-        i += 2;
-        while (i < line->len && !(line->str[i] >= 0x40 && line->str[i] <= 0x7E)) {
-          ++i;
-        }
-      } else {
-        ++i;  // two-byte escape
-      }
-      continue;
-    }
-    text.push_back(c);
-  }
-  if (text.find_first_not_of(" \t\r\n") == std::string::npos) {
-    return 0;
-  }
-  if (text.back() != '\n') {
-    text.push_back('\n');
-  }
-  {
-    std::scoped_lock lock(m_displayMutex);
-    if (text == m_lastDisplay) {
-      return 0;
-    }
-    m_lastDisplay = text;
-  }
-  prosdk::platform::ConsoleWrite(text);
+  prosdk::platform::dashboard::WriteDisplay(std::string_view{line->str, line->len});
   return 0;
 }
 
