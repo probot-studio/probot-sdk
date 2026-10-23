@@ -474,6 +474,21 @@ Status 2026-10-23:
 - NT4 is deferred out of the first stable release.
 - Rumble is still open.
 
+Completeness critic, 2026-10-23 (five more gaps, checked against the tree and upstream):
+- Telemetry in the DataLog: done. `DataLogManager::LogNetworkTables()` (on by default) copies
+  telemetry into the log as `NT:/Telemetry/<path>` (`wpilibc/0016`, `prosdk/platform/TelemetryLog.hpp`,
+  test `test/prosdk/DataLogManagerTelemetryTest.cpp`). Tunables are not copied (no upstream DataLog
+  tunable backend).
+- `DriverStationDisplay`: no longer console lines. A small terminal keeps the screen and publishes it
+  as the telemetry table `DriverStationDisplay` (`prosdk/platform/dashboard/DashboardDisplay.hpp`, test
+  `test/prosdk/DashboardDisplayTest.cpp`); a DS panel for it is core request R19.
+- Alliance, station, game data and match info: need probot-core; request R18, deferral recorded in
+  API-DIFFERENCES.md section 3.
+- Desktop simulation of a sketch: recorded as not in the first release (API-DIFFERENCES.md section 5,
+  PORT.md section 10); examples.md no longer says the sketches run in a host simulator.
+- Stale widget text in API-DIFFERENCES.md (`Scheduler`) and examples.md (`Field2d`, `Mechanism2d`):
+  corrected (core #40 draws them).
+
 ## 6. Release checklist (before a stable prosdk release)
 
 Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attached to this server.

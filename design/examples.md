@@ -37,8 +37,9 @@ hand-written examples are listed under `"handwritten"` in `tools/upstream/exampl
     (Encoder, DutyCycleEncoder, MecanumDrive).
   - Templates are named `Template<Name>`.
   - Examples keep upstream's folder name.
-- **Simulation code** (`SimulationPeriodic`, `*Sim` classes) stays. It only runs in the host
-  simulator; on the robot it is inert.
+- **Simulation code** (`SimulationPeriodic`, `*Sim` classes) stays. On the robot it is inert. On a
+  PC it runs only in the host tests (`test/examples`: ArmSimulation, ElevatorSimulation and two
+  snippets); there is no desktop simulation of a sketch (design/API-DIFFERENCES.md section 5).
 
 ## Pin map
 
@@ -65,9 +66,9 @@ They also stay inside the hardware limits:
 | Addressable LED strip | 21 |
 | I2C port 0 (HAL default) | SDA 8, SCL 9 |
 
-The same pins also work in the host simulator, which limits PWM to 0-19, DIO to 0-30 and analog
-to 0-7. The exceptions are SwerveBot and SwerveDrivePoseEstimator, which need more pins than
-those ranges allow.
+The same pins also fit the host simulation HAL that the example tests use, which limits PWM to
+0-19, DIO to 0-30 and analog to 0-7. The exceptions are SwerveBot and SwerveDrivePoseEstimator,
+which need more pins than those ranges allow.
 
 ## Deviations common to several ports
 
@@ -84,14 +85,16 @@ those ranges allow.
 - **No NetworkTables.**
   - DifferentialDrivePoseEstimator passed its simulated camera-to-object transform through an NT
     topic. It now passes a `std::array<double, 7>` member.
-  - Telemetry, Field2d, Mechanism2d and choosers use prosdk telemetry and tunables. Field2d and
-    Mechanism2d show as a topic tree on the Driver Station (core R5).
+  - Telemetry, Field2d, Mechanism2d and choosers use prosdk telemetry and tunables. The Driver
+    Station draws Field2d and Mechanism2d as widgets (probot-core #40, layouts in
+    design/core-requests.md).
 - **Driver Station.**
   - The Probot Driver Station sends no alliance, station, match info or game data
-    (design/hal-esp32.md), so SnippetDigitalCommunication and SnippetI2CCommunication always see
-    "no alliance".
-  - `DriverStationDisplay` frames go to the Driver Station console with ANSI sequences removed,
-    which affects DriverStationDisplayAnsi.
+    (design/hal-esp32.md; core request R18), so SnippetDigitalCommunication and
+    SnippetI2CCommunication always see "no alliance" on the robot.
+  - `DriverStationDisplay` has no panel on the Driver Station (core request R19). The screen
+    shows as plain text in the topic tree (`/Telemetry/DriverStationDisplay/text`), updated in
+    place; DriverStationDisplayAnsi keeps its in-place counter but loses its colors.
   - Preferences appear as `/Preferences/<key>` tunables and are stored in NVS (ArmSimulation).
 - **Console output.** `prosdk::util::print` (snippets) writes to stdout, which is the USB serial
   on the robot, not the Driver Station console. It was kept as upstream.
@@ -102,7 +105,6 @@ those ranges allow.
   has 4 PCNT units.
   - On the robot the fifth `Encoder` fails, and the program halts with the error on the Driver
     Station console.
-  - They run in the host simulator.
   - On hardware, use absolute turning encoders instead (DutyCycleEncoder or AnalogEncoder). The
     header comment of both sketches says so.
 - **SnippetEncoder.** Upstream puts both encoders on DIO 0/1, which cannot be allocated twice.
@@ -138,7 +140,7 @@ Status values:
 | TankDriveGamepad | ported | TankDriveGamepad |
 | DutyCycleEncoder | ported | DutyCycleEncoder |
 | DriverStationDisplayLines | ported | DriverStationDisplayLines |
-| DriverStationDisplayAnsi | ported (ANSI stripped on the DS console) | DriverStationDisplayAnsi |
+| DriverStationDisplayAnsi | ported (plain text without colors in the DS topic tree) | DriverStationDisplayAnsi |
 | DSGamepadChooser | ported | DSGamepadChooser |
 | DriveDistanceOffboard | ported (smart controller placeholder) | DriveDistanceOffboard |
 | RomiReference | not ported: Romi | |

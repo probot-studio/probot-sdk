@@ -69,10 +69,10 @@ hardware validation is done.
   `PublishOpModes()` (`README.md`).
 - Gamepads: ports 0-5, analog triggers, 8-way POV, names; mapped to WPILib's Gamepad layout. No
   rumble, LEDs or touchpads (`API-DIFFERENCES.md` section 3, "Joysticks").
-- No alliance, match number or game data from the probot DS; `DriverStationSim` has them on the
-  host only (`examples.md` "Example tests").
+- No alliance, match number or game data from the probot DS (core request R18); `DriverStationSim`
+  has them on the host only (`examples.md` "Example tests").
 - Console: lines carry a level (error/warning/info), shown on the DS Logs page
-  (`API-DIFFERENCES.md` section 3, "Console levels"). `DriverStationDisplay` frames go to the console.
+  (`API-DIFFERENCES.md` section 3, "Console levels"). `DriverStationDisplay` shows as plain text in the topic tree (`/Telemetry/DriverStationDisplay/text`), not the console.
 
 ## 5. Telemetry, tunables and widgets
 
@@ -108,6 +108,9 @@ hardware validation is done.
   (`LittleFS.begin()`), else nothing is written (console line says so). SD card:
   `prosdk::platform::MountSdCard()` and `SetLogDirectory("/sd/logs")`.
 - File names get the real UTC date once the DS has set the robot clock (core R10).
+- Telemetry is copied into the log as `NT:/Telemetry/<path>` (the keys AdvantageScope knows from
+  upstream logs); `DataLogManager::LogNetworkTables(false)` turns the copy off. Tunables are not
+  logged.
 - Download: the DS "Dosyalar" card on the Logs page lists and downloads the log folder (share
   `"logs"`), only while the robot is idle. A sketch that unmounts a card must call `Stop()` and then
   wait until `probot::files::busy()` is false.

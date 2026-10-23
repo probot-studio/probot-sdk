@@ -307,7 +307,11 @@ Driver Station (design/PORT.md section 8).
   empty when core has none); a gamepad with the browser's standard mapping is a gamepad of type
   `HIDType::STANDARD`, any other one a generic HID (not a gamepad, type UNKNOWN; the profile
   remap still applies). No touchpads, rumble or LEDs (`supportedOutputs` 0).
-- No alliance station, match info or game data. Match time from core (-1 when unknown).
+- No alliance station, match info or game data: the Probot DS has none to send (deferred to core
+  request R18, design/core-requests.md). Match time from core (-1 when unknown).
+- `HAL_WriteDisplayAnsi` (`DriverStationDisplay`): the screen as plain text in the telemetry table
+  `DriverStationDisplay` (`prosdk/platform/dashboard/DashboardDisplay.hpp`; the page has no display
+  panel, core request R19), not the console.
 - `HAL_GetSystemTimeValid` (`RobotController::IsSystemTimeValid`) = core's `ds::systemTimeValid()`
   (core-requests.md R10, CoreOps `systemTimeValid`): true once the Driver Station page has set the
   robot's clock to the browser's UTC time. DataLogManager then renames its log to
@@ -389,7 +393,7 @@ Driver Station (design/PORT.md section 8).
   every other call reports `HAL_HANDLE_ERROR`. They need the FRC CAN heartbeat and are not in
   the kit.
 - DIO pulse outputs and digital PWM PPS mode (stubs, as on systemcore).
-- Serial flow control, ADC2, CAN FD, joystick rumble/LEDs/touchpads, alliance/match data.
+- Serial flow control, ADC2, CAN FD, joystick rumble/LEDs/touchpads, alliance/match data (core R18).
 
 ## Completeness
 

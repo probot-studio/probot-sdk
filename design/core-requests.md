@@ -240,6 +240,43 @@ result on.
 Status: delivered in draft PR #38 (`feat/ds-files` ba2500b, `probot::files::busy()`) and documented, see
 "P1 R16 and R17 delivered" below.
 
+### R18. Alliance, station, game data and match info on the Driver Station
+
+WPILib robot code reads `MatchState::GetAlliance()`, `GetLocation()`, `GetGameData()` and the match info
+(event name, match type/number, replay number); code that flips paths or poses by alliance, which the
+fields/AprilTag APIs invite, depends on them. The Probot DS has none of these, so on the robot prosdk's
+HAL returns unknown/`std::nullopt`, empty and zero (`hal/esp32/DriverStation.cpp`
+`getAllianceStation`/`getGameData`/`getMatchInfo`), and the ported SnippetDigitalCommunication and
+SnippetI2CCommunication always see "no alliance". Wanted:
+- on the DS page, a selector for the alliance station (Red 1-3, Blue 1-3, none) and a short game data text
+  field (WPILib's game-specific message, at most 64 bytes), editable while the robot is disabled; optional:
+  event name (at most 64 bytes), match type (none/practice/qualification/elimination) and match/replay
+  number;
+- kept in core's DS state (sent with the state frames, like the selected mode) and read on the robot with
+  `probot::ds::allianceStation()` (an enum: unknown, red1..3, blue1..3), `probot::ds::gameData()` (pointer +
+  length, or copy into a buffer) and, if done, `probot::ds::matchInfo()`; a counter or sequence that
+  changes when any of them changes is enough for prosdk to refresh its snapshot.
+prosdk side: one more CoreOps block (ABI 9; null entries mean today's behavior) read by the HAL pump
+into the snapshot, so `HAL_GetAllianceStation`, `HAL_GetGameData` and `HAL_GetMatchInfo` return them. Until then the
+deferral is recorded in design/API-DIFFERENCES.md section 3 (`MatchState` row) and design/hal-esp32.md.
+
+Status: open (written 2026-10-23, not sent to core yet).
+
+### R19. Driver Station display widget (low priority)
+
+WPILib 2027's `DriverStationDisplay` shows keyed or captioned status lines that update in place (line
+mode) or a raw ANSI terminal (raw mode) on the Driver Station; `DSGamepadChooser` uses it to show the
+picked options. The Probot DS page has no display panel. prosdk now keeps the screen in a small terminal
+and publishes its plain text as telemetry (`/Telemetry/DriverStationDisplay`: `.type`
+`"DriverStationDisplay"`, string `text`, at most 1024 bytes, lines separated by `\n`, no trailing
+spaces; `prosdk/platform/dashboard/DashboardDisplay.hpp`), which the topic tree shows as one string row.
+Wanted: a widget for `.type` `"DriverStationDisplay"` that draws `text` as a monospace panel of lines
+(preserving spaces, at most 48 rows of 160 columns), visible on the main page while the robot runs. No
+store or protocol change is needed. Colors are dropped today; if the widget should draw them, say so and
+prosdk can add an `ansi` string child with the screen's SGR runs.
+
+Status: open (written 2026-10-23, not sent to core yet).
+
 ## Status
 
 ### P0 delivered (2026-10-22): probot-core branch `feat/framework-api`, draft PR #26 to `dev`

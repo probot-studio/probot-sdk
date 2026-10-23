@@ -270,8 +270,10 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `EmergencyStopped()` and stops as well (host tests). Threads the program started itself
   (`Notifier`, `MotorSafety`, `Watchdog`) keep running, but every output they write is refused by
   the gate.
-- **Driver Station display.** `DriverStationDisplay` frames go to the Driver Station console with
-  the ANSI sequences removed and repeated frames dropped (the page has no display panel).
+- **Driver Station display.** The page has no display panel (core request R19). A small terminal
+  keeps the screen (cursor and erase sequences applied, colors dropped); its plain text is logged,
+  when it changed, as the telemetry table `DriverStationDisplay` (`text`), which the DS topic tree
+  shows in place; nothing goes to the console (`prosdk/platform/dashboard/DashboardDisplay.hpp`).
 - **Tests.** `test/prosdk/robot` (own executable): the robot host on the HAL sim with a fake core
   table, driving core's hooks on simulated time (disabled -> auto -> teleop -> utility -> e-stop,
   callback order, `AddPeriodic`/timeslice timing, jitter, late pass and late one-shot pass,
@@ -364,6 +366,9 @@ reader and upb (desktop tool side), argparse, Romi/XRP vendordeps (other robots)
   `halsim_ws_client` (HAL state over WebSockets for web simulators), `halsim_xrp` (XRP robot over UDP).
   They are dynamically loaded desktop plugins (`HALSIM_EXTENSIONS`, wpinet sockets); the robot has no
   dynamic loading and its Driver Station is probot-core's. Host tests use the plain sim backend.
+  With them goes the desktop simulation of a user's sketch (upstream "Simulate Robot Code"): not in
+  the first release, since nothing on a PC could enable it or feed it joysticks (probot-core has no
+  host build); the `*Sim` classes run in the host tests only (design/API-DIFFERENCES.md section 5).
 
 - Desktop applications and build infrastructure, which are not robot libraries: `glass` (dashboard
   and the simulator GUI's widgets), `wpigui` and `thirdparty/imgui_suite` (Dear ImGui/GLFW/OpenGL GUI
