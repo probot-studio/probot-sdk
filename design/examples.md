@@ -94,9 +94,10 @@ which need more pins than those ranges allow.
     Station draws Field2d and Mechanism2d as widgets (probot-core #40, layouts in
     design/core-requests.md).
 - **Driver Station.**
-  - The Probot Driver Station sends no alliance, station, match info or game data
-    (design/hal-esp32.md; core request R18), so SnippetDigitalCommunication and
-    SnippetI2CCommunication always see "no alliance" on the robot.
+  - The alliance station, match info and game data come from the Driver Station's "Maç Bilgisi"
+    card (design/hal-esp32.md; core request R18), set while the robot is disabled. Until it is
+    set (and with a probot-core without R18) SnippetDigitalCommunication and
+    SnippetI2CCommunication see "no alliance" on the robot.
   - `DriverStationDisplay` has no panel on the Driver Station (core request R19). The screen
     shows as plain text in the topic tree (`/Telemetry/DriverStationDisplay/text`), updated in
     place; DriverStationDisplayAnsi keeps its in-place counter but loses its colors.
@@ -199,12 +200,12 @@ Status values:
 | AddressableLED | ported | SnippetAddressableLED |
 | AprilTagsVision | not ported: camera/vision (cscore/CameraServer). AprilTag field poses are shown by AprilTagFieldPose | AprilTagFieldPose |
 | CANPDP | not ported: CAN Power Distribution (the HAL's PowerDistribution is a stub) | |
-| DigitalCommunication | ported (no alliance data) | SnippetDigitalCommunication |
+| DigitalCommunication | ported | SnippetDigitalCommunication |
 | DutyCycleInput | ported | SnippetDutyCycleInput |
 | EventLoop | ported | SnippetEventLoop |
 | FlywheelBangBangController | ported | SnippetFlywheelBangBangController |
 | HttpCamera | not ported: camera/vision | |
-| I2CCommunication | ported (no alliance data) | SnippetI2CCommunication |
+| I2CCommunication | ported | SnippetI2CCommunication |
 | IntermediateVision | not ported: camera/vision | |
 | MotorControl | ported | SnippetMotorControl |
 | SelectCommand | ported | SnippetSelectCommand |
@@ -270,8 +271,8 @@ Upstream has five example tests: three in `wpilibcExamples/src/test/cpp/examples
   - Each executable is built from the example's `.cpp` tabs with `RUNNING_WPILIB_TESTS=1`. The
     `.ino` is not compiled, since it only holds `PROSDK_ROBOT_MAIN`.
   - The tests run the robot in the host simulator with paused timing, as upstream does. The
-    simulator has alliance and match data, so the snippet tests check them although the probot
-    Driver Station sends none.
+    simulator sets alliance and match data, as the Driver Station's "Maç Bilgisi" card does on the
+    robot.
 - **UnitTest** is not ported, because the example is not ported (pneumatics).
 
 ## Boardoza examples

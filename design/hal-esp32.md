@@ -291,7 +291,8 @@ Driver Station (design/PORT.md section 8).
 ### Driver Station (DriverStation.cpp)
 - The Driver Station is probot-core's browser Driver Station; the backend reads it through the
   CoreOps table. A pre-cycle callback on core's user task (every loop iteration, 20 ms) takes a
-  new snapshot when a packet arrived or the control word changed and wakes the new-data events.
+  new snapshot when a packet arrived, the control word or the match info changed (or a joystick
+  was lost) and wakes the new-data events.
 - Control word: robot mode from core's phase (AUTO_* autonomous, TELEOP_* teleop, otherwise the
   mode selected on the Driver Station); enabled = `outputsEnabled()`; e-stop latched; DS attached
   = a Driver Station client is connected; FMS never. UTILITY_INIT/UTILITY_RUN map to WPILib's
@@ -333,8 +334,21 @@ Driver Station (design/PORT.md section 8).
   R20 maps the W3C Home button, 16). Button indexes are 0-based, as upstream 2027; the "starting
   at 1" doc comments of `GenericHID`/`Joystick` are corrected by `wpilibc/0017`. The `NiDs*`
   controllers use the legacy NI DS numbering and do not match this layout (API-DIFFERENCES.md).
-- No alliance station, match info or game data: the Probot DS has none to send (deferred to core
-  request R18, design/core-requests.md). Match time from core (-1 when unknown).
+- Alliance station, game data and match info (core-requests.md R18, CoreOps ABI 9
+  `matchInfoSeq`/`matchInfo`; prosdk/platform/hal/CoreMatchInfo.cpp): the DS page's "Maç Bilgisi"
+  card sets the station (Red 1-3, Blue 1-3 or none), game data and event name (UTF-8, at most 64
+  bytes each, no control characters), match type and match/replay number while the robot is
+  disabled with nothing pending (STOPPED, or TRANSITION between autonomous and TeleOp; never
+  during INIT or RUN, not after an e-stop). Core keeps them in RAM: a reboot clears them until
+  the page sends them again. The pump reads core's change counter every cycle (one locked load)
+  and copies the values only when it changed, then takes a new snapshot as for a packet, so
+  `HAL_GetAllianceStation`, `HAL_GetGameData` and `HAL_GetMatchInfo` (and `MatchState`) return
+  them after the next `HAL_RefreshDSData`, i.e. from the robot loop's next pass on (the pump runs
+  before it in the same pre-cycle), also for a change made between autonomous and TeleOp. Numbering is the HAL's (station 0-6, match
+  type 0-3; anything else reads as unknown/none); text is cut at 64 bytes on a UTF-8 boundary
+  (core never sends more). With a core without R18: unknown station, empty game data and event
+  name, `MATCH_TYPE_NONE`, match/replay 0. FMS is never attached, so DataLogManager's FMS rename
+  of the log file does not use them. Match time from core (-1 when unknown).
 - `HAL_WriteDisplayAnsi` (`DriverStationDisplay`): the screen as plain text in the telemetry table
   `DriverStationDisplay` (`prosdk/platform/dashboard/DashboardDisplay.hpp`; the page has no display
   panel, core request R19), not the console and not the DataLog telemetry copy. The terminal is
@@ -421,7 +435,7 @@ Driver Station (design/PORT.md section 8).
   every other call reports `HAL_HANDLE_ERROR`. They need the FRC CAN heartbeat and are not in
   the kit.
 - DIO pulse outputs and digital PWM PPS mode (stubs, as on systemcore).
-- Serial flow control, ADC2, CAN FD, joystick rumble/LEDs/touchpads, alliance/match data (core R18).
+- Serial flow control, ADC2, CAN FD, joystick rumble/LEDs/touchpads.
 
 ## Completeness
 

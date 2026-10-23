@@ -8,8 +8,9 @@
 //
 // Wiring (GPIO numbers; channel = GPIO):
 //   GPIO 17 alliance (red = high)   GPIO 18 enabled   GPIO 10 autonomous   GPIO 11 match-time alert
-// The probot Driver Station sends no alliance, so the alliance output stays low; match time
-// comes from probot-core (-1 when unknown).
+// The alliance comes from the probot Driver Station's "Maç Bilgisi" card (set while the robot is
+// disabled; until then the alliance output stays low); match time comes from probot-core (-1
+// when unknown).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

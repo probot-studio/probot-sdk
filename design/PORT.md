@@ -185,7 +185,9 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   their level to core's console (R9, `console::write`); `HAL_GetSystemTimeValid` to core's wall-clock flag
   (R10, `ds::systemTimeValid()`); `HAL_GetRSLState` / `HAL_GetCommsDisableCount` to `ds::rslState()` /
   `ds::commsDisableCount()`, an accepted `SetBrownoutVoltages` to core's low-voltage threshold
-  (`io::battery::setLowVoltage`) and a halted robot program to `probot::requestStop()` (R12); opt-in
+  (`io::battery::setLowVoltage`) and a halted robot program to `probot::requestStop()` (R12);
+  `HAL_GetAllianceStation` / `HAL_GetGameData` / `HAL_GetMatchInfo` to `ds::matchInfo()`, re-read when
+  `ds::matchInfoSeq()` changes (R18); opt-in
   persistent tunables (`properties` `{"persistent": true}`) to core's `PERSISTENT` topics (core stores
   only Driver Station writes the robot accepted, never a value the robot sets; a republish in the same
   run applies the last value core accepted on the path: a tune the robot applied, or core's restore)
@@ -193,16 +195,19 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `dashboard::clearPersisted()` (R12 part 2); the
   refused-schema report to core's per-schema limit (R13, `PROBOT_DASH_MAX_SCHEMA_BYTES`). Battery
   current (`io::battery::currentAmps()`, NaN without a sensor) has no WPILib 2027 API and is not
-  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (8 since R11
-  file sharing), and the bridge leaves a field null when the core lacks the feature (detected with
+  wrapped. CoreOps fields are only appended, each change bumps `kCoreOpsAbiVersion` (9 since R18
+  match info), and the bridge leaves a field null when the core lacks the feature (detected with
   `__has_include`, R13 on `dashboard::Limits`, R12 persistence with core's `PROBOT_HAS_DASH_PERSIST`
   macro plus a requires-check on `dashboard::clearPersisted()`, R15 with requires-checks on
   `loopGridRestarts()` and `dashboard::limits()`, R11 with core's `PROBOT_HAS_FILES_SHARE` macro plus
-  requires-checks on `files::share(name, vfsDir)` and `files::unshare(name)`), so the archive
+  requires-checks on `files::share(name, vfsDir)` and `files::unshare(name)`, R18 with core's
+  `PROBOT_HAS_DS_MATCH_INFO` macro plus requires-checks on `ds::matchInfoSeq()` and `ds::matchInfo()`),
+  so the archive
   falls back (text-only console, the 2024-01-01 clock
   heuristic, `HAL_HANDLE_ERROR` for the RSL state and comms-disable count, no DS stop on a halt, the
   `PROBOT_DASH_MAX_VALUE` advice for a refused schema, no `PERSISTENT` flag and one warning per
-  persistent tunable path, re-alignment on counted overruns only, no shared log folder).
+  persistent tunable path, re-alignment on counted overruns only, no shared log folder, unknown
+  alliance station and empty match info).
 - Outputs (PWM, motor controllers) are zeroed whenever core reports "outputs disabled" and immediately
   on e-stop (core calls a registered e-stop callback on its own task).
 - Features prosdk needs from probot-core are listed in `design/core-requests.md` and are sent to the

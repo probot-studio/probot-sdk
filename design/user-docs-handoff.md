@@ -94,8 +94,14 @@ hardware validation is done.
   `NiDs*` row). Buttons are 0-based (`GetRawButton(0)` = FACE_DOWN); old "starting at 1" comments
   were fixed in prosdk (`wpilibc/0017`). GUIDE is not available with core's profiles (core request
   R20); `Joystick::GetTrigger()`/`GetTop()` read buttons 1/2 (B/X on a gamepad).
-- No alliance, match number or game data from the probot DS (core request R18); `DriverStationSim`
-  has them on the host only (`examples.md` "Example tests").
+- Alliance, game data and match info (core R18, `API-DIFFERENCES.md` section 3, `MatchState` row):
+  entered on the DS Dashboard's "Maç Bilgisi" card (station Red 1-3 / Blue 1-3 / none, game data,
+  event name, match type, match and replay number; text at most 64 bytes UTF-8). Changeable only
+  while the robot is disabled (stopped, or between autonomous and TeleOp), never during INIT or RUN;
+  the robot code reads them with `MatchState::GetAlliance()`, `GetLocation()`, `GetGameData()` etc.
+  from its next loop pass on. RAM only: a reboot clears them until the page sends them again (an open
+  page resends to the same robot; a reloaded page does not). Not logged, no FMS. With an older core
+  they stay empty. On the host `DriverStationSim` sets them (`examples.md` "Example tests").
 - Console: lines carry a level (error/warning/info), shown on the DS Logs page
   (`API-DIFFERENCES.md` section 3, "Console levels"). `DriverStationDisplay` shows as plain text in the topic tree (`/Telemetry/DriverStationDisplay/text`), not the console.
 

@@ -395,3 +395,30 @@ the R11 column is the last measurement against 15defc1 (design/core-requests.md 
   setting and clearing them in `set()`, one more pass in the frame builder) and the regenerated DS
   page. `files::busy()` is an inline function nothing calls, so it adds nothing. prosdk's code did not
   change. Not attributed further.
+
+## 13. Core R18 match info, CoreOps ABI 9 (measured 2026-10-23)
+
+Archive at `7e32cbb` plus the ABI 9 wiring (`CoreMatchInfo.cpp`, the Driver Station backend's match
+fields), probot-core `sdk-target` at `3751146` (`feat/ds-match-info`, draft PR #43 on #42 940d300). The
+HAL link test was also linked against 940d300 with the same archive, which splits off core's share.
+
+| Build | Flash | Static RAM |
+|---|---:|---:|
+| HAL link test, core 940d300 (no R18, fields null) | 1,725,877 | 76,812 |
+| HAL link test, core 3751146 (R18) | 1,731,209 | 76,956 |
+| HAL link test, core `feat/dashboard-store` 9217ae4 (oldest) | 1,761,373 | 69,772 |
+| TemplateTimed, core 3751146 | 1,812,016 | 73,164 |
+| SnippetDigitalCommunication, core 3751146 | 1,809,160 | 73,172 |
+
+- Core's #43 costs 5,332 B of flash and 144 B of RAM against 940d300 (its match store,
+  `matchStore()::instance` 148 B, the `/match` handlers and form parser, the larger DS page), including
+  the bridge's two probes (`match_probe::MatchInfoSeq<>` 13 B, `ReadMatchInfo<>` 123 B and the copy
+  36 B).
+- prosdk's part is in both columns: `ConvertCoreMatchInfo` 71 B, `RefreshCoreMatchData` 98 B, the
+  default 20 B and the pump's extra check; the Driver Station backend object grows by 584 B of RAM
+  (from 8,120 to 8,704 B: station, game data and match info in each of its three snapshots, plus the
+  pump's copy and counter). Keeping the match fields outside the snapshot would save about 300 B;
+  not done (minimal).
+- TemplateTimed was last measured locally at 1,802,508 / 72,372 (examples.md, after the display
+  terminal's review fixes, core 940d300); the +9,508 / +792 since also contain ecb5460 (Utility mode for
+  `TimedRobot`) and are not attributed further.

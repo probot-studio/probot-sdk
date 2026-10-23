@@ -260,7 +260,8 @@ prosdk side: one more CoreOps block (ABI 9; null entries mean today's behavior) 
 into the snapshot, so `HAL_GetAllianceStation`, `HAL_GetGameData` and `HAL_GetMatchInfo` return them. Until then the
 deferral is recorded in design/API-DIFFERENCES.md section 3 (`MatchState` row) and design/hal-esp32.md.
 
-Status: open (written 2026-10-23, not sent to core yet).
+Status: delivered as draft PR #43 (`feat/ds-match-info` 3751146, all optional fields included) and wired
+(CoreOps ABI 9), see "P1 R18 delivered and wired" below.
 
 ### R19. Driver Station display widget (low priority)
 
@@ -934,3 +935,69 @@ nothing to wait for. Merged #38 will have `busy()`.
   not change, so neither the oldest-core link test nor QEMU was re-run.
 - Vendoring check (`python3 tools/upstream/wpilib.py --check`): all 2406 generated files match; the R17
   comment in DataLogManager.hpp is made in its patch `wpilibc/0015`.
+
+### P1 R18 delivered and wired (CoreOps ABI 9), 2026-10-23
+
+Core's R18: draft PR #43 `feat/ds-match-info` 3751146, stacked on #42 (940d300, unchanged). `.upstream/probot-core`
+`sdk-target` is at 3751146 (`git reset --keep`); CI's `PROBOT_CORE_REF` names `feat/ds-match-info`
+(`PROBOT_CORE_OLDEST_REF` stays `feat/dashboard-store`). API (core `API.md`, `<probot/robot/match_info.hpp>`
+through `<probot/ds.hpp>`): `ds::allianceStation()` (`AllianceStation` Unknown 0, Red1-3 1-3, Blue1-3 4-6,
+the `HAL_AllianceStationID` numbering), `ds::gameData(out, cap)` (snprintf semantics), `ds::matchInfo()`
+(`MatchInfo`: station, `type` (`MatchType` None/Practice/Qualification/Elimination 0-3, `HAL_MatchType`
+numbering), `uint16_t matchNumber`, `uint8_t replayNumber`, `char eventName[65]`, `char gameData[65]`;
+text UTF-8, at most 64 bytes, no control characters), `ds::matchInfoSeq()` (changes on any change, 0 =
+never set since boot), `PROBOT_HAS_DS_MATCH_INFO` 1. The Dashboard's "Maç Bilgisi" card sets them only
+while the robot is disabled with nothing pending (`core::canChangeMatchInfo`: STOPPED, or TRANSITION
+between autonomous and TeleOp; never during INIT or RUN, not after an e-stop); `POST /match` answers
+409 otherwise. RAM only: a reboot clears them; a page left open resends what it last saw when the same
+robot (same SSID) reports none (`msq` 0), a reloaded page does not. Core's store copies the values under its lock.
+
+Wired:
+- CoreOps ABI 9: `matchInfoSeq()` and `matchInfo(CoreMatchInfo*)`. `CoreMatchInfo` is prosdk's copy of
+  core's `MatchInfo` (station and type as `uint8_t` in the HAL numbering, the two 65-byte texts);
+  `CopyCoreMatchInfo()` (a template in `CoreOps.hpp`, so the archive never names a core type) copies it,
+  the text bounded at 64 bytes. Defaults (no core, or null): counter 0, empty values.
+- Bridge: `kCoreHasMatchInfo` = `PROBOT_HAS_DS_MATCH_INFO` plus requires-checks on `matchInfoSeq()`
+  (returns `uint32_t`) and `matchInfo()` (returns `probot::ds::MatchInfo`), looked up through a
+  using-directive in `match_probe` as for `clearPersisted()`; `static_assert`s pin the text size (64) and
+  the station/type numbering. Older cores leave both fields null.
+- HAL (`hal/esp32/DriverStation.cpp`, conversion in `platform/hal/CoreMatchInfo.cpp`): the pump reads the
+  counter every cycle (one locked load in core) and only when it changed copies the values, converted to
+  `HAL_AllianceStationID` / `HAL_GameData` / `HAL_MatchInfo` (2027 HAL: `eventName[65]` in
+  `HAL_MatchInfo`, the game data in its own `HAL_GameData`; station outside 0-6 -> unknown, type outside
+  0-3 -> none, text cut at 64 bytes on a UTF-8 boundary). The counter is read before the values, so a
+  change in between is seen on the next cycle. A change forces a new snapshot (as a packet does), which
+  `HAL_RefreshDSData` makes current under the backend's cache mutex, like the joysticks; the three getters
+  copy from that snapshot (no core call on the getter path). WPILib's `MatchState` (`GetAlliance`,
+  `GetLocation`, `GetGameData`, `GetEventName`, `GetMatchType`, `GetMatchNumber`, `GetReplayNumber`)
+  calls these HAL getters directly, so it sees a change from the robot loop's next pass on (the pump runs
+  before the robot loop in the same pre-cycle), also one made in TRANSITION between autonomous and
+  TeleOp. Data log: WPILib 2027's `DataLogSender` logs only the control word, opmode and joysticks; the
+  match data is logged upstream only through NetworkTables' `FMSInfo` table (`MatchDataSender`, removed
+  with ntcore), and DataLogManager's match rename needs an FMS, so neither applies on the robot.
+  Without R18: unknown station, empty game data and match info (`MATCH_TYPE_NONE`), today's behavior.
+- Tests: `prosdk_match_tests` (test/prosdk/match/CoreMatchInfoTest.cpp, own executable): numbering of
+  every station and type (out-of-range values), all fields, the counter (no read while unchanged over
+  100 checks, a change between autonomous and TeleOp, a change while the values are read is seen on
+  the next check, a clear), text at 64 bytes (exactly 64 kept, 65 without a NUL cut, a two-byte
+  character across byte 64 dropped whole, `CopyCoreMatchInfo` bounded), and the null fallback through an
+  installed table with both fields null. With the core clone (`PROSDK_TEST_PROBOT_CORE_MATCH`, core's
+  `src` and `tests/stubs` on the include path; CI's host job checks out `PROBOT_CORE_REF`) one more case
+  reads core's own `ds::matchInfoSeq()`/`matchInfo()` as the bridge does, with values set through core's
+  `applyMatchForm()` (the DS form): an unchanged form does not move the counter, 64 bytes of UTF-8 pass
+  whole and 65 are refused by core, `canChangeMatchInfo` allows TRANSITION and refuses TELEOP_INIT.
+  CoreOpsTest: no-core and null-field defaults. QEMU FakeCore leaves ABI 9 null.
+- Docs: design/API-DIFFERENCES.md (`MatchState` row, section 6), design/hal-esp32.md, design/PORT.md,
+  design/user-docs-handoff.md, design/examples.md and the SnippetDigitalCommunication /
+  SnippetI2CCommunication headers.
+- Checked against 3751146: host tests (`build.sh host all header_check --test`: every binary passes
+  except a known flaky `prosdk_drivers_tests` case, "W25QFlash splits programs on page boundaries", whose
+  10 ms wall-clock busy timeout fails about 1 run in 5 standalone too; untouched by this change), the
+  incremental archive and header check, a single-TU host syntax check of `CoreBridge.hpp` with core's
+  test stubs (`kCoreHasMatchInfo` true on 3751146, false on `feat/dashboard-store`, and the files probe
+  unchanged), the HAL link test (`match_probe::MatchInfoSeq<>` and `ReadMatchInfo<>` in the ELF next to the
+  files, grid and persistence probes; 1,731,209 B flash / 76,956 B RAM), against 940d300 (1,725,877 /
+  76,812) and against `feat/dashboard-store` 9217ae4 (links, no probe; 1,761,373 / 69,772), QEMU smoke
+  8/8 on both boots (FakeCore, fields null), examples TemplateTimed 1,812,016 / 73,164 and
+  SnippetDigitalCommunication 1,809,160 / 73,172, `ds_widget_check.js` on core's page, `wpilib.py
+  --check` and `examples.py --check`. Sizes: design/size.md section 13.
