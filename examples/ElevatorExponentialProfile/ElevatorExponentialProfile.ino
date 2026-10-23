@@ -7,7 +7,8 @@
 // wpilibcExamples/src/main/cpp/examples/ElevatorExponentialProfile), ported to prosdk.
 // ExampleSmartMotorController is upstream's placeholder (no hardware behind it, every method
 // is empty): replace it with the driver of a motor controller that runs its own position PID.
-// Joystick 1: button 2 goes to 5 m, button 3 to 0 m.
+// Joystick 1: button 2 goes to 5 m, button 3 to 0 m. On the Probot DS gamepad raw button 2 is
+// FACE_LEFT (X / Square) and 3 is FACE_UP (Y / Triangle).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

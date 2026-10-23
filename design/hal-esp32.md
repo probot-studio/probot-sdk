@@ -34,12 +34,20 @@ Driver Station (design/PORT.md section 8).
     and release them on close (serial) or never (CAN runs until reboot). SPI bus and chip-select
     pins, the SD card's chip select, pulse I/O pins and six-step pins are claimed the same way.
 - Strapping pins GPIO 0, 45 and 46 are allowed, without a warning (GPIO 3 is refused only as
-  core's `NEOPIXEL_PIN`). The chip reads them at reset: 0 and 46 select the boot mode, 45 the
-  flash voltage (VDD_SPI). Hardware that pulls one of them the wrong way at power-on (an encoder or
-  sensor output that idles high, an external pull-up, a switch to 3.3 V) can keep the board from
-  booting or leave it in download mode; after boot they are ordinary GPIO, so the HAL can neither
-  detect nor prevent it. GPIO 0 is also the BOOT button. User docs warn; the example pin map
-  avoids them (design/examples.md).
+  core's `NEOPIXEL_PIN`). The chip reads them at reset (ESP32-S3 datasheet, strapping pins):
+  - GPIO 0 selects the boot mode: high (internal pull-up, the default) boots the sketch, low
+    enters download mode. Hardware that holds it low at power-on (a sensor output that idles low,
+    a pull-down, a switch to GND) leaves the board in download mode. It is also the BOOT button.
+  - GPIO 45 selects the flash voltage (VDD_SPI): low (internal pull-down, the default) is 3.3 V,
+    high is 1.8 V. Hardware that holds it high at power-on (an encoder or sensor output that idles
+    high, a pull-up, a switch to 3.3 V) can keep a module with 3.3 V flash from booting, unless the
+    module's eFuse fixes the voltage.
+  - GPIO 46 counts only when GPIO 0 is low: download mode needs it low, and GPIO 0 low with GPIO 46
+    high is an invalid combination. A normal boot (GPIO 0 high) ignores it, so of the three it is
+    the safest for an input.
+  After boot they are ordinary GPIO, so the HAL can neither detect nor prevent a wrong level at
+  reset. User docs warn; the example pin map avoids 0 and 45 and uses 46 only in the swerve
+  examples (design/examples.md).
 - Free/Clean releases everything the HAL created: the hardware unit (MCPWM timer/generator, PCNT
   unit, capture channel, RMT channel, UART driver, TWAI driver), the Arduino peripheral-manager
   attachment, and the pin, which returns to `gpio_reset_pin` state (input with pull-up). After an

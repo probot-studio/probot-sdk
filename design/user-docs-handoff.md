@@ -64,9 +64,12 @@ hardware validation is done.
 - Source: `design/hal-esp32.md` "Channel model", "Capacities", "Output safety", "Not supported".
 - Channel = GPIO number for every pin API (no roboRIO-style DIO 0-9). Pins refused and why (USB,
   UART0, flash/PSRAM, core's pins, pins already used by Arduino code).
-- Warn about the strapping pins GPIO 0, 45, 46: allowed, no runtime warning, but hardware that pulls
-  them at power-on can keep the board from booting or leave it in download mode (0/46 boot mode,
-  45 flash voltage; 0 is the BOOT button). Use them last (`hal-esp32.md` "Channel model").
+- Warn about the strapping pins GPIO 0, 45, 46: allowed, no runtime warning, but the chip reads them
+  at power-on (`hal-esp32.md` "Channel model"). GPIO 0 held low (output idling low, pull-down,
+  switch to GND) leaves the board in download mode; it is also the BOOT button. GPIO 45 held high
+  (encoder or sensor output idling high, pull-up, switch to 3.3 V) selects 1.8 V flash voltage and
+  can keep the board from booting. GPIO 46 matters only while GPIO 0 is low, so a normal boot
+  ignores it. Use them last, 46 first, and never wire an encoder or idle-high input to 45.
 - Bus port names are the 2027 enums: `I2C::Port::PORT_0`/`PORT_1`, `SerialPort::Port::ONBOARD`
   (UART1)/`MXP` (UART2); SPI keeps `SPI::kPort0` (SPI2)/`kPort1` (SPI3).
 - Capacities: 12 PWM outputs, 4 counters/encoders, 6 duty-cycle inputs, 10 analog inputs (ADC1),
@@ -131,7 +134,8 @@ hardware validation is done.
   `#include <LittleFS.h>`, first member of the Robot class `bool m_fs = LittleFS.begin(true);`
   (above RobotContainer, subsystems and DataLog entries; the log directory is fixed at the first
   DataLogManager call), then `DataLogManager::Start()` in the constructor so the "logs" share exists
-  after every boot. `begin(true)` formats only a partition it cannot mount (blank on first boot).
+  after every boot (the example does both; without `Start()` the folder appears only at the first
+  DataLogManager call, e.g. the first SysId test, which opens a new log). `begin(true)` formats only a partition it cannot mount (blank on first boot).
   SD card: `prosdk::platform::MountSdCard()` and `SetLogDirectory("/sd/logs")`.
 - E-stop: logs survive. The e-stop needs a reboot, and neither the DS reboot nor a PB-E305 restart
   erases flash; the writer fsyncs every 0.25 s on its own task. A sketch upload keeps the partition

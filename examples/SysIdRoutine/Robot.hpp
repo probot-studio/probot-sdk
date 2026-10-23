@@ -31,7 +31,7 @@ class Robot : public prosdk::TimedRobot {
 
  private:
   // first member: mount the log storage (/littlefs/logs) before anything logs
-  bool fsMounted = LittleFS.begin(true);
+  bool m_fs = LittleFS.begin(true);
 
   std::optional<prosdk::cmd::CommandPtr> autonomousCommand;
 

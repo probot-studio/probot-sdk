@@ -5,8 +5,13 @@
 #include "Robot.hpp"
 
 #include <prosdk/commands2/CommandScheduler.hpp>
+#include <prosdk/system/DataLogManager.hpp>
 
-Robot::Robot() {}
+Robot::Robot() {
+  // prosdk: start the log now (LittleFS is already mounted by m_fs) so the Driver Station
+  // lists the "logs" folder after every boot, before the first SysId test.
+  prosdk::DataLogManager::Start();
+}
 
 void Robot::RobotPeriodic() {
   prosdk::cmd::CommandScheduler::GetInstance().Run();

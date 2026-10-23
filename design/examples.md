@@ -50,8 +50,10 @@ refuses:
 - 22-25, which do not exist;
 - GPIO 3 (probot-core's NeoPixel).
 
-They also avoid the strapping pins 0, 45 and 46, which the HAL allows (hal-esp32.md); only
-SwerveBot and SwerveDrivePoseEstimator use 45, for lack of pins, and say so in their wiring.
+They also avoid the strapping pins 0, 45 and 46, which the HAL allows (hal-esp32.md). Only
+SwerveBot and SwerveDrivePoseEstimator use one, for lack of pins: GPIO 46 for the back-right
+turning encoder B, which a normal boot ignores (it counts only while GPIO 0 is held low). They say
+so in their wiring. GPIO 45 and GPIO 0 are not used by any example.
 
 They also stay inside the hardware limits:
 - 12 PWM outputs;
@@ -118,8 +120,12 @@ which need more pins than those ranges allow.
     Upstream leaves both with the base name, and without RTTI both would be
     `prosdk::cmd::SubsystemBase` (API-DIFFERENCES.md, SubsystemBase default name). It has to be the
     base initializer: the `sysIdRoutine` member reads `GetName()` before the constructor body.
-  - `Robot`'s first member mounts LittleFS (`LittleFS.begin(true)`), so the log reaches
-    /littlefs/logs; prosdk does not mount it. BoardozaSdLog mounts it as its no-card fallback.
+  - `Robot`'s first member mounts LittleFS (`bool m_fs = LittleFS.begin(true);`), so the log
+    reaches /littlefs/logs; prosdk does not mount it. BoardozaSdLog mounts it as its no-card
+    fallback.
+  - The `Robot` constructor calls `DataLogManager::Start()` (upstream starts the log lazily at the
+    first SysId test). The start shares the "logs" folder with the Driver Station, so logs of an
+    earlier boot can be downloaded after a reboot or e-stop restart without running a test first.
 
 ## Decisions
 

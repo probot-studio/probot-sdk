@@ -16,10 +16,12 @@
 // tests; left bumper + the same buttons runs them for the shooter.
 // The SysId log goes to the DataLog: on the robot to /littlefs/logs. prosdk does not mount
 // LittleFS; Robot's first member does (LittleFS.begin(true): formats the partition only when it
-// cannot be mounted, e.g. blank on the first boot). Without it the log is discarded with a console
-// line (design/API-DIFFERENCES.md, DataLogManager).
+// cannot be mounted, e.g. blank on the first boot), and the constructor calls
+// DataLogManager::Start() so the "logs" folder is shared from boot on, not only after the first
+// test. Without the mount the log is discarded with a console line (design/API-DIFFERENCES.md,
+// DataLogManager).
 // While the robot is idle the .wpilog files can be downloaded from the Driver Station's Logs page,
-// "Dosyalar" card ("logs").
+// "Dosyalar" card ("logs"), also after a reboot or an e-stop restart.
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

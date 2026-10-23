@@ -8,7 +8,8 @@
 // Wiring (GPIO numbers; channel = GPIO):
 //   GPIO 4  shooter PWMSparkMax     GPIO 6/7  shooter encoder A/B
 //   GPIO 5  kicker PWMSparkMax      GPIO 12   intake PWMSparkMax
-// Joystick 0: button 2 runs the intake, the trigger spins up and shoots.
+// Joystick 0: button 2 runs the intake, the trigger spins up and shoots. On the Probot DS gamepad
+// raw button 2 is FACE_LEFT (X / Square) and the trigger (raw button 1) is FACE_RIGHT (B / Circle).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

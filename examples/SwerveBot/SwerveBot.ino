@@ -9,7 +9,11 @@
 // Wiring (GPIO numbers; channel = GPIO), module = drive PWM, turning PWM, drive encoder A/B,
 // turning encoder A/B:
 //   front left  4, 14,  6/7,   40/41      front right 5, 21, 15/16, 42/1
-//   back left  12, 47, 17/18,  2/10       back right 13, 48, 38/39, 11/45 (45 is a strapping pin)
+//   back left  12, 47, 17/18,  2/10       back right 13, 48, 38/39, 11/46
+// GPIO 46 is a strapping pin, used for lack of free pins. It counts at reset only while BOOT
+// (GPIO 0) is held, where a high level blocks download mode; a normal boot ignores it. GPIO 45
+// (flash voltage) is avoided: an encoder line high at reset can stop a 3.3 V-flash module from
+// booting.
 // Does not fit the ESP32-S3 as written: upstream uses 8 quadrature encoders and the chip has 4
 // PCNT units (encoders and counters together), so on the robot the fifth Encoder fails and the
 // program halts with the error on the Driver Station console. It runs in simulation; on real
