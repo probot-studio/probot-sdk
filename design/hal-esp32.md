@@ -103,8 +103,13 @@ bridge used 1 ms before #46): in 3.3.10's `cores/esp32/HWCDC.cpp` the TX lock ta
 1 ms a second task printing while the first waits loses its whole line (`write()` returns 0), and
 `flush()` counts `tries = tx_timeout_ms` 1 ms waits without progress before it sets
 `connected = false` and drops the ring, even with a reading host. Before 3.3.9 the write loop
-gives up after one timeout by itself (core's review of 3.0.0 and 3.2.0-3.3.8; only 3.3.10 is
-installed here), so the rule leaves those cores at 100 ms (core-requests.md R21-b).
+gives up after one timeout by itself: in the 3.0.0, 3.2.0 and 3.3.8 sources (`write()` the same
+but for comments; 3.3.8 lines 426-498) a failed `xRingbufferSend(..., tx_timeout_ms)` breaks the
+loop, `tries = tx_timeout_ms` 1 ms waits without progress set `connected = false`, and with the
+FIFO not writable the rest is dropped (`flushTXBuffer`), so a stalled host costs one ~100 ms wait
+and later writes do not block; the 20-timeout loop first appears in 3.3.9. So the rule leaves
+those cores at 100 ms, and at 1 ms they would drop text with a reading host (core-requests.md
+R21-b).
 
 ### Other ESP32-S3 boards
 

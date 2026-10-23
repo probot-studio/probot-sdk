@@ -662,7 +662,8 @@ inline bool UtilityAvailable() { return probot::ds::utilityAvailable(); }
 // rule, so a core before #46 gets it too (on #46 it repeats core's value). Not lower: the TX lock
 // take and flush() use the same timeout, so at 1 ms a second printing task loses its whole line
 // and flush() drops the ring with a reading host. Before 3.3.9 a write stops waiting after one
-// timeout by itself (core's review), so the rule leaves those cores alone.
+// timeout by itself (checked in the 3.0.0, 3.2.0 and 3.3.8 sources), so the rule leaves those
+// cores alone.
 inline void Boot() {
 #if defined(ARDUINO_USB_MODE) && ARDUINO_USB_MODE && defined(ARDUINO_USB_CDC_ON_BOOT) && \
     ARDUINO_USB_CDC_ON_BOOT

@@ -1196,11 +1196,15 @@ commits:
   `tries = tx_timeout_ms` (646) and, after that many 1 ms waits without progress, sets
   `connected = false` and empties the ring (656-658), even with a reading host; the write loop
   gives up after 20 consecutive `xRingbufferSend` timeouts of `tx_timeout_ms` (582-600; about 100 ms
-  at 5 ms). Core's claim about cores before 3.3.9 (the write loop counts `tries = tx_timeout_ms`)
-  is not checked here (no older core installed). The hook now applies core's exact rule (5 ms,
-  same three conditions): on #46 it repeats core's value, and on a core before #46, which prosdk
-  still supports down to `feat/dashboard-store`, it keeps the ~100 ms bound. Dropping it would
-  leave those cores at about 2 s per stalled write on 3.3.9 or later.
+  at 5 ms). Core's claim about cores before 3.3.9 holds in the 3.0.0, 3.2.0 and 3.3.8 sources
+  (fetched from espressif/arduino-esp32; `write()` the same but for comments): the write loop
+  counts `tries = tx_timeout_ms` 1 ms waits without progress, breaks on the first failed
+  `xRingbufferSend(..., tx_timeout_ms)` and, with the FIFO not writable, sets `connected = false`
+  and drops the rest (3.3.8 lines 456-493); the `max_consec_timeouts = 20` loop first appears in
+  3.3.9, so the `>= 3.3.9` guard has the right boundary. The hook now applies core's exact
+  rule (5 ms, same three conditions): on #46 it repeats core's value, and on a core before #46,
+  which prosdk still supports down to `feat/dashboard-store`, it keeps the ~100 ms bound. Dropping
+  it would leave those cores at about 2 s per stalled write on 3.3.9 or later.
 - R21 (d), `Wire.read()`: prosdk's I2C port 0 is not affected. Its HAL (`hal/esp32/I2C.cpp`) calls
   `i2cWrite` / `i2cRead` / `i2cWriteReadNonStop` with the caller's buffers; in 3.3.10
   (`esp32-hal-i2c-ng.c`, ESP-IDF 5.5) each takes the bus mutex for the whole transfer, the same

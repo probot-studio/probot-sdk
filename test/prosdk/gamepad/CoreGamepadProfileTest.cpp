@@ -60,8 +60,8 @@ TEST_CASE("Core's profiles: the Home/Guide button is GUIDE where core names it",
       &jm::mapping_logitech_f310(), &jm::mapping_standard(), &jm::mapping_axis9_dpad(),
       jm::findByName("xbox"),       jm::findByName("ps"),
   };
-  // the build says which core this is: R20 (feat/gamepad-guide, CI and the pin) unless configured
-  // for an older one
+  // the build says which core this is: R20 or later (CI and the pin are on a core with R20) unless
+  // configured for an older one
 #if PROSDK_TEST_CORE_BEFORE_R20
   constexpr bool r20 = false;
 #else
