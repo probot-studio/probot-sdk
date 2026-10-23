@@ -41,8 +41,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT="$ROOT/.build/qemu"
-# DIO: QEMU's SPI flash model does not take the QIO enable sequence (the default qio
-# build asserts in esp_flash init); the flash image header is DIO either way
+# QEMU keeps its own FQBN, not the sketch FQBN of tools/build/arduino_recipe.py --fqbn (the
+# Boardoza Pulse settings). DIO: QEMU's SPI flash model does not take the QIO enable sequence
+# (the default qio build asserts in esp_flash init); the flash image header is DIO either way.
+# CDCOnBoot stays off: the runner reads the console from UART0, so Serial must be UART0 too.
 FQBN="esp32:esp32:esp32s3:PartitionScheme=huge_app,FlashMode=dio"
 JOBS=2
 build=1

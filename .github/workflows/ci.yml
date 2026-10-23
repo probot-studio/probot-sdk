@@ -130,7 +130,7 @@ jobs:
       - name: Archive
         run: tools/build/build.sh esp32s3 prosdk
 
-      - name: Examples (huge_app)
+      - name: Examples (Pulse FQBN)
         run: PROBOT_CORE="$GITHUB_WORKSPACE/.upstream/probot-core" tools/build/build.sh examples
 
       - name: HAL link test

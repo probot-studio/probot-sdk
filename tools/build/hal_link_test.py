@@ -13,9 +13,16 @@ link error.
   python3 tools/build/hal_link_test.py --out DIR --compile  # and link it with arduino-cli
 
 --compile links against probot-core from .upstream/probot-core (or --core PATH) through a
-libraries folder of symlinks in DIR, with the huge_app partition scheme, under the shared build
-lock at the lowest priority (2 jobs). Needs src/esp32s3/libprosdk.a (tools/build/build.sh
-esp32s3). The build folder DIR/build is kept between runs.
+libraries folder of symlinks in DIR, with the sketch FQBN of tools/build/arduino_recipe.py (the
+Boardoza ESP32-S3 Pulse settings), under the shared build lock at the lowest priority (2 jobs).
+Needs src/esp32s3/libprosdk.a (tools/build/build.sh esp32s3). The build folder DIR/build is kept
+between runs.
+
+After the link, --compile also checks that the archive does not depend on the board options the
+sketch FQBN sets and the archive recipe does not (USB CDC on boot, PSRAM): no undefined symbol of
+libprosdk.a names an Arduino Serial object or String, and no archive source under src/prosdk
+uses BOARD_HAS_PSRAM, ARDUINO_USB_* or the Arduino PSRAM API (prosdk.h and
+prosdk/probot/CoreBridge.hpp compile in the sketch and may).
 """
 from __future__ import annotations
 
@@ -27,9 +34,19 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import arduino_recipe  # noqa: E402
+
 FUNCTIONS = ROOT / "design" / "hal-esp32-functions.txt"
 SKETCH = "HalLinkTest"
-FQBN = "esp32:esp32:esp32s3:PartitionScheme=huge_app"
+FQBN = arduino_recipe.SKETCH_FQBN
+ARCHIVE = ROOT / "src" / "esp32s3" / "libprosdk.a"
+# Undefined symbols that would tie the archive to the sketch's CDCOnBoot/USBMode choice
+BOARD_SYMBOLS = re.compile(r"Serial0|HWCDCSerial|USBSerial|_ZN6String")
+BOARD_MACROS = (r"BOARD_HAS_PSRAM|ARDUINO_USB_(MODE|CDC_ON_BOOT|MSC_ON_BOOT|DFU_ON_BOOT)"
+                r"|psramFound|ps_malloc")
+# Headers that compile in the sketch (with the user's board options), not into the archive
+SKETCH_SIDE = {"src/prosdk.h", "src/prosdk/probot/CoreBridge.hpp"}
 
 SECTION = re.compile(r"^## (prosdk/hal/\S+\.h) \(\d+\)$")
 SIGNATURE = re.compile(r"^(.*?)\b((?:HAL|HALSIM)_\w+)\s*\((.*)\)\s*$")
@@ -131,6 +148,31 @@ def write_if_changed(path: Path, text: str) -> None:
         path.write_text(text)
 
 
+def check_archive_abi() -> int:
+    """Fails (1) when the archive depends on a board option the sketch FQBN changes."""
+    bad = 0
+    nm = arduino_recipe.paths()["toolchain"] / "xtensa-esp32s3-elf-nm"
+    res = subprocess.run([str(nm), "-u", str(ARCHIVE)], capture_output=True, text=True)
+    if res.returncode != 0:
+        print(f"ABI check: {nm.name} -u failed: {res.stderr.strip()}")
+        return 1
+    undefined = {f[1] for f in (ln.split() for ln in res.stdout.splitlines())
+                 if len(f) == 2 and f[0] == "U"}
+    syms = sorted(s for s in undefined if BOARD_SYMBOLS.search(s))
+    for sym in syms:
+        print(f"ABI check: libprosdk.a references {sym} (depends on the sketch's USB options)")
+        bad = 1
+    res = subprocess.run(["grep", "-rnE", BOARD_MACROS, "src/prosdk.h", "src/prosdk",
+                          "--exclude-dir=thirdparty"], cwd=ROOT, capture_output=True, text=True)
+    for ln in res.stdout.splitlines():
+        if ln.split(":", 1)[0] not in SKETCH_SIDE:
+            print(f"ABI check: archive source uses a board-option macro: {ln}")
+            bad = 1
+    print("ABI check: " + ("FAILED" if bad else
+                           "archive independent of the USB/PSRAM board options"))
+    return bad
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", required=True, type=Path, help="work folder (sketch, libraries, build)")
@@ -165,7 +207,7 @@ def main() -> int:
     print(" ".join(cmd), flush=True)
     rc = subprocess.run(cmd).returncode
     print(f"arduino-cli exit {rc}")
-    return rc
+    return rc or check_archive_abi()
 
 
 if __name__ == "__main__":

@@ -9,6 +9,16 @@ Reproduces platform.txt `recipe.cpp.o.pattern` / `recipe.c.o.pattern` with the g
 
 The effective C++ standard is the one cpp_flags ends with (gnu++2a = gnu++20). Nothing here
 appends another -std flag.
+
+Sketches (tools/build/build.sh examples, tools/build/hal_link_test.py, tools/release/package.sh)
+compile with SKETCH_FQBN, the Boardoza ESP32-S3 Pulse settings (`--fqbn` prints it). The
+archive does not depend on its USB, PSRAM or flash-size options: CDCOnBoot only changes the
+sketch's `Serial` macro, PSRAM=enabled only adds -DBOARD_HAS_PSRAM (psram_type stays qspi, so
+the qio_qspi include dir is the same) and FlashSize/PartitionScheme only change the partition
+table and image header. So the archive is built once with the generic defaults below
+(ARDUINO_USB_CDC_ON_BOOT=0, no BOARD_HAS_PSRAM) and linked into SKETCH_FQBN sketches.
+tools/build/hal_link_test.py checks that no archive source or undefined symbol depends on those
+options.
 """
 from __future__ import annotations
 
@@ -22,6 +32,10 @@ TOOLCHAIN_VERSION = "2601"
 # arduino-cli 1.x passes runtime.ide.version=10607
 ARDUINO_IDE_VERSION = "10607"
 MEMORY_TYPE = "qio_qspi"  # {build.boot}_{build.psram_type} defaults for esp32s3
+# Boardoza ESP32-S3 Pulse (ESP32-S3-WROOM-1-N4R2: 4 MB flash, 2 MB quad PSRAM, native USB-C).
+# USBMode=hwcdc and UploadMode=default are the esp32s3 defaults.
+SKETCH_FQBN = ("esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,"
+               "CDCOnBoot=cdc")
 
 
 def paths(home: str | None = None) -> dict[str, Path]:
@@ -124,7 +138,11 @@ def main() -> int:
     ap.add_argument("--warnings", default="-w")
     ap.add_argument("--home", default=None)
     ap.add_argument("--out-dir", type=Path, help="write cxx.rsp, c.rsp and recipe.cmake here")
+    ap.add_argument("--fqbn", action="store_true", help="print the sketch FQBN (SKETCH_FQBN)")
     a = ap.parse_args()
+    if a.fqbn:
+        print(SKETCH_FQBN)
+        return 0
     p = paths(a.home)
     if a.out_dir:
         write_out_dir(p, a.out_dir, a.warnings)

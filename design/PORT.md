@@ -287,7 +287,9 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   opmode selection, halts); built twice, with core R15's grid-restart count and without it
   (`prosdk_robot_legacy_tests`, which also pins the degraded case above: after a late one-shot pass a
   late pass runs the loop in the wrong pass until a counted overrun re-aligns the schedule).
-- **Examples** (`esp32:esp32:esp32s3:PartitionScheme=huge_app`, `tools/build/build.sh examples` with
+- **Examples** (measured with `esp32:esp32:esp32s3:PartitionScheme=huge_app`, before the sketch FQBN
+  became the Boardoza Pulse one of `tools/build/arduino_recipe.py --fqbn` on 2026-10-23; current sizes
+  in design/examples.md "Sizes"; `tools/build/build.sh examples` with
   CoreOps ABI 5 (3450336) against probot-core `feat/small-items` 09a6fe4, 2026-10-22; flash / static
   RAM; four of them re-measured with ABI 7 against `feat/loop-grid-restarts` in design/size.md
   sections 10 and 11): `TimedRobotDifferential` 1846484 / 72276 bytes, `CommandBasedRobot` (commandsv2: scheduler,
@@ -322,7 +324,10 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
 - Every compile runs as `nice -n 19 ionice -c3`, at most `-j2`, under the lock `flock .build/build.lock`, so
   parallel agents never stack compiles on the shared server.
 - Sketch builds: `arduino-cli compile --build-path <persistent dir> --jobs 2`, never `--clean`.
-  `tools/build/build.sh examples [sketch...]` compiles `examples/*` that way (huge_app, build folders
+  `tools/build/build.sh examples [sketch...]` compiles `examples/*` that way (sketch FQBN
+  `esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc`, the Boardoza
+  ESP32-S3 Pulse, from `tools/build/arduino_recipe.py --fqbn`; the archive keeps the generic recipe
+  flags, see that script's docstring; build folders
   `.build/examples/<name>`, probot-core from `$PROBOT_CORE` or `.upstream/probot-core`); CI runs it and
   `tools/build/hal_link_test.py` against probot-core at `PROBOT_CORE_REF` (`.github/workflows/ci.yml`),
   and the HAL link test again against `PROBOT_CORE_OLDEST_REF` (`feat/dashboard-store`, the oldest core
