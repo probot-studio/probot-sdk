@@ -219,7 +219,7 @@ limit) and the WebSocket receive buffer for DS writes (limit + 4 B): about 5.6 K
 `PROBOT_DASH_WRITE_QUEUE` (2048 B, 85 poses) and is refused with `QueueFull` above it. Persistent topics
 are stored only up to 2048 bytes whatever the limit.
 
-Status: delivered as draft PR #42 (`feat/dash-set-refused` 62e5dbf) and documented (no prosdk API), see
+Status: delivered as draft PR #42 (`feat/dash-set-refused` 940d300, first pushed as 62e5dbf) and documented (no prosdk API), see
 "P1 R16 and R17 delivered" below.
 
 ### R17. `unshare()` that reports whether the file task let go (low priority)
@@ -835,7 +835,9 @@ Wired:
 
 Core rebased its stack again and added draft PR #42 on top: #38 `feat/ds-files` ba2500b, #39
 `feat/dash-persist` 29c282a, #40 `feat/dash-widgets` 589262e, #41 `feat/loop-grid-restarts` 784a94a, #42
-`feat/dash-set-refused` 62e5dbf. `.upstream/probot-core` `sdk-target` is at 62e5dbf (`git reset --keep`);
+`feat/dash-set-refused` 62e5dbf, then force-pushed as 940d300 (only two `API.md` lines on the heap cost of
+`PROBOT_DASH_MAX_VALUE` / `PROBOT_DASH_MAX_SCHEMA_BYTES` differ; code and `ui/index.html` are identical, so
+the checks below hold). `.upstream/probot-core` `sdk-target` is at 940d300 (`git reset --keep`);
 CI's `PROBOT_CORE_REF` names `feat/dash-set-refused` (`PROBOT_CORE_OLDEST_REF` stays
 `feat/dashboard-store`). 15defc1 -> 62e5dbf changes `dashboard.hpp` and `files.hpp` only by the two
 items below; the signatures the bridge probes (`limits()`, `clearPersisted()`, `loopGridRestarts()`,
