@@ -40,19 +40,23 @@ low() { flock "$LOCK" nice -n 19 ionice -c3 "$@"; }
 # tools/build/build.sh esp32s3) and probot-core from $PROBOT_CORE (default .upstream/probot-core).
 # Libraries come from .build/examples/libraries (symlinks prosdk and probot); each sketch keeps its
 # build folder .build/examples/<name>, so a rebuild only recompiles what changed.
+# PROSDK_LIBRARY (default: this repository) is the prosdk library folder to link and to take the
+# sketches from, PROSDK_EXAMPLES_OUT (default .build/examples) the output folder; the release
+# smoke test (tools/release/package.sh) sets both to compile against an unpacked release zip.
 if [ "$cfg" = examples ]; then
-  [ -f "$ROOT/src/esp32s3/libprosdk.a" ] || {
-    echo "src/esp32s3/libprosdk.a is missing: run tools/build/build.sh esp32s3 first" >&2; exit 2; }
+  lib="$(cd "${PROSDK_LIBRARY:-$ROOT}" && pwd)"
+  [ -f "$lib/src/esp32s3/libprosdk.a" ] || {
+    echo "$lib/src/esp32s3/libprosdk.a is missing: run tools/build/build.sh esp32s3 first" >&2; exit 2; }
   core="${PROBOT_CORE:-$ROOT/.upstream/probot-core}"
   [ -f "$core/library.properties" ] || { echo "no probot-core library at $core" >&2; exit 2; }
   core="$(cd "$core" && pwd)"
-  out="$ROOT/.build/examples"
+  out="${PROSDK_EXAMPLES_OUT:-$ROOT/.build/examples}"
   mkdir -p "$out/libraries"
-  ln -sfn "$ROOT" "$out/libraries/prosdk"
+  ln -sfn "$lib" "$out/libraries/prosdk"
   ln -sfn "$core" "$out/libraries/probot"
   sketches=("$@")
   if [ ${#sketches[@]} -eq 0 ]; then
-    for d in "$ROOT"/examples/*/; do
+    for d in "$lib"/examples/*/; do
       d="${d%/}"
       [ -f "$d/$(basename "$d").ino" ] && sketches+=("$(basename "$d")")
     done
@@ -62,7 +66,7 @@ if [ "$cfg" = examples ]; then
     echo "== $name"
     low arduino-cli compile --fqbn "esp32:esp32:esp32s3:PartitionScheme=huge_app" \
       --libraries "$out/libraries" --build-path "$out/$name" --jobs "$JOBS" \
-      --warnings default "$ROOT/examples/$name" || { echo "FAILED: $name"; status=1; }
+      --warnings default "$lib/examples/$name" || { echo "FAILED: $name"; status=1; }
   done
   exit $status
 fi
