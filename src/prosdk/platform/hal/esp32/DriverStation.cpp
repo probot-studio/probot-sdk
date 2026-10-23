@@ -240,7 +240,7 @@ void ProbotCoreDs::Poll() {
   m_lastWord = controlWord.value;
 
   Snapshot& next = m_scratch;
-  std::memset(&next, 0, sizeof(next));
+  std::memset(static_cast<void*>(&next), 0, sizeof(next));  // standard layout (asserted above)
   next.controlWord = controlWord;
   next.matchTime = ops.matchTimeSeconds();
   next.allianceStation = m_match.station;

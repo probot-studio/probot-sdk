@@ -88,3 +88,16 @@ if(TARGET prosdk_gamepad_tests AND
 elseif(TARGET prosdk_gamepad_tests)
   message(STATUS "prosdk_gamepad_tests: no probot-core at ${_probot_core}, core's profiles untested")
 endif()
+
+# own executable: the ESP32 Driver Station backend (src/prosdk/platform/hal/esp32/DriverStation.cpp,
+# otherwise target only) on the host: its pump against a fake core table, through the HAL's Driver
+# Station functions. Its GetDefaultDriverStationImpl is renamed here, since the sim backend defines
+# the host's.
+prosdk_add_test(prosdk_ds_pump_tests SOURCES "${PROSDK_ROOT}/test/prosdk/main.cpp"
+  "${PROSDK_ROOT}/test/prosdk/dspump/DriverStationPumpTest.cpp"
+  "${PROSDK_ROOT}/src/prosdk/platform/hal/esp32/DriverStation.cpp")
+if(TARGET prosdk_ds_pump_tests)
+  set_source_files_properties("${PROSDK_ROOT}/src/prosdk/platform/hal/esp32/DriverStation.cpp"
+    TARGET_DIRECTORY prosdk_ds_pump_tests
+    PROPERTIES COMPILE_DEFINITIONS "GetDefaultDriverStationImpl=GetEsp32DriverStationForTest")
+endif()
