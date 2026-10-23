@@ -16,27 +16,6 @@ static_assert(sizeof(HAL_GameData{}.gameData) == kCoreMatchInfoMaxText + 1 &&
                   sizeof(HAL_MatchInfo{}.eventName) == kCoreMatchInfoMaxText + 1,
               "HAL match text fields hold kCoreMatchInfoMaxText bytes and a NUL");
 
-namespace {
-
-// `src` up to its NUL, at most `cap` and kCoreMatchInfoMaxText bytes, not splitting a UTF-8
-// sequence; `dst` holds kCoreMatchInfoMaxText + 1 bytes and is NUL-terminated.
-void CopyText(const char* src, size_t cap, char* dst) {
-  size_t n = 0;
-  while (n < cap && src[n] != '\0') {
-    ++n;
-  }
-  if (n > kCoreMatchInfoMaxText) {
-    n = kCoreMatchInfoMaxText;
-    while (n > 0 && (static_cast<unsigned char>(src[n]) & 0xC0) == 0x80) {
-      --n;
-    }
-  }
-  std::memcpy(dst, src, n);
-  dst[n] = '\0';
-}
-
-}  // namespace
-
 void ConvertCoreMatchInfo(const CoreMatchInfo& in, CoreMatchData* out) noexcept {
   std::memset(out, 0, sizeof(*out));
   out->station = in.station <= HAL_ALLIANCE_STATION_BLUE_3
@@ -46,8 +25,10 @@ void ConvertCoreMatchInfo(const CoreMatchInfo& in, CoreMatchData* out) noexcept 
                                                               : HAL_MATCH_TYPE_NONE;
   out->info.matchNumber = in.matchNumber;
   out->info.replayNumber = in.replayNumber;
-  CopyText(in.eventName, sizeof(in.eventName), out->info.eventName);
-  CopyText(in.gameData, sizeof(in.gameData), out->gameData.gameData);
+  // CopyCoreMatchInfo already cut the bridge's text; this covers a table filled another way (a
+  // field without its NUL)
+  CopyCoreMatchText(in.eventName, sizeof(in.eventName), out->info.eventName);
+  CopyCoreMatchText(in.gameData, sizeof(in.gameData), out->gameData.gameData);
 }
 
 bool RefreshCoreMatchData(const CoreOps& ops, uint32_t* seq, CoreMatchData* out) noexcept {

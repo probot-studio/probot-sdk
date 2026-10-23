@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,7 @@
 
 #include <prosdk/driverstation/RobotState.hpp>
 #include <prosdk/framework/TimedRobot.hpp>
+#include <prosdk/hal/DriverStation.h>
 #include <prosdk/hal/Errors.h>
 #include <prosdk/hal/HAL.h>
 #include <prosdk/platform/CoreOps.hpp>
@@ -252,6 +254,47 @@ void CaseRobot(Ctx& ctx) {
   QCHECK_MSG(ctx, static_cast<int>(robot->loop.t.size()) == loopsBefore &&
                       static_cast<int>(robot->fast.t.size()) == fastBefore,
              "robot ran after the e-stop ({} -> {})", loopsBefore, robot->loop.t.size());
+
+  // ---- match info (R18) through the Driver Station pump, no packet in between ----
+  // The robot task is gone, so this task takes the snapshots the robot loop would take. Never set
+  // so far: every pass read the counter only, and the HAL reports the empty values.
+  {
+    QCHECK(ctx, core.matchReads.load() == 0);
+    HAL_RefreshDSData();  // takes what the e-stop passes left
+    pf::detail::PreCycle();
+    pf::detail::PostCycle();
+    QCHECK(ctx, !HAL_RefreshDSData());  // nothing changed: no new snapshot
+    QCHECK(ctx, HAL_GetAllianceStation(&status) == HAL_ALLIANCE_STATION_UNKNOWN && status == 0);
+    pf::CoreMatchInfo set{};
+    set.station = 5;  // blue 2
+    set.type = 2;     // qualification
+    set.matchNumber = 12;
+    set.replayNumber = 3;
+    std::strcpy(set.eventName, "Istanbul Regional");
+    std::strcpy(set.gameData, "LRL");
+    fakecore::SetMatchInfo(set);
+    pf::detail::PreCycle();
+    pf::detail::PostCycle();
+    // the same packet counter, control word and joysticks: the match change alone is a snapshot
+    QCHECK(ctx, HAL_RefreshDSData());
+    QCHECK(ctx, core.matchReads.load() == 1);
+    status = -1;
+    QCHECK(ctx, HAL_GetAllianceStation(&status) == HAL_ALLIANCE_STATION_BLUE_2 && status == 0);
+    HAL_GameData gameData{};
+    QCHECK(ctx, HAL_GetGameData(&gameData) == 0 && std::string{gameData.gameData} == "LRL");
+    HAL_MatchInfo info{};
+    QCHECK(ctx, HAL_GetMatchInfo(&info) == 0);
+    QCHECK_MSG(ctx, std::string{info.eventName} == "Istanbul Regional" &&
+                        info.matchType == HAL_MATCH_TYPE_QUALIFICATION && info.matchNumber == 12 &&
+                        info.replayNumber == 3,
+               "match info '{}' type {} {} {}", info.eventName, static_cast<int>(info.matchType),
+               info.matchNumber, info.replayNumber);
+    // unchanged: the counter only, no new snapshot
+    pf::detail::PreCycle();
+    pf::detail::PostCycle();
+    QCHECK(ctx, !HAL_RefreshDSData());
+    QCHECK(ctx, core.matchReads.load() == 1);
+  }
 
   // ---- lifecycle ----
   const std::vector<std::string> want{"ctor",          "DriverStationConnected", "DisabledInit",

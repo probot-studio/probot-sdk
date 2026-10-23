@@ -191,27 +191,42 @@ struct CoreMatchInfo {
 };
 
 /**
+ * Copies match text `src` (an array of `cap` bytes) into `dst` (kCoreMatchInfoMaxText + 1 bytes):
+ * up to its NUL or `cap`, and when that is longer than kCoreMatchInfoMaxText, cut there without
+ * splitting a UTF-8 sequence. `dst` is NUL-terminated.
+ */
+inline void CopyCoreMatchText(const char* src, size_t cap, char* dst) noexcept {
+  size_t n = 0;
+  while (n < cap && src[n] != '\0') {
+    ++n;
+  }
+  if (n > kCoreMatchInfoMaxText) {
+    n = kCoreMatchInfoMaxText;
+    while (n > 0 && (static_cast<unsigned char>(src[n]) & 0xC0) == 0x80) {
+      --n;
+    }
+  }
+  for (size_t i = 0; i < n; ++i) {
+    dst[i] = src[i];
+  }
+  dst[n] = '\0';
+}
+
+/**
  * Copies core's match info `m` (probot::ds::MatchInfo, or any type with its fields) into `out`.
- * The text fields are copied up to their NUL and at most kCoreMatchInfoMaxText bytes; the HAL
- * checks the rest (prosdk/platform/hal/CoreMatchInfo.hpp). A template so that the archive never
- * names a core type: the bridge and the host tests instantiate it.
+ * The text fields go through CopyCoreMatchText (at most kCoreMatchInfoMaxText bytes, cut on a
+ * UTF-8 boundary); the HAL checks the numbering (prosdk/platform/hal/CoreMatchInfo.hpp). A
+ * template so that the archive never names a core type: the bridge and the host tests
+ * instantiate it.
  */
 template <typename M>
 void CopyCoreMatchInfo(const M& m, CoreMatchInfo* out) noexcept {
-  auto text = [](const char* src, size_t cap, char* dst) {
-    size_t n = 0;
-    while (n < cap && n < kCoreMatchInfoMaxText && src[n] != '\0') {
-      dst[n] = src[n];
-      ++n;
-    }
-    dst[n] = '\0';
-  };
   out->station = static_cast<uint8_t>(m.station);
   out->type = static_cast<uint8_t>(m.type);
   out->matchNumber = static_cast<uint16_t>(m.matchNumber);
   out->replayNumber = static_cast<uint8_t>(m.replayNumber);
-  text(m.eventName, sizeof(m.eventName), out->eventName);
-  text(m.gameData, sizeof(m.gameData), out->gameData);
+  CopyCoreMatchText(m.eventName, sizeof(m.eventName), out->eventName);
+  CopyCoreMatchText(m.gameData, sizeof(m.gameData), out->gameData);
 }
 
 /** Everything prosdk calls in probot-core. All pointers are non-null in an installed table. */

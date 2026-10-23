@@ -180,7 +180,7 @@ class ProbotCoreDs final : public MrcLibDs {
   HAL_ControlWord m_newestControlWord;
 
   // Poll state (core's user task only)
-  Snapshot m_scratch;  // not on the stack: about 2.5 KB
+  Snapshot m_scratch;  // not on the stack: about 2.7 KB
   prosdk::platform::CoreJoystickData m_stick;
   prosdk::platform::CoreMatchData m_match;  // core's match info as of m_matchSeq
   uint32_t m_matchSeq = 0;                  // core matchInfoSeq(), 0 = never set since boot
@@ -460,6 +460,10 @@ int32_t ProbotCoreDs::getMatchTime(double* matchTime) {
 }
 
 int32_t ProbotCoreDs::getMatchInfo(HAL_MatchInfo* info) {
+  if (gShutdown) {
+    std::memset(info, 0, sizeof(*info));
+    return HAL_INCOMPATIBLE_STATE;
+  }
   std::scoped_lock lock(m_cacheMutex);
   *info = m_current.matchInfo;
   return 0;

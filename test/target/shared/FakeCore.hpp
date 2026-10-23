@@ -48,6 +48,9 @@ struct State {
   std::atomic<uint32_t> topics{0};
   std::atomic<uint32_t> sets{0};
   std::atomic<uint32_t> schemas{0};
+  // match info (R18): the change counter and how often the values were read
+  std::atomic<uint32_t> matchSeq{0};
+  std::atomic<uint32_t> matchReads{0};
 };
 
 /** The fake file sharing: every share()/unshare() call and the FreeRTOS task that made it. */
@@ -67,6 +70,8 @@ inline std::mutex gConsoleMutex;
 inline std::string gConsole;
 inline std::mutex gFilesMutex;
 inline std::vector<FileCall> gFileCalls;
+inline std::mutex gMatchMutex;
+inline pf::CoreMatchInfo gMatch{};
 
 inline uint8_t Phase() { return gState.phase.load(); }
 inline uint8_t SelectedMode() { return gState.selectedMode.load(); }
@@ -149,6 +154,13 @@ inline bool FilesUnshare(const char* name) {
   return true;
 }
 
+inline uint32_t MatchInfoSeq() { return gState.matchSeq.load(); }
+inline void MatchInfo(pf::CoreMatchInfo* out) {
+  std::scoped_lock lock{gMatchMutex};
+  *out = gMatch;
+  gState.matchReads.fetch_add(1);
+}
+
 inline bool Install() {
   static constexpr pf::CoreOps kOps{
       pf::kCoreOpsAbiVersion, sizeof(pf::CoreOps), 400, "0.4.0-qemu-fake",
@@ -179,10 +191,9 @@ inline bool Install() {
       // ABI 8 (R11 filesShare/filesUnshare) recorded, so DataLogManager's share of its LittleFS
       // folder runs on the target (the null fallback is covered by prosdk_files_legacy_tests)
       &FilesShare, &FilesUnshare,
-      // ABI 9 (R18 matchInfoSeq/matchInfo) null, as the bridge leaves them for a core without
-      // R18: unknown alliance station, empty game data and match info (the values and the
-      // counter are covered by prosdk_match_tests)
-      nullptr, nullptr,
+      // ABI 9 (R18 matchInfoSeq/matchInfo) recorded, never set until CaseRobot sets it (counter
+      // 0, so the same empty values as the null fallback, which prosdk_match_tests covers)
+      &MatchInfoSeq, &MatchInfo,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   // what CoreBridge.hpp reports after probot::framework::install succeeded
@@ -207,6 +218,15 @@ inline std::string Console() {
 inline std::vector<FileCall> TakeFileCalls() {
   std::scoped_lock lock{detail::gFilesMutex};
   return std::exchange(detail::gFileCalls, {});
+}
+
+/** Sets the match info as the Driver Station's card does: the values, then the counter. */
+inline void SetMatchInfo(const prosdk::platform::CoreMatchInfo& info) {
+  {
+    std::scoped_lock lock{detail::gMatchMutex};
+    detail::gMatch = info;
+  }
+  detail::gState.matchSeq.fetch_add(1);
 }
 
 /** True when the table was installed at static initialization. */

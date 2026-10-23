@@ -85,7 +85,7 @@ The `CASE` line reports the task's peak stack use and the heap change.
 | e | `prosdk::Preferences` on NVS: boot 1 writes every type, boot 2 reads them back from the same flash image |
 | f | `DataLogManager` on LittleFS (`/littlefs/logs`, the huge_app `spiffs` partition): writer thread, flush, the `.wpilog` read back; boot 2 finds boot 1's log; the fake core's file sharing (CoreOps ABI 8) records the folder shared as `logs` on the `datalogmgr` task and taken back on the task that called `Stop()` |
 | g | `CommandScheduler`: subsystem periodic, default command, sequence with a 100 ms wait, race, requirement interruption, the disabled rule |
-| d | the hosted `TimedRobot` (`PROSDK_ROBOT_MAIN`, 20 ms loop + 10 ms `AddPeriodic`) through disabled -> autonomous -> disabled -> teleop -> disabled -> e-stop: lifecycle order, `RobotState` in each mode, the HAL output gate (`HAL_GetSystemActive`), core loop period requested by the robot (10 ms), timing (below), nothing runs after the e-stop. Runs last (the e-stop latches) |
+| d | the hosted `TimedRobot` (`PROSDK_ROBOT_MAIN`, 20 ms loop + 10 ms `AddPeriodic`) through disabled -> autonomous -> disabled -> teleop -> disabled -> e-stop: lifecycle order, `RobotState` in each mode, the HAL output gate (`HAL_GetSystemActive`), core loop period requested by the robot (10 ms), timing (below), nothing runs after the e-stop; then match info set on the fake core (CoreOps ABI 9) reaches `HAL_GetAllianceStation`/`HAL_GetGameData`/`HAL_GetMatchInfo` through the Driver Station pump without a packet, and is read once. Runs last (the e-stop latches) |
 | h | every FreeRTOS task: priority, core, stack high-water mark; prosdk threads must be below priority 4 and no thread may use the default pthread config; the static TLS block (at most 64 bytes, see below); heap free / minimum / largest block |
 
 ### Case d timing
@@ -121,7 +121,7 @@ Peak stack of the 24576-byte case task and heap change per case (boot 1 / boot 2
 | e Preferences | 2428 / 3152 | -912 |
 | f DataLog | 3424 / 3428 (2026-10-23, with file sharing) | -3412 / -3404 |
 | g CommandScheduler | 3788 / 3788 | -9460 |
-| d hosted TimedRobot | 5472 / 5472 | -19376 (robot stays registered) |
+| d hosted TimedRobot | 5816 / 5816 (2026-10-23, with the match info checks) | -22772 / -22800 (robot stays registered) |
 
 Heap free 328968 bytes at start, 279368 after every case, minimum ever 238548, largest free block
 208884 (boot 1). Minimum free stack of the remaining tasks: `prosdk` (HAL notifier) 2804,

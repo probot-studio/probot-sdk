@@ -240,7 +240,7 @@ TEST_CASE("CoreMatchInfo: text is cut at 64 bytes on a UTF-8 boundary", "[prosdk
   pf::ConvertCoreMatchInfo(in, &data);
   CHECK(std::string{data.gameData.gameData} == std::string(62, 'g') + "\xC3\xA7");
 
-  // CopyCoreMatchInfo (the bridge's copy of core's MatchInfo) stops at 64 bytes as well
+  // CopyCoreMatchInfo (the bridge's copy of core's MatchInfo) cuts the same way
   struct CoreLike {
     uint8_t station = 2;
     uint8_t type = 3;
@@ -259,6 +259,32 @@ TEST_CASE("CoreMatchInfo: text is cut at 64 bytes on a UTF-8 boundary", "[prosdk
   CHECK(copy.replayNumber == 1);
   CHECK(std::string{copy.eventName} == std::string(64, 'x'));
   CHECK(std::string{copy.gameData} == "L");
+  // a two-byte character across byte 64 of core's array: dropped whole, also through the HAL
+  std::memset(core.gameData, 'g', 63);
+  core.gameData[63] = '\xC3';
+  core.gameData[64] = '\xA7';
+  pf::CopyCoreMatchInfo(core, &copy);
+  CHECK(std::string{copy.gameData} == std::string(63, 'g'));
+  pf::ConvertCoreMatchInfo(copy, &data);
+  CHECK(std::string{data.gameData.gameData} == std::string(63, 'g'));
+  // a longer core array (a core that raised its limit): cut at 64 bytes on a boundary
+  struct WiderCore {
+    uint8_t station = 0;
+    uint8_t type = 0;
+    uint16_t matchNumber = 0;
+    uint8_t replayNumber = 0;
+    char eventName[80];
+    char gameData[80];
+  } wide;
+  std::memset(wide.eventName, 0, sizeof(wide.eventName));
+  std::memset(wide.gameData, 0, sizeof(wide.gameData));
+  std::string event;
+  for (int i = 0; i < 25; ++i) {
+    event += "\xE2\x82\xAC";  // U+20AC, three bytes: 21 fit in 64 (63 bytes)
+  }
+  std::memcpy(wide.eventName, event.data(), event.size());
+  pf::CopyCoreMatchInfo(wide, &copy);
+  CHECK(std::string{copy.eventName} == event.substr(0, 63));
 }
 
 #if PROSDK_TEST_PROBOT_CORE_MATCH
