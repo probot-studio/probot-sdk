@@ -5,13 +5,16 @@
 
 #include <stdint.h>
 
+#include <span>
 #include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include "DashboardFixture.hpp"
+#include "prosdk/datalog/DataLogBackgroundWriter.hpp"
 #include "prosdk/platform/CoreOps.hpp"
+#include "prosdk/platform/TelemetryLog.hpp"
 #include "prosdk/platform/dashboard/Dashboard.hpp"
 #include "prosdk/platform/dashboard/DashboardAlerts.hpp"
 #include "prosdk/telemetry/Telemetry.hpp"
@@ -176,4 +179,21 @@ TEST_CASE_METHOD(DashboardFixture, "RegisterDashboardBackends is idempotent",
   prosdk::platform::detail::PostCycle();
   CHECK(fake::GetStringArray("/Telemetry/Alerts/Registered/errors") == Strings{"visible"});
   CHECK(fake::Rejects().empty());
+
+  // DataLogManager's log copy (prosdk/platform/TelemetryLog.hpp): switching it on and off keeps
+  // the published topics, also the alert that is logged again only when it changes; the display
+  // table goes to the Driver Station backend without the copy
+  using prosdk::telemetry::TelemetryRegistry;
+  auto displayBackend = TelemetryRegistry::GetBackend("/DriverStationDisplay/text");
+  CHECK(displayBackend != telemetryBackend);
+  prosdk::log::DataLogBackgroundWriter log{[](std::span<const uint8_t>) {}, 0.25};
+  prosdk::platform::StartTelemetryLog(log);
+  CHECK(TelemetryRegistry::GetBackend("/Alerts/Registered/errors") != telemetryBackend);
+  CHECK(TelemetryRegistry::GetBackend("/DriverStationDisplay/text") == displayBackend);
+  prosdk::platform::detail::PostCycle();
+  CHECK(fake::GetStringArray("/Telemetry/Alerts/Registered/errors") == Strings{"visible"});
+  prosdk::platform::StopTelemetryLog(log);
+  CHECK(TelemetryRegistry::GetBackend("") == telemetryBackend);
+  prosdk::platform::detail::PostCycle();
+  CHECK(fake::GetStringArray("/Telemetry/Alerts/Registered/errors") == Strings{"visible"});
 }

@@ -15,7 +15,9 @@ namespace prosdk::platform {
  *     for "" (all paths) and prosdk::backend::ProbotTunableBackend("/Tunables") as the tunable
  *     backend for "", replacing what was registered for "" before (the telemetry backend
  *     through prosdk::platform::SetDefaultTelemetryBackend(): while DataLogManager logs
- *     "NetworkTables", telemetry is also copied into its log, prosdk/platform/TelemetryLog.hpp);
+ *     "NetworkTables", telemetry is also copied into its log, prosdk/platform/TelemetryLog.hpp;
+ *     the same backend is registered for "/DriverStationDisplay", so the display screen is not
+ *     copied);
  *   - shows prosdk::Preferences as robust tunables /Preferences/<key> (own tunable backend for
  *     "/Preferences"); Driver Station edits are written back to the Preferences store
  *     (prosdk/platform/dashboard/DashboardPreferences.hpp);

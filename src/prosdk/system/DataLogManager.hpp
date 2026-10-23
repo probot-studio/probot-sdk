@@ -38,15 +38,18 @@ namespace prosdk {
  * below twice the threshold. Free space comes from esp_littlefs (only for logs
  * under /littlefs; elsewhere, e.g. an SD card, nothing is deleted).
  *
- * prosdk: NetworkTables is not ported. LogNetworkTables() (on by default, as
- * upstream) copies the robot's telemetry into the log instead: every value
- * logged through prosdk telemetry while the Driver Station backend is
- * registered (the robot framework does it) is also written as
- * "NT:/Telemetry/<path>", the name upstream's NetworkTables logger gives it,
- * so AdvantageScope finds the same keys (prosdk/platform/TelemetryLog.hpp).
- * Equal consecutive values are written once (KeepDuplicates() keeps them).
- * Tunables, Preferences and alerts are not copied. Without a log directory
- * nothing is copied.
+ * prosdk: NetworkTables is not ported. LogNetworkTables() copies the robot's
+ * telemetry into the log instead: every value logged through prosdk telemetry
+ * while the Driver Station backend is registered (the robot framework does
+ * it) is also written as "NT:/Telemetry/<path>", the name upstream's
+ * NetworkTables logger gives it, so AdvantageScope finds the same keys
+ * (prosdk/platform/TelemetryLog.hpp). Equal consecutive values are written
+ * once (KeepDuplicates() keeps them). Alerts are copied; tunables,
+ * Preferences and the Driver Station display are not. Without a log directory
+ * nothing is copied. Upstream starts it by default; here it starts by default only on
+ * the host. On the robot call LogNetworkTables(true) after Start(): a few
+ * values changing every loop fill the LittleFS partition in minutes
+ * (PROSDK_DATALOGMANAGER_LOG_TELEMETRY in prosdk/platform/WpilibcConfig.hpp).
  * The console log ("console" entry) holds the prosdk console output
  * (prosdk::platform::ConsoleWrite: errors, warnings, DataLogManager::Log and
  * other library messages), not Serial or stdout. It is copied through a
@@ -122,7 +125,8 @@ class DataLogManager final {
    * Enable or disable logging of NetworkTables data. Note that unlike the
    * network interface for NetworkTables, this will capture every value change.
    * Defaults to enabled.
-   * prosdk: logs the telemetry copy described in the class comment.
+   * prosdk: logs the telemetry copy described in the class comment; defaults
+   * to disabled on the robot.
    *
    * @param enabled true to enable, false to disable
    */

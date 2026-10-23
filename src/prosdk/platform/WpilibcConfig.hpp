@@ -62,6 +62,25 @@
 #endif
 
 /**
+ * Whether DataLogManager starts its telemetry copy (LogNetworkTables(), "NT:/Telemetry/<path>",
+ * prosdk/platform/TelemetryLog.hpp) by default. Upstream logs NetworkTables by default; on the
+ * robot it is off: each changed value is a record of about 15 B for a double (header, entry id,
+ * size, timestamp, value), so 20 doubles changing every 20 ms loop write about 15 KB/s and fill the
+ * huge_app LittleFS partition (896 KiB, shared with the console log and other files) in about a
+ * minute. Old logs are deleted only when DataLogManager starts, and on the ESP32 the writer has no
+ * free-space check (no statvfs): once the partition is full every write fails and is reported.
+ * DataLogManager::LogNetworkTables(true) turns the copy on; log few values, or values that change
+ * rarely, or log to an SD card. 1: on by default as upstream (the host default).
+ */
+#ifndef PROSDK_DATALOGMANAGER_LOG_TELEMETRY
+#if PROSDK_TARGET_HW
+#define PROSDK_DATALOGMANAGER_LOG_TELEMETRY 0
+#else
+#define PROSDK_DATALOGMANAGER_LOG_TELEMETRY 1
+#endif
+#endif
+
+/**
  * DataLogManager console log: bytes of console output buffered between two drains by the manager's
  * thread (every 20-250 ms); more is dropped and counted.
  */

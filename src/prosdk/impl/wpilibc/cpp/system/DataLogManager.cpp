@@ -210,7 +210,10 @@ Thread::Thread(std::string_view dir, std::string_view filename, double period)
   // the date/time std::format of the rename needs more than the default
   m_stackSize = PROSDK_DATALOGMANAGER_THREAD_STACK_SIZE;
   m_threadName = "datalogmgr";
-  StartNTLog();
+  // prosdk: the telemetry copy is off by default on the robot (PROSDK_DATALOGMANAGER_LOG_TELEMETRY)
+  if (PROSDK_DATALOGMANAGER_LOG_TELEMETRY) {
+    StartNTLog();
+  }
   StartConsoleLog();
 }
 
