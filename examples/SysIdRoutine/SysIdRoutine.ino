@@ -14,8 +14,10 @@
 // Gamepad 0: arcade drive on the sticks, shooter on the left trigger. Right bumper + face
 // down/right/left/up runs the drive's quasistatic forward/reverse and dynamic forward/reverse
 // tests; left bumper + the same buttons runs them for the shooter.
-// The SysId log goes to the DataLog: on the robot to /littlefs/logs when LittleFS is mounted,
-// otherwise it is discarded with a console line (design/API-DIFFERENCES.md, DataLogManager).
+// The SysId log goes to the DataLog: on the robot to /littlefs/logs. prosdk does not mount
+// LittleFS; Robot's first member does (LittleFS.begin(true): formats the partition only when it
+// cannot be mounted, e.g. blank on the first boot). Without it the log is discarded with a console
+// line (design/API-DIFFERENCES.md, DataLogManager).
 // While the robot is idle the .wpilog files can be downloaded from the Driver Station's Logs page,
 // "Dosyalar" card ("logs").
 

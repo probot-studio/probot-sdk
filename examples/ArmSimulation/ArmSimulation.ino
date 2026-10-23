@@ -13,8 +13,8 @@
 // Preferences "ArmPosition" (deg) and "ArmP" are tunables under /Preferences on the Driver
 // Station, stored in NVS; they are read when teleop starts.
 // The physics model only runs in the host simulator (SimulationPeriodic); on the robot it is
-// inert and the real motor and encoder are used. Mechanism2d shows as a topic tree on the
-// Driver Station.
+// inert and the real motor and encoder are used. The Driver Station's "Veri" page draws the
+// Mechanism2d as a widget (probot-core #40).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

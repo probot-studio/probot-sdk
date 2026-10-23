@@ -47,19 +47,35 @@ hardware validation is done.
   program halts with outputs off until reboot (`PORT.md` 8.1 "Exceptions").
 - Command-based: `examples/CommandBasedRobot`, `TemplateCommandV2`, `TemplateCommandItems`
   (`prosdk::cmd`); command names come from the CRTP class (no RTTI; `API-DIFFERENCES.md` section 3,
-  `CommandHelper`), subsystems are named with `SubsystemBase(name)` or `SetName()`.
+  `CommandHelper`), subsystems are named with `SubsystemBase(name)` or `SetName()`. Recommend the
+  base initializer, `Drive() : SubsystemBase{"Drive"} {}`: unnamed, every subsystem is
+  `prosdk::cmd::SubsystemBase` (two SysIdRoutines then write the same `sysid-test-state` entry and
+  the Scheduler widget cannot tell them apart), and `SetName()` in the body is too late for a
+  `SysIdRoutine` member (it reads `GetName()` when it is constructed).
+- Utility mode works in every robot class. `TimedRobot`/`TimesliceRobot`: the robot host lists a
+  `Utility` opmode after the constructor, so the DS offers Utility and `UtilityInit/Periodic/Exit`
+  run (`design/hal-esp32.md` "Utility mode"; prosdk before that change offered no Utility to them,
+  the workaround was `RobotState::AddOpMode(RobotMode::UTILITY, "Utility")` +
+  `RobotState::PublishOpModes()` in the constructor). `OpModeRobot`: register UTILITY opmodes and
+  call `PublishOpModes()`.
 
 ## 3. Pins and hardware
 
 - Source: `design/hal-esp32.md` "Channel model", "Capacities", "Output safety", "Not supported".
 - Channel = GPIO number for every pin API (no roboRIO-style DIO 0-9). Pins refused and why (USB,
   UART0, flash/PSRAM, core's pins, pins already used by Arduino code).
+- Warn about the strapping pins GPIO 0, 45, 46: allowed, no runtime warning, but hardware that pulls
+  them at power-on can keep the board from booting or leave it in download mode (0/46 boot mode,
+  45 flash voltage; 0 is the BOOT button). Use them last (`hal-esp32.md` "Channel model").
+- Bus port names are the 2027 enums: `I2C::Port::PORT_0`/`PORT_1`, `SerialPort::Port::ONBOARD`
+  (UART1)/`MXP` (UART2); SPI keeps `SPI::kPort0` (SPI2)/`kPort1` (SPI3).
 - Capacities: 12 PWM outputs, 4 counters/encoders, 6 duty-cycle inputs, 10 analog inputs (ADC1),
   3 LED/pulse outputs, 2 I2C, 2 serial, 1 CAN (external transceiver), 2 SPI buses.
 - Output safety: outputs are gated while disabled and on Driver Station loss; e-stop drives outputs
   low. PCA9685 limitation: `design/drivers.md` "PCA9685 and ProHub".
 - Not on the kit (API compiles, does nothing or reports an error): pneumatics, PowerDistribution,
-  OnboardIMU, DIO pulses, interrupts (`API-DIFFERENCES.md` section 3).
+  OnboardIMU, DIO pulses, interrupts (`API-DIFFERENCES.md` section 3). `OnboardIMU` constructs fine;
+  yaw reads 0 and every other getter throws (the program halts if uncaught): use `MPU6050`.
 - The kit electronics and pin map are not final (KIT.md section 3); the examples' pin map is in
   `design/examples.md` "Pin map". Check before publishing wiring pages.
 
@@ -69,6 +85,12 @@ hardware validation is done.
   `PublishOpModes()` (`README.md`).
 - Gamepads: ports 0-5, analog triggers, 8-way POV, names; mapped to WPILib's Gamepad layout. No
   rumble, LEDs or touchpads (`API-DIFFERENCES.md` section 3, "Joysticks").
+- Controller class: `Gamepad` / `CommandGamepad` (`XboxController`, `DualShock4Controller`,
+  `DualSenseController` and their `Command*` read the same layout). Not the `NiDs*` /
+  `CommandNiDs*` classes: legacy NI DS numbering, wrong on the Probot DS (`API-DIFFERENCES.md`,
+  `NiDs*` row). Buttons are 0-based (`GetRawButton(0)` = FACE_DOWN); old "starting at 1" comments
+  were fixed in prosdk (`wpilibc/0017`). GUIDE is not available with core's profiles (core request
+  R20); `Joystick::GetTrigger()`/`GetTop()` read buttons 1/2 (B/X on a gamepad).
 - No alliance, match number or game data from the probot DS (core request R18); `DriverStationSim`
   has them on the host only (`examples.md` "Example tests").
 - Console: lines carry a level (error/warning/info), shown on the DS Logs page
@@ -104,9 +126,18 @@ hardware validation is done.
 
 - Source: `API-DIFFERENCES.md` section 3 (`DataLogManager` rows, `DataLog` buffers),
   `examples/SysIdRoutine`, `examples/BoardozaSdLog`, `core-requests.md` "P1 R11 wired", R17.
-- `DataLogManager::Start()` logs to `/littlefs/logs` when the sketch mounted LittleFS
-  (`LittleFS.begin()`), else nothing is written (console line says so). SD card:
-  `prosdk::platform::MountSdCard()` and `SetLogDirectory("/sd/logs")`.
+- `DataLogManager::Start()` logs to `/littlefs/logs` when the sketch mounted LittleFS, else nothing
+  is written (console line says so). prosdk never mounts it. Pattern (`examples/SysIdRoutine`):
+  `#include <LittleFS.h>`, first member of the Robot class `bool m_fs = LittleFS.begin(true);`
+  (above RobotContainer, subsystems and DataLog entries; the log directory is fixed at the first
+  DataLogManager call), then `DataLogManager::Start()` in the constructor so the "logs" share exists
+  after every boot. `begin(true)` formats only a partition it cannot mount (blank on first boot).
+  SD card: `prosdk::platform::MountSdCard()` and `SetLogDirectory("/sd/logs")`.
+- E-stop: logs survive. The e-stop needs a reboot, and neither the DS reboot nor a PB-E305 restart
+  erases flash; the writer fsyncs every 0.25 s on its own task. A sketch upload keeps the partition
+  unless "Erase All Flash" is on or the partition scheme changes. Only dated
+  `WPILIB_<date>.wpilog` files are kept: a `WPILIB_TBD_` file (no DS clock) is deleted at the next
+  `Start()`; below 128 KiB free the oldest go until 3 remain. No download while e-stopped.
 - File names get the real UTC date once the DS has set the robot clock (core R10).
 - Telemetry can be copied into the log as `NT:/Telemetry/<path>` (the keys AdvantageScope knows
   from upstream logs). On the robot the copy is off by default: call

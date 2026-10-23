@@ -154,7 +154,7 @@ Use **channel number = GPIO number** for every pin-based API (DIO, PWM, Encoder 
 
 * Validity mask: `GPIO_IS_VALID_GPIO(n)`, minus pins that are always reserved: 26–32 (SPI flash), 33–37 on octal-PSRAM modules (R8/R16; Kconfig `CONFIG_SPIRAM_MODE_OCT`), 19/20 (USB D-/D+ when USB-CDC console is used) and 43/44 (UART0).
 * Pre-allocated with `previousAllocation = "probot-core"` so users get the standard "Resource already allocated" message: `NEOPIXEL_PIN` (default 3), `PROBOT_RSL_PIN`, `PROBOT_ESTOP_ENABLE_PIN`, `PROBOT_BATTERY_ADC_PIN`, and the INA SDA/SCL pins when defined.
-* Strapping pins 0/3/45/46 are allowed, with a warning.
+* Strapping pins 0/3/45/46 are allowed, with a warning. (Built differently: 0/45/46 are allowed without a runtime warning, 3 is refused as `NEOPIXEL_PIN`; the user docs warn. See design/hal-esp32.md, Channel model.)
 * Optional *virtual channel ranges* for off-chip IO through a "port provider" interface. The legacy sdk already has ProHub: PCA9685 I2C PWM on 0x40/0x41 and an encoder co-processor over UART at 921600 baud (`src/probot/prohub/*`). For example, PWM 100–115 would go to PCA9685 #0 and encoders 100–107 to ProHub frames. The provider decides per range, so the HAL front-end files stay the same.
 
 ### 5.2 Group → peripheral mapping

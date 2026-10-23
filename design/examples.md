@@ -50,6 +50,9 @@ refuses:
 - 22-25, which do not exist;
 - GPIO 3 (probot-core's NeoPixel).
 
+They also avoid the strapping pins 0, 45 and 46, which the HAL allows (hal-esp32.md); only
+SwerveBot and SwerveDrivePoseEstimator use 45, for lack of pins, and say so in their wiring.
+
 They also stay inside the hardware limits:
 - 12 PWM outputs;
 - 4 PCNT units shared by encoders and counters;
@@ -109,6 +112,14 @@ which need more pins than those ranges allow.
     header comment of both sketches says so.
 - **SnippetEncoder.** Upstream puts both encoders on DIO 0/1, which cannot be allocated twice.
   The port uses 6/7 and 15/16.
+- **SysIdRoutine.**
+  - Drive and Shooter name themselves (`SubsystemBase{"Drive"}`, `SubsystemBase{"Shooter"}`), so
+    their SysId log entries (`sysid-test-state-Drive`, `-Shooter`) and command names differ.
+    Upstream leaves both with the base name, and without RTTI both would be
+    `prosdk::cmd::SubsystemBase` (API-DIFFERENCES.md, SubsystemBase default name). It has to be the
+    base initializer: the `sysIdRoutine` member reads `GetName()` before the constructor body.
+  - `Robot`'s first member mounts LittleFS (`LittleFS.begin(true)`), so the log reaches
+    /littlefs/logs; prosdk does not mount it. BoardozaSdLog mounts it as its no-card fallback.
 
 ## Decisions
 
@@ -271,7 +282,7 @@ pins of their own. None of them has run on hardware.
 | BoardozaThermalCamera | MLX90640 (`MLX90640`; the MLX90641 works the same way) | I2C port 1, SDA 17 / SCL 18, 400 kHz |
 | BoardozaMultizoneToF | VL53L7CX-1..4 (`VL53L7CX`, 8x8 at 15 Hz) | I2C port 1, SDA 17 / SCL 18, 400 kHz |
 | BoardozaLoadCell | NAU7802, HX711 (`NAU7802`, `HX711`, `LoadCell`) | I2C port 1, SDA 17 / SCL 18, 400 kHz; HX711 DAT 4, CLK 5 |
-| BoardozaGnss | SAM-M8Q or SAM-M10Q (`UbloxGnss` on I2C), GP-02 (`NmeaGnss`) | I2C port 1, SDA 17 / SCL 18, 100 kHz; serial `kOnboard`, RX 15 / TX 16 |
+| BoardozaGnss | SAM-M8Q or SAM-M10Q (`UbloxGnss` on I2C), GP-02 (`NmeaGnss`) | I2C port 1, SDA 17 / SCL 18, 100 kHz; serial `ONBOARD`, RX 15 / TX 16 |
 | BoardozaSdLog | MicroSD (`platform::MountSdCard`, DataLogManager to `/sd/logs`) | SPI bus 0: SCK 12, MOSI 11, MISO 13, CS 10 |
 | BoardozaRotaryArgb | Rotary Encoder ARGB (`ClockedAddressableLED`, `Encoder`, `DigitalInput`) | SPI bus 1 alone: SCK 39, MOSI 40; encoder A 41 / B 42; button 38 |
 | BoardozaLoRa | E22-900M22S (`SX126x`). Regulatory: 868.1 MHz, 14 dBm, at most 1 % duty cycle (EU 868.0-868.6 MHz sub-band); check local rules before changing them | SPI bus 0: SCK 12, MOSI 11, MISO 13, CS 10; BUSY 4, DIO1 5, NRST 6, RXEN 7, TXEN 15 |

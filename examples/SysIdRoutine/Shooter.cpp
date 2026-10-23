@@ -8,7 +8,7 @@
 #include <prosdk/units/angle.hpp>
 #include <prosdk/units/voltage.hpp>
 
-Shooter::Shooter() {
+Shooter::Shooter() : SubsystemBase{"Shooter"} {
   shooterEncoder.SetDistancePerPulse(
       constants::shooter::ENCODER_DISTANCE_PER_PULSE.value());
 }

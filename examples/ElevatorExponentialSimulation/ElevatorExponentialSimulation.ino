@@ -10,8 +10,8 @@
 // encoder A/B on GPIO 6/7 (upstream: PWM 0, DIO 0/1).
 // Joystick 0: hold the trigger to go to the upper setpoint, release to go to the lower one.
 // The physics model only runs in the host simulator (SimulationPeriodic); on the robot it is
-// inert and the real motor and encoder are used. Mechanism2d shows as a topic tree on the
-// Driver Station.
+// inert and the real motor and encoder are used. The Driver Station's "Veri" page draws the
+// Mechanism2d as a widget (probot-core #40).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

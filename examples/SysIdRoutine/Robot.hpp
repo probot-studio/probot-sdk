@@ -6,6 +6,8 @@
 
 #include <optional>
 
+#include <LittleFS.h>
+
 #include "SysIdRoutineBot.hpp"
 #include <prosdk/commands2/CommandPtr.hpp>
 #include <prosdk/framework/TimedRobot.hpp>
@@ -28,6 +30,9 @@ class Robot : public prosdk::TimedRobot {
   void UtilityExit() override;
 
  private:
+  // first member: mount the log storage (/littlefs/logs) before anything logs
+  bool fsMounted = LittleFS.begin(true);
+
   std::optional<prosdk::cmd::CommandPtr> autonomousCommand;
 
   SysIdRoutineBot container;

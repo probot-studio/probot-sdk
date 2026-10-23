@@ -6,7 +6,7 @@
 
 #include <prosdk/commands2/Commands.hpp>
 
-Drive::Drive() {
+Drive::Drive() : SubsystemBase{"Drive"} {
   leftMotor.AddFollower(prosdk::PWMSparkMax{constants::drive::LEFT_MOTOR2_PORT});
   rightMotor.AddFollower(prosdk::PWMSparkMax{constants::drive::RIGHT_MOTOR2_PORT});
 

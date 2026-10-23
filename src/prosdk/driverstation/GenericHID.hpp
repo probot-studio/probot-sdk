@@ -121,7 +121,7 @@ class GenericHID final : public HIDDevice {
   GenericHID& operator=(GenericHID&&) = default;
 
   /**
-   * Get the button value (starting at button 1).
+   * Get the button value (starting at button 0).
    *
    * The buttons are returned in a single 16 bit value with one bit representing
    * the state of each button. The appropriate button is returned as a boolean
@@ -130,14 +130,14 @@ class GenericHID final : public HIDDevice {
    * This method returns true if the button is being held down at the time
    * that this method is being called.
    *
-   * @param button The button number to be read (starting at 1)
+   * @param button The button number to be read (starting at 0)
    * @return The state of the button.
    */
   bool GetRawButton(int button) const;
 
   /**
    * Whether the button was pressed since the last check. %Button indexes begin
-   * at 1.
+   * at 0.
    *
    * This method returns true if the button went from not pressed to held down
    * since the last time this method was called. This is useful if you only
@@ -150,7 +150,7 @@ class GenericHID final : public HIDDevice {
 
   /**
    * Whether the button was released since the last check. %Button indexes begin
-   * at 1.
+   * at 0.
    *
    * This method returns true if the button went from held down to not pressed
    * since the last time this method was called. This is useful if you only

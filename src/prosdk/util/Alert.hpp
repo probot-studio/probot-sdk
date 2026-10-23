@@ -40,8 +40,8 @@ void ReleaseAlertHandle(Alert& alert);
  *
  * <pre>
  * class Robot {
- *   prosdk::util::Alert alert{"Something went wrong",
- *                          prosdk::util::Alert::Level::kMedium};
+ *   prosdk::util::Alert alert{"somethingWrong", "Something went wrong",
+ *                             prosdk::util::Alert::Level::kMedium};
  * }
  *
  * Robot::periodic() {
@@ -87,8 +87,8 @@ class Alert {
   /**
    * Creates a new alert in the default group - "Alerts".
    *
-   * @param text Text to be displayed when the alert is active.
    * @param id Alert identifier. This should be unique within the group.
+   * @param text Text to be displayed when the alert is active.
    * @param level Alert urgency level.
    */
   Alert(std::string_view id, std::string_view text, Level level);

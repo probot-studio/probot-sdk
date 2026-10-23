@@ -166,31 +166,31 @@ class Joystick : public HIDDevice {
   int GetThrottleChannel() const;
 
   /**
-   * Get the button value (starting at button 1).
+   * Get the button value (starting at button 0).
    *
    * The buttons are returned in a single 16 bit value with one bit representing
    * the state of each button. The appropriate button is returned as a boolean
    * value.
    *
-   * @param button The button number to be read (starting at 1)
+   * @param button The button number to be read (starting at 0)
    * @return The state of the button
    */
   bool GetRawButton(int button) const;
 
   /**
    * Whether the button was pressed since the last check. Button indexes begin
-   * at 1.
+   * at 0.
    *
-   * @param button The button index, beginning at 1.
+   * @param button The button index, beginning at 0.
    * @return Whether the button was pressed since the last check.
    */
   bool GetRawButtonPressed(int button);
 
   /**
    * Whether the button was released since the last check. Button indexes begin
-   * at 1.
+   * at 0.
    *
-   * @param button The button index, beginning at 1.
+   * @param button The button index, beginning at 0.
    * @return Whether the button was released since the last check.
    */
   bool GetRawButtonReleased(int button);

@@ -1,10 +1,10 @@
 // Copyright (c) Probot Studio. Hand-written (not vendored); see LICENSE.
 //
 // Board wiring for the HAL buses that have no fixed pins on the ESP32-S3 (design/hal-esp32.md).
-// WPILib names buses by port (I2C kPort0/kPort1, SerialPort kOnboard/kMXP, CAN bus 0); the GPIO
+// WPILib names buses by port (I2C PORT_0/PORT_1, SerialPort ONBOARD/MXP, CAN bus 0); the GPIO
 // matrix lets any pin carry them, so the sketch says which pins before it opens the bus:
 //
-//   prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/18);   // before I2C(I2C::kPort1, ...)
+//   prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/18);  // before I2C(I2C::Port::PORT_1, ...)
 //   prosdk::platform::SetCanConfig(/*tx=*/4, /*rx=*/5, 1'000'000);
 //   prosdk::platform::SetSPIPins(0, /*sck=*/12, /*mosi=*/11, /*miso=*/13);  // before SPI(...)
 //
@@ -46,9 +46,9 @@ struct CanConfig {
   uint32_t bitrate;  // 125000, 250000, 500000 or 1000000
 };
 
-/** Number of I2C ports (WPILib I2C::Port kPort0, kPort1). */
+/** Number of I2C ports (WPILib I2C::Port PORT_0, PORT_1). */
 inline constexpr int kNumI2CPorts = 2;
-/** Number of serial ports (WPILib SerialPort::Port kOnboard = UART1, kMXP = UART2). */
+/** Number of serial ports (WPILib SerialPort::Port ONBOARD = UART1, MXP = UART2). */
 inline constexpr int kNumSerialPorts = 2;
 /** Number of SPI buses (prosdk::SPI kPort0 = SPI2, kPort1 = SPI3). */
 inline constexpr int kNumSPIBuses = 2;

@@ -18,7 +18,7 @@
 // transform goes through a std::array member instead of an NT topic; the MPU6050 has no sim
 // class, so the simulated heading is not written back (upstream's imuSim.SetYaw is commented
 // out, as upstream SimpleDifferentialDriveSimulation already does with its gyro).
-// Field2d shows as a topic tree on the Driver Station.
+// The Driver Station's "Veri" page draws the Field2d as a field widget (probot-core #40).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6

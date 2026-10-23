@@ -218,7 +218,7 @@ The ESP32-S3 units that Boardoza drivers share with each other and with the rest
 | ADC1 pins | 10 (GPIO 1-10) | `AnalogCurrentSensor` (INA250A1, ACS758), `VNH7070AS` CS, `VNH5019` CS, MQ4 AO, water sensor | ADC2 is refused (WiFi) |
 | I2C ports | 2 | every I2C board | Port 0 is `Wire`'s bus, which probot-core's battery sensor may use. Port 1 needs `SetI2CPins(1, ...)`. A driver with a reader thread must not sit behind an `I2CSwitch` |
 | SPI buses | 2: `kPort0` = SPI2 (6 chip selects), `kPort1` = SPI3 (3) | `W25QFlash`, `W25NFlash`, SD card, `TMAG5170`, `SX126x`, `FT8xx`, `ClockedAddressableLED` | **A device without chip select must be alone on its bus**: the clocked LEDs take a whole bus (normally `kPort1`) and every CS device shares the other. Give `FT8xx` its own bus unless its MISO release is verified. Mount the SD card before other devices on its bus talk; it counts as one bus user |
-| UARTs | 2 (`kOnboard` UART1, `kMXP` UART2) | GNSS over UART, RS-485, USB-UART, AT radio modules, coprocessors | |
+| UARTs | 2 (`ONBOARD` UART1, `MXP` UART2) | GNSS over UART, RS-485, USB-UART, AT radio modules, coprocessors | |
 | CAN | 1 (TWAI, classic CAN) | ATA6561, TPT71050 | No CAN FD |
 | GPIO interrupts | the GPIO ISR service | `DRV8317H`: 3 Hall pins per motor | Shared with Arduino `attachInterrupt`; there is no interrupt HAL otherwise |
 

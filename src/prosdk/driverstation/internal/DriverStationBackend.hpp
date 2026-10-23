@@ -82,7 +82,7 @@ class DriverStationBackend final {
 
   /**
    * Whether one joystick button was pressed since the last check. %Button
-   * indexes begin at 1.
+   * indexes begin at 0.
    *
    * @param stick  The joystick to read.
    * @param button The button index, beginning at 0.
@@ -92,7 +92,7 @@ class DriverStationBackend final {
 
   /**
    * Whether one joystick button was released since the last check. %Button
-   * indexes begin at 1.
+   * indexes begin at 0.
    *
    * @param stick  The joystick to read.
    * @param button The button index, beginning at 0.

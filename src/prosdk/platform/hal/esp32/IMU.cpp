@@ -1,8 +1,9 @@
 // Copyright (c) Probot Studio. Hand-written (not vendored); see LICENSE.
 //
 // ESP32-S3 HAL backend: onboard IMU. The Probot board has no onboard IMU, so every read returns
-// zeros with HAL_HANDLE_ERROR and a message (OnboardIMU reports it once per call site); the yaw
-// getters, which have no status, return 0 with the current timestamp. External IMUs are used
+// zeros with HAL_HANDLE_ERROR and a message (OnboardIMU's WPILIB_CheckErrorStatus throws
+// prosdk::RuntimeError on it); the yaw getters, which have no status, return 0 with the current
+// timestamp. External IMUs are used
 // through I2C/serial device classes instead.
 
 #include "prosdk/hal/IMU.h"

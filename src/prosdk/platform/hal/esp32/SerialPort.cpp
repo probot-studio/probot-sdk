@@ -1,9 +1,9 @@
 // Copyright (c) Probot Studio. Hand-written (not vendored); see LICENSE.
 //
 // ESP32-S3 HAL backend: serial ports on the ESP-IDF UART driver (design/hal-esp32.md, "Serial").
-// kOnboard is UART1 and kMXP is UART2, on the pins from prosdk::platform::SetSerialPins (onboard
+// ONBOARD is UART1 and MXP is UART2, on the pins from prosdk::platform::SetSerialPins (onboard
 // default RX 15 / TX 16; MXP has no default). UART0 is the console and USB is not a serial port
-// here: kUSB1/kUSB2 report HAL_SERIAL_PORT_NOT_FOUND. A UART that Arduino's Serial1/Serial2
+// here: USB_1/USB_2 report HAL_SERIAL_PORT_NOT_FOUND. A UART that Arduino's Serial1/Serial2
 // already opened is refused. The RX/TX GPIOs are claimed in the HAL pin table while the port is
 // open, so DIO/PWM/... on them fail (and work again after HAL_CloseSerial). Defaults: 9600 8N1, no flow control, read timeout 0 (a read returns
 // what is buffered; WPILib's SerialPort sets its own timeout).
@@ -105,7 +105,7 @@ HAL_SerialPortHandle HAL_InitializeSerialPort(HAL_SerialPort port, int32_t* stat
   if (port == HAL_SERIAL_PORT_USB_1 || port == HAL_SERIAL_PORT_USB_2) {
     *status = MakeError(HAL_SERIAL_PORT_NOT_FOUND,
                         "Serial: USB serial ports do not exist on the ESP32-S3 robot (use "
-                        "kOnboard or kMXP)");
+                        "SerialPort::Port::ONBOARD or MXP)");
     return HAL_INVALID_HANDLE;
   }
   if (port != HAL_SERIAL_PORT_ONBOARD && port != HAL_SERIAL_PORT_MXP) {
@@ -137,7 +137,7 @@ HAL_SerialPortHandle HAL_InitializeSerialPort(HAL_SerialPort port, int32_t* stat
   auto [handle, state] = *resource;
   state->uart = uart;
   // claim the pins (released by ~SerialPortState, also on the failure paths below)
-  const char* portName = index == 0 ? "kOnboard" : "kMXP";
+  const char* portName = index == 0 ? "ONBOARD" : "MXP";
   for (auto [gpio, claim, role] : {std::tuple{config.rx, &state->rxClaim, "RX"},
                                    std::tuple{config.tx, &state->txClaim, "TX"}}) {
     if (gpio < 0) {

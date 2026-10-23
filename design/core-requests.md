@@ -277,6 +277,21 @@ prosdk can add an `ansi` string child with the screen's SGR runs.
 
 Status: open (written 2026-10-23, not sent to core yet).
 
+### R20. Gamepad GUIDE (Home) button in the mapping profiles (low priority)
+
+prosdk maps core's mapping field `Options` to WPILib's Gamepad GUIDE button (index 5,
+`hal/CoreJoystick.cpp`). In `src/probot/io/joystick_mappings/mapping.hpp` `Options` is -1 in
+`mapping_logitech_f310` (the default active profile), `mapping_standard` (also behind the xbox/ds4/ps
+aliases) and `mapping_axis9_dpad`; only tuna-default has one (10). The DS page already sends up to 20
+buttons (`kMaxButtons`), so W3C Standard Gamepad button 16 (the centre Home/Guide/PS/Logitech button)
+reaches the robot but no profile names it, and GUIDE is never available: `GetGuideButton()` is false and
+the WPILib DriverStation alert reports a missing button. Wanted: `Options = 16` in those three profiles. A
+frame with fewer than 17 buttons keeps GUIDE unavailable, which prosdk already handles. Worth a line in
+API.md that the OS, Steam or the browser may capture the Guide/PS button. No prosdk change is needed once
+core has it. Until then design/hal-esp32.md (Joysticks) and the user docs say GUIDE is not available.
+
+Status: open (written 2026-10-23, not sent to core yet).
+
 ## Status
 
 ### P0 delivered (2026-10-22): probot-core branch `feat/framework-api`, draft PR #26 to `dev`

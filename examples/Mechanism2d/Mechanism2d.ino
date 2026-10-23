@@ -4,8 +4,8 @@
 
 // Mechanism2d: an elevator with a wrist shown as a Mechanism2d (upstream
 // wpilibcExamples/src/main/cpp/examples/Mechanism2d), ported
-// to prosdk. The mechanism goes to /Telemetry/Mech2d (the Driver Station has no Mechanism2d
-// widget yet and shows it as a topic tree, design/core-requests.md R5).
+// to prosdk. The mechanism goes to /Telemetry/Mech2d; the Driver Station's "Veri" page draws it
+// as a Mechanism2d widget (probot-core #40, design/core-requests.md R5).
 //
 // Wiring (GPIO numbers; channel = GPIO):
 //   GPIO 4  elevator PWMSparkMax    GPIO 5  wrist PWMSparkMax

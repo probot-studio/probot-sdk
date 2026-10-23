@@ -23,7 +23,7 @@ class RobotContainer {
   prosdk::cmd::CommandPtr GetAutonomousCommand();
 
  private:
-  // Replace with CommandPS4Controller or CommandJoystick if needed
+  // Replace with CommandDualShock4Controller or CommandJoystick if needed
   prosdk::cmd::CommandGamepad driverController{
       OperatorConstants::DRIVER_CONTROLLER_PORT};
 

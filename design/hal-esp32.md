@@ -33,6 +33,13 @@ Driver Station (design/PORT.md section 8).
     these claim their pins in `smartIoHandles` (`ClaimPin`, the owner shows in the error message)
     and release them on close (serial) or never (CAN runs until reboot). SPI bus and chip-select
     pins, the SD card's chip select, pulse I/O pins and six-step pins are claimed the same way.
+- Strapping pins GPIO 0, 45 and 46 are allowed, without a warning (GPIO 3 is refused only as
+  core's `NEOPIXEL_PIN`). The chip reads them at reset: 0 and 46 select the boot mode, 45 the
+  flash voltage (VDD_SPI). Hardware that pulls one of them the wrong way at power-on (an encoder or
+  sensor output that idles high, an external pull-up, a switch to 3.3 V) can keep the board from
+  booting or leave it in download mode; after boot they are ordinary GPIO, so the HAL can neither
+  detect nor prevent it. GPIO 0 is also the BOOT button. User docs warn; the example pin map
+  avoids them (design/examples.md).
 - Free/Clean releases everything the HAL created: the hardware unit (MCPWM timer/generator, PCNT
   unit, capture channel, RMT channel, UART driver, TWAI driver), the Arduino peripheral-manager
   attachment, and the pin, which returns to `gpio_reset_pin` state (input with pull-up). After an
@@ -53,7 +60,7 @@ Driver Station (design/PORT.md section 8).
 | Addressable LED outputs + pulse transmitters | 3 together | RMT TX channels (4; core's status LED uses one) | 1024 LEDs shared buffer; one counter (`rmt::AcquireTxChannel`) for both kinds |
 | Pulse capture inputs | 4 | RMT RX channels | |
 | I2C ports | 2 | I2C controllers 0 and 1 | port 0 = `Wire`'s bus |
-| Serial ports | 2 | UART1 (kOnboard), UART2 (kMXP) | USB ports not available |
+| Serial ports | 2 | UART1 (`ONBOARD`), UART2 (`MXP`) | USB ports not available |
 | CAN buses | 1 | TWAI | external transceiver, classic CAN |
 | SPI buses | 2 | SPI2 (`kPort0`), SPI3 (`kPort1`); SPI0/1 are the flash | no default pins (`SetSPIPins`) |
 | SPI chip selects | 6 + 3 | hardware CS of SPI2 and SPI3 | a device without chip select takes the whole bus |
@@ -201,8 +208,8 @@ Driver Station (design/PORT.md section 8).
   device without chip select. Details: `design/boardoza/P9-storage.md`.
 
 ### Serial (SerialPort.cpp)
-- kOnboard = UART1 (default RX 15 / TX 16), kMXP = UART2 (no default pins:
-  `prosdk::platform::SetSerialPins(1, rx, tx)`). kUSB1/kUSB2: `HAL_SERIAL_PORT_NOT_FOUND`
+- `ONBOARD` = UART1 (default RX 15 / TX 16), `MXP` = UART2 (no default pins:
+  `prosdk::platform::SetSerialPins(1, rx, tx)`). `USB_1`/`USB_2`: `HAL_SERIAL_PORT_NOT_FOUND`
   (UART0/USB are the console). A UART that `Serial1`/`Serial2` already opened is refused. The RX
   and TX pins are claimed like DIO pins while the port is open (DIO/PWM on them is refused).
 - 1 KB RX and TX buffers, fixed when the port opens: `HAL_SetSerialReadBufferSize` /
@@ -291,6 +298,11 @@ Driver Station (design/PORT.md section 8).
   INIT or RUN phase is active and `selectedOpModeId()` while idle, so `OpModeRobot` constructs the
   selected opmode while disabled; an id whose mode differs from the control word's robot mode
   reports no opmode. There is no "first registered option" fallback.
+- Utility mode: core offers it only when the sketch defines `utilityLoop()` (prosdk does not) or
+  a UTILITY option is listed (R7). For a `TimedRobot`/`TimesliceRobot` (`PROSDK_ROBOT_MAIN` passes
+  `offerUtility`) the robot host adds the UTILITY option `"Utility"` after the robot's constructor
+  and publishes the list, so the Driver Station offers Utility and `UtilityInit/Periodic/Exit`
+  run, as upstream. An `OpModeRobot` lists its own UTILITY opmodes.
 - Joysticks (prosdk/platform/hal/CoreJoystick.cpp): core gamepad port n = HAL joystick n for
   ports 0-5 (`ds::rawGamepad(0..5)`, core R8; with an older core only port 0 has data). A port
   without a frame, or one core neutralized (stale), is a disconnected joystick. Core neutralizes
@@ -306,7 +318,13 @@ Driver Station (design/PORT.md section 8).
   opposite directions cancel). Descriptor: name = core's gamepad name (UTF-8, at most 63 bytes,
   empty when core has none); a gamepad with the browser's standard mapping is a gamepad of type
   `HIDType::STANDARD`, any other one a generic HID (not a gamepad, type UNKNOWN; the profile
-  remap still applies). No touchpads, rumble or LEDs (`supportedOutputs` 0).
+  remap still applies). No touchpads, rumble or LEDs (`supportedOutputs` 0). GUIDE (5) comes
+  from the profile's `Options` field, which is -1 in core's logitech-f310 (default), standard
+  (also the xbox/ds4/ps aliases) and axis9-dpad profiles, so with them GUIDE is never available:
+  `GetGuideButton()` is false and the DriverStation alert reports a missing button (core request
+  R20 maps the W3C Home button, 16). Button indexes are 0-based, as upstream 2027; the "starting
+  at 1" doc comments of `GenericHID`/`Joystick` are corrected by `wpilibc/0017`. The `NiDs*`
+  controllers use the legacy NI DS numbering and do not match this layout (API-DIFFERENCES.md).
 - No alliance station, match info or game data: the Probot DS has none to send (deferred to core
   request R18, design/core-requests.md). Match time from core (-1 when unknown).
 - `HAL_WriteDisplayAnsi` (`DriverStationDisplay`): the screen as plain text in the telemetry table
@@ -365,7 +383,8 @@ Driver Station (design/PORT.md section 8).
 
 ### Other
 - IMU: the Probot board has no onboard IMU; reads report `HAL_HANDLE_ERROR` with a message, yaw
-  getters return 0.
+  getters return 0. `OnboardIMU` constructs fine and throws `prosdk::RuntimeError` on those reads
+  (`WPILIB_CheckErrorStatus`).
 - Extensions: no dynamic loading; `HAL_LoadExtensions` loads nothing, the in-process registry
   works. Usage reporting: accepted and dropped.
 - SimDevice and HALSIM_*: inert stubs as on systemcore (SimStubs.cpp, SimDevice.cpp), so the

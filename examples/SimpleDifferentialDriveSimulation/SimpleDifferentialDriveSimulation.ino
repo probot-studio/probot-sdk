@@ -15,7 +15,7 @@
 // Gamepad 0: left Y drives, right X turns.
 // The Probot board has no onboard IMU: upstream's OnboardIMU is replaced by the kit IMU,
 // prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 8 SDA, GPIO 9 SCL, the HAL default).
-// Field2d shows as a topic tree on the Driver Station.
+// The Driver Station's "Veri" page draws the Field2d as a field widget (probot-core #40).
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6
