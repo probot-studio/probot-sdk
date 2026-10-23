@@ -296,6 +296,14 @@ supported core (`feat/dashboard-store`). CI builds all examples on pushes to `de
 on manual runs; to refresh this table, take the "Sketch uses" / "Global variables use" lines after each
 "== <name>" line of the examples job log.
 
+The table predates the DataLog telemetry copy and the display terminal (749df1e, 6940946 and their
+review fixes): every robot sketch now links the display terminal and the default-backend wrapper,
+about 4 KB of flash and 64-128 B of RAM more, and a sketch that uses DataLogManager also links the log
+copy (about 9 KB in all). Local builds (`tools/build/build.sh examples`, same archive and core) after
+the review fixes: TemplateTimed 1,802,508 / 72,372, DriverStationDisplayLines 1,826,176 / 72,484,
+DriverStationDisplayAnsi 1,805,464 / 72,484, DSGamepadChooser 1,845,324 / 72,556, SysIdRoutine
+2,017,108 / 76,284. The next CI run gives the figures for all 79 sketches.
+
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|
 | AprilTagFieldPose | 2,025,492 | 72,372 |

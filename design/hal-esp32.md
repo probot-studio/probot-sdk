@@ -311,7 +311,8 @@ Driver Station (design/PORT.md section 8).
   request R18, design/core-requests.md). Match time from core (-1 when unknown).
 - `HAL_WriteDisplayAnsi` (`DriverStationDisplay`): the screen as plain text in the telemetry table
   `DriverStationDisplay` (`prosdk/platform/dashboard/DashboardDisplay.hpp`; the page has no display
-  panel, core request R19), not the console.
+  panel, core request R19), not the console and not the DataLog telemetry copy. The terminal is
+  linked into every sketch (the HAL's display hook is a virtual call, about 2-3 KB of flash).
 - `HAL_GetSystemTimeValid` (`RobotController::IsSystemTimeValid`) = core's `ds::systemTimeValid()`
   (core-requests.md R10, CoreOps `systemTimeValid`): true once the Driver Station page has set the
   robot's clock to the browser's UTC time. DataLogManager then renames its log to

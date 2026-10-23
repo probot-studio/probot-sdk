@@ -291,7 +291,9 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   100 KB less flash than against `feat/wall-clock`, core R14, `design/size.md` section 9). Last
   measured against `feat/wall-clock` (R9/R10): `OpModeRobotExample` 1940584 / 72204,
   `TimesliceRobotExample` 1922844 / 72140. Current figures for all 79 sketches (CI run 39890517789,
-  CoreOps ABI 8, against core #42 `feat/dash-set-refused`): `design/examples.md` (Sizes).
+  CoreOps ABI 8, against core #42 `feat/dash-set-refused`): `design/examples.md` (Sizes); since the
+  DataLog telemetry copy and the display terminal every sketch is about 4 KB larger (examples.md
+  notes the local figures until the next CI run).
 
 ## 9. Build (incremental, low load)
 

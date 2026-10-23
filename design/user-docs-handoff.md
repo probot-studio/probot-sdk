@@ -108,9 +108,12 @@ hardware validation is done.
   (`LittleFS.begin()`), else nothing is written (console line says so). SD card:
   `prosdk::platform::MountSdCard()` and `SetLogDirectory("/sd/logs")`.
 - File names get the real UTC date once the DS has set the robot clock (core R10).
-- Telemetry is copied into the log as `NT:/Telemetry/<path>` (the keys AdvantageScope knows from
-  upstream logs); `DataLogManager::LogNetworkTables(false)` turns the copy off. Tunables are not
-  logged.
+- Telemetry can be copied into the log as `NT:/Telemetry/<path>` (the keys AdvantageScope knows
+  from upstream logs). On the robot the copy is off by default: call
+  `DataLogManager::LogNetworkTables(true)` after `Start()`. Say how fast it fills LittleFS: a double
+  record is about 15 B, 20 doubles changing every 20 ms loop write about 15 KB/s, and the 896 KiB
+  partition is full in about a minute (log few or rarely changing values, or log to an SD card).
+  Tunables, Preferences and the DriverStationDisplay screen are not logged; alerts are.
 - Download: the DS "Dosyalar" card on the Logs page lists and downloads the log folder (share
   `"logs"`), only while the robot is idle. A sketch that unmounts a card must call `Stop()` and then
   wait until `probot::files::busy()` is false.

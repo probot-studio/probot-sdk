@@ -475,10 +475,13 @@ Status 2026-10-23:
 - Rumble is still open.
 
 Completeness critic, 2026-10-23 (five more gaps, checked against the tree and upstream):
-- Telemetry in the DataLog: done. `DataLogManager::LogNetworkTables()` (on by default) copies
-  telemetry into the log as `NT:/Telemetry/<path>` (`wpilibc/0016`, `prosdk/platform/TelemetryLog.hpp`,
-  test `test/prosdk/DataLogManagerTelemetryTest.cpp`). Tunables are not copied (no upstream DataLog
-  tunable backend).
+- Telemetry in the DataLog: done. `DataLogManager::LogNetworkTables()` copies telemetry into the
+  log as `NT:/Telemetry/<path>` (`wpilibc/0016`, `prosdk/platform/TelemetryLog.hpp`, test
+  `test/prosdk/DataLogManagerTelemetryTest.cpp`). Tunables are not copied (no upstream DataLog
+  tunable backend). Review follow-up: switching the copy no longer unpublishes the Driver Station
+  topics (alerts, a static display, values logged once stayed missing before); the copy is off by
+  default on the robot (LittleFS write rate, API-DIFFERENCES.md `DataLogManager` row); the display
+  table is not copied; the pair is linked only with DataLogManager. Not run on a board.
 - `DriverStationDisplay`: no longer console lines. A small terminal keeps the screen and publishes it
   as the telemetry table `DriverStationDisplay` (`prosdk/platform/dashboard/DashboardDisplay.hpp`, test
   `test/prosdk/DashboardDisplayTest.cpp`); a DS panel for it is core request R19.
@@ -616,6 +619,7 @@ Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attac
       prosdk source;
     - TemplateTimed 1,797,772 / 72,308 B. CI's figure is 1,798,684 / 72,308 at `85ed58e`; the
       912 B of flash may come from different checkout paths in assert strings (not checked).
+      These figures predate 749df1e/6940946 (about 4 KB more per sketch since, item 17).
 
     `library.properties` checked against the Arduino library specification and core's
     `library.properties` at 940d300:
@@ -649,8 +653,12 @@ Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attac
       arduino-cli) that links the archive with the released probot-core.
 
     Building from sources inside a sketch (without the archive) has never been tested.
-17. **Partly done.** examples.md "Sizes" has all 79 sketches from CI run 39890517789 (`79cdeb7`),
-    PORT.md 8.1 points to it, and package.sh prints the archive and zip sizes. Open: recording them
+17. **Partly done.** examples.md "Sizes" has all 79 sketches from CI run 39890517789 (`85ed58e`;
+    the figures were written into the docs at `79cdeb7`),
+    PORT.md 8.1 points to it, and package.sh prints the archive and zip sizes. The table predates
+    749df1e/6940946: every sketch is about 4 KB larger since (TemplateTimed 1,802,508 / 72,372 in a
+    local build after the review fixes; examples.md lists the five measured sketches); a new CI run
+    must refresh it. Open: recording them
     again from the release archive. As written: record the final size table (PORT.md 8.1,
     examples.md) from the release archive.
 
