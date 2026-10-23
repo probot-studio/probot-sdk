@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -257,4 +258,85 @@ TEST_CASE("Core gamepads map to HAL joysticks 0-5", "[prosdk][hal][joystick]") {
     REQUIRE(pf::ReadCoreJoystick(ops, 0, &d));
     CHECK(std::string{d.descriptor.name}.size() == pf::kCoreGamepadMaxName);
   }
+}
+
+TEST_CASE("Core's Home/Guide button is the Gamepad GUIDE button", "[prosdk][hal][joystick]") {
+  // probot-core R20: Options is W3C standard button 16 (the centre Home/Guide/PS button) in the
+  // logitech-f310, standard and axis9-dpad profiles; -1 there before R20
+  pf::CoreGamepad pad = Pad("Xbox Wireless Controller (STANDARD GAMEPAD)", true);
+  pad.mapping.options = 16;
+  pad.buttons = 1u << 16;
+  pf::CoreJoystickData d;
+  pf::ConvertCoreGamepad(pad, &d);
+  CHECK((d.buttons.available & 0x7fffu) == 0x7fffu);  // all 15 Gamepad buttons, GUIDE too
+  CHECK(Button(d, pf::kCoreJoystickGuide));
+  CHECK_FALSE(Button(d, pf::kCoreJoystickBack));
+  CHECK_FALSE(Button(d, pf::kCoreJoystickStart));
+  pad.buttons = 0;
+  pf::ConvertCoreGamepad(pad, &d);
+  CHECK((d.buttons.available >> pf::kCoreJoystickGuide & 1u) == 1u);
+  CHECK_FALSE(Button(d, pf::kCoreJoystickGuide));
+
+  // a pad that reports 16 buttons has no Home button: GUIDE not available
+  pad.buttonCount = 16;
+  pad.buttons = 0xffffu;
+  pf::ConvertCoreGamepad(pad, &d);
+  CHECK((d.buttons.available >> pf::kCoreJoystickGuide & 1u) == 0u);
+  CHECK_FALSE(Button(d, pf::kCoreJoystickGuide));
+
+  // a core before R20 (Options -1 in the standard profiles): GUIDE not available, even when the
+  // frame carries button 16
+  pad.buttonCount = 17;
+  pad.buttons = 1u << 16;
+  pad.mapping.options = -1;
+  pf::ConvertCoreGamepad(pad, &d);
+  CHECK((d.buttons.available & 0x7fffu) == 0x7fdfu);
+  CHECK_FALSE(Button(d, pf::kCoreJoystickGuide));
+
+  // core's tuna-default profile has had Options = 10 all along
+  pad.mapping.options = 10;
+  pad.buttons = 1u << 10;
+  pf::ConvertCoreGamepad(pad, &d);
+  CHECK(Button(d, pf::kCoreJoystickGuide));
+}
+
+TEST_CASE("CopyCoreMapping copies every field of core's profile", "[prosdk][hal][joystick]") {
+  // core's MappingProfile layout (probot/io/joystick_mappings/mapping.hpp)
+  struct Profile {
+    const char* name;
+    int leftX, leftY, rightX, rightY;
+    bool invertLeftY, invertRightY;
+    int A, B, X, Y, LB, RB, LT, RT, Back, Start, Options, LStick, RStick;
+    bool dpadFromAxis;
+    int dpadAxis;
+    int DPadUp, DPadDown, DPadLeft, DPadRight;
+  };
+  const Profile standard{"standard", 0, 1, 2, 3, true, true, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 16,
+                         10, 11, false, -1, 12, 13, 14, 15};
+  pf::CoreGamepadMapping m;
+  std::memset(&m, 0x55, sizeof(m));
+  pf::CopyCoreMapping(standard, &m);
+  pf::CoreGamepadMapping want = StandardMapping();
+  want.options = 16;
+  CHECK(std::string{m.name} == want.name);
+  auto fields = [](const pf::CoreGamepadMapping& g) {
+    return std::vector<int>{g.leftX,        g.leftY,       g.rightX,      g.rightY,
+                            g.invertLeftY,  g.invertRightY, g.a,          g.b,
+                            g.x,            g.y,           g.leftBumper,  g.rightBumper,
+                            g.leftTrigger,  g.rightTrigger, g.back,       g.start,
+                            g.options,      g.leftStick,   g.rightStick,  g.dpadFromAxis,
+                            g.dpadAxis,     g.dpadUp,      g.dpadDown,    g.dpadLeft,
+                            g.dpadRight};
+  };
+  CHECK(fields(m) == fields(want));
+
+  // a null name reads as "", an index outside int8_t as none
+  Profile odd = standard;
+  odd.name = nullptr;
+  odd.Options = 200;
+  odd.LT = -5;
+  pf::CopyCoreMapping(odd, &m);
+  CHECK(std::string{m.name}.empty());
+  CHECK(m.options == -1);
+  CHECK(m.leftTrigger == -1);
 }

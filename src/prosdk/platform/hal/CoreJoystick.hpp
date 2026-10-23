@@ -51,7 +51,10 @@ struct CoreJoystickData {
 /**
  * Converts one core gamepad snapshot into a HAL joystick (`out` is cleared first):
  *  - buttons and sticks through the snapshot's mapping profile into WPILib's Gamepad layout
- *    (Y axes down-positive);
+ *    (Y axes down-positive); a button is available only when the profile names it and the frame
+ *    has that many buttons. GUIDE is the profile's Options, the centre Home/Guide/PS button
+ *    (probot-core R20: W3C button 16 in the standard profiles, so a pad that reports 17 or more
+ *    buttons; a core before R20 names none there and GUIDE stays unavailable);
  *  - trigger axes = core's trigger values (0..1, core's deadzone applied), raw = the analog
  *    button value scaled to 0..32767;
  *  - POV 0 and the D-pad buttons from core's 8-way POV (a direction is pressed on its two

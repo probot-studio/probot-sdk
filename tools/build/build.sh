@@ -101,7 +101,7 @@ if [ "$run_tests" = 1 ]; then
   rundir="$BUILD/test-run"
   mkdir -p "$rundir"
   status=0
-  for t in prosdk_tests prosdk_dashboard_tests prosdk_dashboard_legacy_tests prosdk_robot_tests prosdk_robot_legacy_tests prosdk_files_tests prosdk_files_legacy_tests prosdk_match_tests wpiutil_tests telemetry_tests tunables_tests hal_tests datalog_tests units_tests wpimath_tests fields_tests apriltag_tests wpilibc_tests commandsv2_tests prosdk_commands2_tests drivers_tests prosdk_drivers_tests example_ArmSimulation_tests example_ElevatorSimulation_tests example_SnippetDigitalCommunication_tests example_SnippetI2CCommunication_tests; do
+  for t in prosdk_tests prosdk_dashboard_tests prosdk_dashboard_legacy_tests prosdk_robot_tests prosdk_robot_legacy_tests prosdk_files_tests prosdk_files_legacy_tests prosdk_match_tests prosdk_gamepad_tests wpiutil_tests telemetry_tests tunables_tests hal_tests datalog_tests units_tests wpimath_tests fields_tests apriltag_tests wpilibc_tests commandsv2_tests prosdk_commands2_tests drivers_tests prosdk_drivers_tests example_ArmSimulation_tests example_ElevatorSimulation_tests example_SnippetDigitalCommunication_tests example_SnippetI2CCommunication_tests; do
     if [ -x "$BUILD/$t" ]; then
       echo "== $t"
       (cd "$rundir" && low "$BUILD/$t") || status=1

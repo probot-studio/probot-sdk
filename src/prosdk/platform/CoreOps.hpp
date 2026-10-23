@@ -121,7 +121,8 @@ struct CoreGamepadMapping {
   int8_t a, b, x, y;
   int8_t leftBumper, rightBumper;
   int8_t leftTrigger, rightTrigger;  // buttons; analog values in CoreGamepad (ABI 3)
-  int8_t back, start, options;
+  int8_t back, start;
+  int8_t options;  // the centre Home/Guide/PS button (probot-core R20), WPILib's GUIDE
   int8_t leftStick, rightStick;
   uint8_t dpadFromAxis;  // 1: the D-pad is one hat axis (dpadAxis), else four buttons
   int8_t dpadAxis;
@@ -227,6 +228,49 @@ void CopyCoreMatchInfo(const M& m, CoreMatchInfo* out) noexcept {
   out->replayNumber = static_cast<uint8_t>(m.replayNumber);
   CopyCoreMatchText(m.eventName, sizeof(m.eventName), out->eventName);
   CopyCoreMatchText(m.gameData, sizeof(m.gameData), out->gameData);
+}
+
+/** A core mapping index as CoreGamepadMapping keeps it: -1 for none or one past int8_t. */
+constexpr int8_t CoreMappingIndex(int index) noexcept {
+  return (index < 0 || index > 127) ? int8_t{-1} : static_cast<int8_t>(index);
+}
+
+/**
+ * Copies core's mapping profile `m` (probot::io::joystick_mapping::MappingProfile, or any type with
+ * its fields) into `out`; `name` stays core's static string. `Options` is the centre
+ * Home/Guide/PS button: W3C standard button 16 in core's logitech-f310, standard and axis9-dpad
+ * profiles since probot-core R20, -1 (none) there before; the HAL reports it as WPILib's Gamepad
+ * GUIDE button (prosdk/platform/hal/CoreJoystick.hpp). A template so that the archive never names a
+ * core type: the bridge and the host tests instantiate it.
+ */
+template <typename P>
+void CopyCoreMapping(const P& m, CoreGamepadMapping* out) noexcept {
+  out->name = m.name != nullptr ? m.name : "";
+  out->leftX = CoreMappingIndex(m.leftX);
+  out->leftY = CoreMappingIndex(m.leftY);
+  out->rightX = CoreMappingIndex(m.rightX);
+  out->rightY = CoreMappingIndex(m.rightY);
+  out->invertLeftY = m.invertLeftY ? 1 : 0;
+  out->invertRightY = m.invertRightY ? 1 : 0;
+  out->a = CoreMappingIndex(m.A);
+  out->b = CoreMappingIndex(m.B);
+  out->x = CoreMappingIndex(m.X);
+  out->y = CoreMappingIndex(m.Y);
+  out->leftBumper = CoreMappingIndex(m.LB);
+  out->rightBumper = CoreMappingIndex(m.RB);
+  out->leftTrigger = CoreMappingIndex(m.LT);
+  out->rightTrigger = CoreMappingIndex(m.RT);
+  out->back = CoreMappingIndex(m.Back);
+  out->start = CoreMappingIndex(m.Start);
+  out->options = CoreMappingIndex(m.Options);
+  out->leftStick = CoreMappingIndex(m.LStick);
+  out->rightStick = CoreMappingIndex(m.RStick);
+  out->dpadFromAxis = m.dpadFromAxis ? 1 : 0;
+  out->dpadAxis = CoreMappingIndex(m.dpadAxis);
+  out->dpadUp = CoreMappingIndex(m.DPadUp);
+  out->dpadDown = CoreMappingIndex(m.DPadDown);
+  out->dpadLeft = CoreMappingIndex(m.DPadLeft);
+  out->dpadRight = CoreMappingIndex(m.DPadRight);
 }
 
 /** Everything prosdk calls in probot-core. All pointers are non-null in an installed table. */

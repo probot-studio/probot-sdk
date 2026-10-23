@@ -60,6 +60,9 @@
 //     <probot/ds.hpp> includes, and requires-checks on probot::ds::matchInfoSeq() and
 //     probot::ds::matchInfo(): kCoreHasMatchInfo). Without it matchInfoSeq/matchInfo stay null:
 //     the HAL reports an unknown alliance station and empty game data and match info.
+//   - R20 Home/Guide button: no detection either. The active mapping profile is copied as it is
+//     (CopyCoreMapping); with R20 its Options is button 16 in the standard profiles, before R20 -1,
+//     and the HAL reports WPILib's GUIDE button available only for an Options index the frame has.
 // The dashboard value limit (dashMaxValue, CoreOps ABI 10) needs no detection: every supported
 // core has it (dashboard::limits() with R15, the store's detail::maxValue() before).
 //
@@ -201,10 +204,6 @@ inline bool IsAttached() { return probot::ds::isAttached(); }
 inline float MatchTimeSeconds() { return probot::ds::matchTimeSeconds(); }
 inline uint32_t PacketSeq() { return probot::ds::packetSeq(); }
 
-inline int8_t Index(int i) {
-  return (i < 0 || i > 127) ? int8_t{-1} : static_cast<int8_t>(i);
-}
-
 // core's joystick API on one snapshot, so the values of ABI 3 come from the same frame as the
 // raw arrays
 struct SnapshotSource final : probot::io::IGamepadSource {
@@ -290,33 +289,7 @@ inline bool RawGamepad(int port, pf::CoreGamepad* out) {
   }
   out->buttons = buttons;
   const auto& m = probot::io::joystick_mapping::getActive();
-  pf::CoreGamepadMapping& o = out->mapping;
-  o.name = m.name != nullptr ? m.name : "";
-  o.leftX = Index(m.leftX);
-  o.leftY = Index(m.leftY);
-  o.rightX = Index(m.rightX);
-  o.rightY = Index(m.rightY);
-  o.invertLeftY = m.invertLeftY ? 1 : 0;
-  o.invertRightY = m.invertRightY ? 1 : 0;
-  o.a = Index(m.A);
-  o.b = Index(m.B);
-  o.x = Index(m.X);
-  o.y = Index(m.Y);
-  o.leftBumper = Index(m.LB);
-  o.rightBumper = Index(m.RB);
-  o.leftTrigger = Index(m.LT);
-  o.rightTrigger = Index(m.RT);
-  o.back = Index(m.Back);
-  o.start = Index(m.Start);
-  o.options = Index(m.Options);
-  o.leftStick = Index(m.LStick);
-  o.rightStick = Index(m.RStick);
-  o.dpadFromAxis = m.dpadFromAxis ? 1 : 0;
-  o.dpadAxis = Index(m.dpadAxis);
-  o.dpadUp = Index(m.DPadUp);
-  o.dpadDown = Index(m.DPadDown);
-  o.dpadLeft = Index(m.DPadLeft);
-  o.dpadRight = Index(m.DPadRight);
+  pf::CopyCoreMapping(m, &out->mapping);
   FillCoreValues(port, s, m, out);
   return true;
 }
