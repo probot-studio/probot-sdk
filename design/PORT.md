@@ -288,7 +288,8 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `AprilTagFieldPose` 1997696 / 71316, `HalSmoke` 1591645 / 73308 (of 3145728 / 327680; about
   100 KB less flash than against `feat/wall-clock`, core R14, `design/size.md` section 9). Last
   measured against `feat/wall-clock` (R9/R10): `OpModeRobotExample` 1940584 / 72204,
-  `TimesliceRobotExample` 1922844 / 72140. The 63 ported upstream examples: `design/examples.md` (Sizes).
+  `TimesliceRobotExample` 1922844 / 72140. Current figures for all 79 sketches (CI run 39890517789,
+  CoreOps ABI 8, against core #42 `feat/dash-set-refused`): `design/examples.md` (Sizes).
 
 ## 9. Build (incremental, low load)
 
@@ -334,7 +335,7 @@ huge_app partition, only sketches that call it pay for it (archive linking), and
 grayscale frames to `Detect()` although the kit has no camera. Detection heap is not measured (no camera;
 estimate in `design/API-DIFFERENCES.md` section 3). The field images are not vendored (9.3 MB; upstream
 builds them only for its GUI). `examples/AprilTagFieldPose`: 1,997,696 B flash (63.5 %), 71,316 B RAM (against core
-`feat/small-items`, 8.1).
+`feat/small-items`, 8.1); 2,025,492 B / 72,372 B against core #42 (`design/examples.md` Sizes).
 
 Re-implemented for this platform: `NetworkButton` and `NetworkBooleanEvent` over tunables
 (`wpilibc/0011`); Preferences on the DS as robust tunables `/Preferences/<key>` written back to NVS
@@ -348,7 +349,7 @@ telemetry and tunables backends over probot-core; Servo; prosdk drivers carried 
 
 Not ported, with reason: JNI/Java/Python bindings (no JVM), commandsv3 (Java-only, uses JVM
 continuations), ntcore/wpinet (replaced by the probot-core DS link; an NT4-compatible server for
-AdvantageScope/Elastic is a later work item), cscore/cameraserver (no camera on the kit), DataLog
+AdvantageScope/Elastic is a later work item, not in the first stable release), cscore/cameraserver (no camera on the kit), DataLog
 reader and upb (desktop tool side), argparse, Romi/XRP vendordeps (other robots), and:
 
 - ExpansionHub (`wpilibc/.../hardware/expansionhub`): drives a REV Expansion Hub through SystemCore's USB

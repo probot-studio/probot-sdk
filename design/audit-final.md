@@ -46,6 +46,11 @@ Short answer:
   - stale status text in API-DIFFERENCES.md section 6 and one size in PORT.md section 10.
 - **Release checklist:** section 6.
 
+**Update 2026-10-23** (prosdk `8a82297` and the commit that adds this note): the 4 gaps of section 5
+are closed, and so are the non-hardware items 10-13, 19 and 20 of the release checklist. Items 16-18
+are done as far as they can be without publishing. Section 6 marks every item **done**, **partly
+done** or **open**; the findings of sections 1-4 are left as measured on 2026-10-22.
+
 ## 1. Method and evidence
 
 All commands ran in `/srv/probot/sdk` on 2026-10-22 with `PROSDK_UPSTREAM` set to the pinned
@@ -402,6 +407,26 @@ QEMU smoke cases run.
 
 ## 5. Unjustified gaps left
 
+**Status 2026-10-23: all four closed.**
+1. `42138d3` ported both tests to `test/examples/SnippetDigitalCommunication` and
+   `test/examples/SnippetI2CCommunication`. They are built as `example_Snippet*_tests`, run by
+   `build.sh host --test` and CI, and described in examples.md "Example tests".
+2. NOTICE (`480b75b`, `e38b13a`) names `examples/` (the 63 ported sketches) and `test/examples` as
+   WPILib BSD-3, and lists every hand-written path, including the 16 prosdk and Boardoza examples,
+   `src/prosdk/probot`, the hand-written drivers and `test/target`. Check on 2026-10-23: every
+   tracked file under `src`, `test` and `host` is either listed in `tools/upstream/generated.txt` or
+   under a path that NOTICE names.
+3. `tools/upstream/examples.py --check` (`42138d3`, CI host job; PORT.md section 2, examples.md)
+   covers all 63 ported sketches and the 5 paths of `test/examples`. It compares 174 upstream files
+   and the 4 upstream example lists with the pin, and fails on an `examples/` folder that is neither
+   ported nor hand-written. Run on 2026-10-23: `examples check OK: 68 ported paths, 174 upstream
+   files and 4 example lists match b68effca4ddc`.
+4. API-DIFFERENCES.md section 6 covers wave 5 (examples) and core R8-R17. PORT.md section 10 gives
+   AprilTagFieldPose's size with the core it was measured against, adds the current CI figure, and
+   points to examples.md "Sizes".
+
+As found on 2026-10-22:
+
 1. **Upstream snippet tests not ported and not mentioned.** Two upstream test programs cover
    snippets that are ported:
    - `wpilibcExamples/src/test/cpp/snippets/DigitalCommunication` tests `SnippetDigitalCommunication`;
@@ -442,7 +467,16 @@ gaps against the project goal "every WPILib 2027 C++ feature":
 
 They depend on probot-core (R5, R11, R12, R8) or on a scope decision (NT4).
 
+Status 2026-10-23:
+- Delivered as core drafts and wired in prosdk (core-requests.md): the three widgets, DataLog
+  download, tunable persistence (opt-in persistent tunables), and the RSL, comms-disable, current
+  and brownout data.
+- NT4 is deferred out of the first stable release.
+- Rumble is still open.
+
 ## 6. Release checklist (before a stable prosdk release)
+
+Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attached to this server.
 
 ### 6.1 Hardware validation (needs an ESP32-S3 board and the final kit electronics)
 
@@ -494,7 +528,10 @@ They depend on probot-core (R5, R11, R12, R8) or on a scope decision (NT4).
 
 ### 6.2 probot-core
 
-9. **PRs #26-#31 merged and released** as probot-core 0.4.0 or later, on stable and in Library
+9. **Open.** probot-core's stack is now draft PRs #26-#42 (R1-R17). Its latest release is still
+   0.3.0. CI's `PROBOT_CORE_REF` is `feat/dash-set-refused` (#42, 940d300), and the oldest supported
+   core is `feat/dashboard-store`. As written on 2026-10-22: **PRs #26-#31 merged and released**
+   as probot-core 0.4.0 or later, on stable and in Library
    Manager. These carry R1-R4 (framework, ds, api), R5 (dashboard store and DS page), R7 (opmodes),
    R6 (loop rate) and R8 (gamepads). The latest release today is 0.3.0. core-requests.md holds the
    PRs until 0.4.0 itself is on stable, so the release that carries them may be numbered above
@@ -504,28 +541,92 @@ They depend on probot-core (R5, R11, R12, R8) or on a scope decision (NT4).
      of the framework headers and `PROBOT_VERSION >= 0.4.0` (the `sdk-target` number), plus
      `__has_include` feature probes such as `PROSDK_CORE_HAS_LOOP_RATE`;
    - set `depends=probot (>=<that version>)` in `library.properties`.
-10. **R9 and R10 wired in prosdk.** R9 (#33, console levels) and R10 (#34, wall clock) are merged,
+10. **Done on the prosdk side** (`4650738`, CoreOps ABI 4; core-requests.md "P1 R9 delivered" and
+    "P1 R10 delivered"). Merging core #33 and #34 is part of item 9. As written on 2026-10-22:
+    **R9 and R10 wired in prosdk.** R9 (#33, console levels) and R10 (#34, wall clock) are merged,
     then:
     - `ConsoleWrite` calls `console::write` with levels;
     - `HAL_GetSystemTimeValid` calls `ds::systemTimeValid()`.
-11. **R11-R14 delivered and wired, or explicitly deferred** with the limitation in the user docs:
+11. **Done on the prosdk side.**
+    - R11: `a61901c`, ABI 8.
+    - R12: part 1 in `3450336` (ABI 5); persistence in `b58b111` and `d641c18` (ABI 6).
+    - R13: `3450336`.
+    - R14: no prosdk code.
+    - R15: `9ec2023`, ABI 7.
+    - R16 and R17: documented; they add no prosdk API.
+
+    core-requests.md has the details. The core PRs are part of item 9. As written on 2026-10-22:
+    **R11-R14 delivered and wired, or explicitly deferred** with the limitation in the user docs:
     - R11: file download (`.wpilog` from the DS);
     - R12: `requestStop`, `rslState`, `commsDisableCount`, `battery::currentAmps`, brownout flag,
       robust-tunable persistence;
     - R13: schema size limit;
     - R14: gzip DS page (about 99 KB of flash per sketch).
-12. **DS widgets `Field2d`, `Mechanism2d`, `Scheduler`** (R5 remainder), or explicitly deferred.
+12. **Done on the prosdk side.** Core #40 (`feat/dash-widgets`) delivers the `Field2d`,
+    `Mechanism2d` and `Scheduler` widgets with the golden layouts of `780db16`.
+    `tools/build/ds_widget_check.js` decodes them from core's page at 940d300 (core-requests.md
+    "P1 R16 and R17 delivered"). As written on 2026-10-22: **DS widgets `Field2d`, `Mechanism2d`,
+    `Scheduler`** (R5 remainder), or explicitly deferred.
 
 ### 6.3 prosdk repository and packaging
 
-13. Close the 4 gaps of section 5.
-14. With Tuna's approval, push the local commits. CI must be green on `dev` for host, esp32s3 and
+13. **Done**: close the 4 gaps of section 5 (see the status there).
+14. **Partly done.**
+    - The commits up to `79cdeb7` are on `origin/dev`.
+    - CI run 39890517789 (push of `85ed58e`, the last code change) passed host, esp32s3 and examples.
+      The examples job built all 79 sketches; its sizes are in examples.md "Sizes".
+    - The runs of the docs-only commits after it were cancelled by the next push.
+    - Open: the manual `qemu` dispatch. Two dispatch runs on `79cdeb7` (39899244018, 39899250476) were
+      still in progress when this was written.
+    - Open: the decision on case d's timing checks.
+
+    As written on 2026-10-22: with Tuna's approval, push the local commits. CI must be green on `dev` for host, esp32s3 and
     examples (70 sketches), plus a manual `qemu` dispatch. Decide how the QEMU timing checks of
     case d tolerate a loaded runner (section 1, item 5).
-15. Decide the branch and release layout. `stable` still holds Probot Lib 0.2.x (`main` was deleted
+15. **Open** (decision): `main` is deleted. As written: decide the branch and release layout. `stable` still holds Probot Lib 0.2.x (`main` was deleted
     on 2026-10-23). prosdk is a new
     library name (`name=prosdk`) and needs its own Library Manager registration.
-16. Package the precompiled archive for Library Manager (`precompiled=full`):
+16. **Partly done.** `tools/release/package.sh` (`a0be76a`) does the following:
+    - brings the incremental archive up to date (no clean rebuild);
+    - checks `library.properties`;
+    - stages the tracked tree at HEAD plus `src/esp32s3/libprosdk.a` in `.build/package/` and zips
+      it;
+    - unpacks the zip and compiles `TemplateTimed` against it with `build.sh examples`.
+
+    Run on 2026-10-23 at `8a82297`:
+    - archive 62,760,394 B (debug-stripped; `objcopy --strip-debug` already runs in the build);
+    - unpacked tree 84,800,965 B;
+    - zip 20,730,238 B;
+    - arduino-cli reported "Using precompiled library in .../prosdk/src/esp32s3" and compiled no
+      prosdk source;
+    - TemplateTimed 1,797,772 / 72,308 B. CI's figure is 1,798,684 / 72,308 at `85ed58e`; the
+      912 B of flash may come from different checkout paths in assert strings (not checked).
+
+    `library.properties` checked against the Arduino library specification and core's
+    `library.properties` at 940d300:
+    - `name=prosdk`;
+    - `depends=probot` (core's `name=probot`);
+    - `architectures=esp32`;
+    - `includes=prosdk.h` (exists in `src/`);
+    - `precompiled=full`, with the archive at `src/{build.mcu}` = `src/esp32s3`;
+    - category "Device Control" is valid;
+    - no `ldflags` needed: arduino-cli links the archive itself.
+
+    Still open:
+    - Release layout. Library Manager indexes a clone of the release tag, so the archive must be
+      committed in the tag (it is gitignored). At 60 MB it is above GitHub's 50 MB warning and
+      below its 100 MB file limit.
+    - Library Manager size limit. This audit did not fetch arduino/library-registry and does not
+      know whether it documents a size limit for a library or a release: **unknown**.
+    - `depends=probot (>=<released version>)` once core is released.
+    - The release version.
+    - A clean install in a fresh Arduino IDE and arduino-cli with the released core.
+    - Arduino-ESP32 3.3.10. The archive is built with it and CI pins it. The library has no
+      compile-time check for another board-package version; the user docs say to install exactly
+      this one.
+
+    As written on 2026-10-22: package the precompiled archive for Library Manager
+    (`precompiled=full`):
     - ship `src/esp32s3/libprosdk.a` in the release. Today it is gitignored, and at 51 MB
       (debug-stripped) it is above GitHub's 50 MB warning and under its 100 MB limit;
     - set the release version (now `2027.0.0-alpha.1`);
@@ -533,11 +634,19 @@ They depend on probot-core (R5, R11, R12, R8) or on a scope decision (NT4).
       arduino-cli) that links the archive with the released probot-core.
 
     Building from sources inside a sketch (without the archive) has never been tested.
-17. Record the final size table (PORT.md 8.1, examples.md) from the release archive.
+17. **Partly done.** examples.md "Sizes" has all 79 sketches from CI run 39890517789 (`79cdeb7`),
+    PORT.md 8.1 points to it, and package.sh prints the archive and zip sizes. Open: recording them
+    again from the release archive. As written: record the final size table (PORT.md 8.1,
+    examples.md) from the release archive.
 
 ### 6.4 Documentation
 
-18. Publish user docs on probotstudio.com through probot-docs (`bp msg probot-docs`):
+18. **Partly done.** `design/user-docs-handoff.md` lists what probot-docs must document and where
+    the source of each item is: install, first sketch, pins, DS, telemetry and tunables including
+    persistent tunables and limits, widgets, DataLog download, drivers including Boardoza,
+    differences from WPILib, and status. Open: handing it to probot-docs (the parent agent) and
+    publishing. As written: publish user docs on probotstudio.com through probot-docs
+    (`bp msg probot-docs`):
     - installation;
     - first robot (`PROSDK_ROBOT_MAIN`, no `setup()`/`loop()`);
     - the pin model (channel = GPIO, capacities);
@@ -547,10 +656,15 @@ They depend on probot-core (R5, R11, R12, R8) or on a scope decision (NT4).
     - examples.
 
     Today the docs mention probot-sdk only as a future library (`docs/ornekler.md:917`).
-19. Update the README status line and examples list for the release, and complete NOTICE (section 5,
-    item 2).
+19. **Done** (`8a82297`). The README gives the alpha status on the core 0.4.0 draft stack, what is
+    checked, what needs a board, NT4 deferred, the board settings, all 79 examples and the release
+    tools. NOTICE was already complete (section 5, item 2). Update the version line again at release.
+    As written: update the README status line and examples list for the release, and complete NOTICE
+    (section 5, item 2).
 
 ### 6.5 Scope decisions for Tuna
 
-20. Decide whether an NT4-compatible server for AdvantageScope/Elastic is in the first stable release
-    (ntcore is excluded as "a later work item").
+20. **Decided: deferred.** The NT4 server is not in the first stable release. PORT.md section 10,
+    API-DIFFERENCES.md section 5 and the README say so; `.wpilog` files still open in AdvantageScope.
+    The question was: is an NT4-compatible server for AdvantageScope/Elastic in the first stable
+    release (ntcore is excluded as "a later work item")?

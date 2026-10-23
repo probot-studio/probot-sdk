@@ -250,7 +250,7 @@ template fragment that needs `TNAME` from those two) are not compiled as C++ eit
 |---|---|
 | JNI, Java and Python bindings | no JVM or Python on the MCU |
 | commandsv3 | Java-only; uses JVM continuations |
-| ntcore, wpinet | replaced by the probot-core Driver Station link (an NT4-compatible server for AdvantageScope/Elastic is a later work item) |
+| ntcore, wpinet | replaced by the probot-core Driver Station link (an NT4-compatible server for AdvantageScope/Elastic is a later work item, not in the first stable release) |
 | cscore, cameraserver | no camera on the kit |
 | `simulation/halsim_gui`, `halsim_ds_socket`, `halsim_ws_core`, `halsim_ws_server`, `halsim_ws_client`, `halsim_xrp` | dynamically loaded desktop simulation plugins (GUI, FRC Driver Station socket, WebSocket HAL state, XRP over UDP) built on wpinet; no dynamic loading on the robot, probot-core is the Driver Station |
 | ExpansionHub (`wpilibc` `hardware/expansionhub`) | REV Expansion Hub through SystemCore's USB `rhsp` server over NetworkTables; no rhsp server, no hub, no ntcore |
