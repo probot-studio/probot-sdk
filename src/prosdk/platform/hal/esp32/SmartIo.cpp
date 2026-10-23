@@ -47,8 +47,9 @@ constexpr uint64_t Bit(int gpio) {
   return uint64_t{1} << gpio;
 }
 
-// USB D-/D+ (USB-Serial-JTAG: flashing and the USB console) and UART0 TX/RX (Serial, the boot
-// console that probot-core prints to).
+// USB D-/D+ (USB-Serial-JTAG: flashing and the USB console) and UART0 TX/RX (the ESP-IDF
+// console: boot log and prosdk's stderr; Arduino's Serial only when USB CDC On Boot is Disabled,
+// otherwise Serial is on USB).
 constexpr uint64_t kUsbPins = Bit(19) | Bit(20);
 constexpr uint64_t kConsolePins = Bit(43) | Bit(44);
 
@@ -119,7 +120,7 @@ HAL_Status CheckPinUsable(int32_t gpio, std::string_view what) {
   }
   if ((pinMask & kConsolePins) != 0) {
     return MakeError(HAL_RESOURCE_IS_ALLOCATED,
-                     std::format("{}: GPIO {} is reserved for UART0 (Serial, the console)", what,
+                     std::format("{}: GPIO {} is reserved for UART0 (the ESP-IDF console)", what,
                                  gpio));
   }
   if (esp_gpio_is_reserved(pinMask)) {

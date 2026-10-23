@@ -57,9 +57,10 @@ PROSDK_ROBOT_MAIN(Robot)
   for example `bool m_pinsConfigured = prosdk::platform::SetI2CPins(0, 8, 9) &&
   prosdk::platform::SetSerialPins(0, 15, 16) && prosdk::platform::SetSPIPins(0, 12, 11, 13);`
   (the same pattern as `prosdk::prohub::ConfigurePins()`). Set USB CDC On Boot for the USB port
-  in use (Disabled when a USB-UART bridge port carries `Serial`). On octal-PSRAM modules (N8R8,
-  N16R8) GPIO 33-37 are refused, so the examples' motor pins 35-37 must move (for example to 4, 5,
-  12). Details: design/hal-esp32.md "Boards".
+  in use (Disabled when a USB-UART bridge port carries `Serial`). Octal-PSRAM modules (N8R8,
+  N16R8) run without PSRAM with these settings (OPI PSRAM is not supported), and their GPIO 33-37
+  are wired to the PSRAM but not refused by the HAL: move the examples' motor pins 35-37 (for
+  example to 4, 5, 12). Details: design/hal-esp32.md "Boards".
 - `TimedRobot`, `TimesliceRobot` and `OpModeRobot` are supported. The robot is constructed when
   probot-core boots and its loop runs inside core's loop; core's loop period follows the robot's
   periods (`TimedRobot(10_ms)`, `AddPeriodic`), 1 ms to 1000 ms.

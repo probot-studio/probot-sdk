@@ -19,7 +19,8 @@ ESP32-S3 rules that apply to every row (design/hal-esp32.md):
 - `DigitalInput` always enables the internal pull-up, so an open line reads true.
 - The HAL refuses these pins:
   - GPIO 19/20 (USB) and 43/44 (UART0, the console);
-  - flash and PSRAM pins: 26-32, plus 33-37 on octal-PSRAM modules;
+  - flash and PSRAM pins: 26-32 (33-37 are not refused, even on octal-PSRAM modules: see
+    design/hal-esp32.md "Other ESP32-S3 boards");
   - the probot-core pins: `NEOPIXEL_PIN` (3), RSL, e-stop and the battery pins;
   - pins already in use by an Arduino peripheral.
 - I2C port 0 defaults to SDA 1 / SCL 2 (the Pulse J3, section 3.1) at 400 kHz. Other pins need
@@ -476,7 +477,10 @@ source. Tones are only an option on a robot with no LEDC motor drivers.
   works either way; `esptool.py flash_id` on the first board settles it.
 - USB-C: native USB on GPIO 19/20 (README: "Power + Programming"; no USB-UART bridge chip is
   visible on the board render). Unverified: there is no schematic; `lsusb` on the first board
-  should show Espressif 303a:1001 (USB-Serial-JTAG).
+  should show Espressif 303a:1001 (USB-Serial-JTAG). Also to check on the first board: core's
+  `Serial` and prosdk's stderr both reach USB-C without interleaving or loss, and core keeps
+  running (DS timeout stop included) with a serial monitor opened and then closed while the cable
+  stays in (design/hal-esp32.md "Boards").
 - Source: the repo README and the board silkscreen (Pulse_S32-S3_Front/Back.png). There is no
   schematic in the repo.
 

@@ -3,8 +3,11 @@
 `QemuSmoke/` is an Arduino sketch that runs prosdk's precompiled archive on an emulated ESP32-S3
 (Espressif's QEMU, machine `esp32s3`): the real Xtensa LX7 instruction set, the real Arduino-ESP32
 3.3.10 / ESP-IDF 5.5 binaries (FreeRTOS SMP, newlib, libstdc++, esp_timer, NVS, LittleFS), the
-same compiler flags and the same partition table (huge_app) as a robot sketch. There is no
-ESP32-S3 board on the build server; this is the closest it gets.
+same archive and the same partition table (huge_app) as a robot sketch. There is no ESP32-S3 board
+on the build server; this is the closest it gets. The board options differ from a robot sketch's
+(`tools/build/arduino_recipe.py --fqbn`, the Boardoza Pulse settings): QEMU builds with
+`FlashMode=dio`, USB CDC On Boot Disabled and no `BOARD_HAS_PSRAM` (`tools/qemu/run.sh`), so
+`Serial` is UART0 here and the Pulse's `Serial` on USB-C (HWCDC) is not exercised.
 
 ```
 tools/qemu/setup.sh            # pinned QEMU (esp-develop-9.2.2-20260417, sha256) -> tools/bin/qemu

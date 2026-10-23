@@ -34,9 +34,10 @@ hardware validation is done.
 - Other ESP32-S3 boards: the robot's first member calls `prosdk::platform::SetI2CPins(0, 8, 9)`,
   `SetSerialPins(0, 15, 16)` and `SetSPIPins(0, 12, 11, 13)` (or the board's pins), as
   `prosdk::prohub::ConfigurePins()` does; USB CDC On Boot Disabled when a USB-UART bridge port
-  carries `Serial`; on octal-PSRAM modules (N8R8, N16R8) GPIO 33-37 are refused, so the examples'
-  motor pins 35-37 move (for example to 4, 5, 12). Source: `design/hal-esp32.md` "Other ESP32-S3
-  boards".
+  carries `Serial`; octal-PSRAM modules (N8R8, N16R8) run without PSRAM with these settings (OPI
+  PSRAM is not supported) and their GPIO 33-37, wired to the PSRAM, are not refused by the HAL, so
+  the examples' motor pins 35-37 must move (for example to 4, 5, 12). Source:
+  `design/hal-esp32.md` "Other ESP32-S3 boards".
 - probot-core version: prosdk needs probot-core 0.4.0 or later (the framework hooks R1-R4). Older
   core features are detected at compile time; what each core feature adds is in
   `design/core-requests.md` "Status". Until core 0.4.0 is released this is a draft stack.

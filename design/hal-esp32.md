@@ -21,8 +21,10 @@ Driver Station (design/PORT.md section 8).
 - A pin is refused with a HAL error and a message when it:
   - does not exist (ESP32-S3: GPIO 0-21 and 26-48; 22-25 do not exist);
   - is USB D-/D+ (GPIO 19, 20: flashing and the USB console);
-  - is UART0 TX/RX (GPIO 43, 44: `Serial`, the boot console);
-  - belongs to the module's flash or PSRAM (`esp_gpio_is_reserved`; GPIO 26-32, and 33-37 on
+  - is UART0 TX/RX (GPIO 43, 44: the ESP-IDF console, with the boot log and prosdk's stderr;
+    Arduino's `Serial` too when USB CDC On Boot is Disabled, otherwise `Serial` is on USB);
+  - belongs to the module's flash or PSRAM (`esp_gpio_is_reserved`; GPIO 26-32 on the Pulse;
+    the archive's quad PSRAM configuration never reserves 33-37, see "Other ESP32-S3 boards" for
     octal-PSRAM modules);
   - is reserved by probot-core: the pins named by its configuration (`NEOPIXEL_PIN`,
     `PROBOT_RSL_PIN`, `PROBOT_ESTOP_ENABLE_PIN`, `PROBOT_BATTERY_ADC_PIN`, the battery I2C pins),
@@ -68,7 +70,7 @@ flash, 2 MB quad PSRAM, so GPIO 33-37 are free. The bus defaults of `prosdk::pla
 | Header | Pins | prosdk use |
 |---|---|---|
 | J3 I2C | IO1 SDA, IO2 SCL | I2C port 0 default (SDA 1, SCL 2); ADC1 when not I2C |
-| J4 UART | IO43 TX, IO44 RX, IO11 (F2), IO10 (F1) | 43/44 are UART0, the console (refused); serial `ONBOARD` default RX 10 / TX 11; IO10 is ADC1 |
+| J4 UART | IO43 TX, IO44 RX, IO11 (F2), IO10 (F1) | 43/44 are UART0, the ESP-IDF console (refused; with the settings below `Serial` is on USB-C); serial `ONBOARD` default RX 10 / TX 11; IO10 is ADC1 |
 | J5 SPI | IO17 CLK, IO7 CS, IO16 MISO, IO15 MOSI | SPI bus 0 default (SCK 17, MOSI 15, MISO 16; CS 7 is the device's); IO7 is ADC1 |
 | J6 | IO38, IO37, IO36, IO35 | GPIO (35-37 free on quad PSRAM) |
 | J7 | IO42, IO41, IO40, IO39 | GPIO; also the JTAG pins |
@@ -87,6 +89,12 @@ Board settings: ESP32S3 Dev Module, `esp32:esp32:esp32s3:FlashSize=4M,PartitionS
 PSRAM=enabled,CDCOnBoot=cdc` (`tools/build/arduino_recipe.py --fqbn`; README.md "Board"). The
 precompiled archive is built with the generic esp32s3 defaults and does not depend on these
 options (`tools/build/arduino_recipe.py` docstring, checked by `tools/build/hal_link_test.py`).
+With USB CDC On Boot Enabled, Arduino's `Serial` is HWCDC on USB-C. Its write waits up to 20
+times its TX timeout per call (100 ms by default, so about 2 s) while the CDC link counts as
+connected but the host does not read (a serial monitor opened, then closed, cable still in), and
+probot-core prints from its sysloop, the DS timeout line before it stops the robot. The bridge
+(`CoreBridge.hpp`, core's boot hook) therefore sets `HWCDCSerial.setTxTimeoutMs(1)`: at most about
+20 ms per write, and text that does not fit is dropped (core-requests.md R21-b).
 
 ### Other ESP32-S3 boards
 
@@ -100,8 +108,16 @@ bool m_pinsConfigured = prosdk::platform::SetI2CPins(0, /*sda=*/8, /*scl=*/9) &&
 ```
 
 Set USB CDC On Boot for the USB port in use (Disabled when a USB-UART bridge port carries
-`Serial`). On octal-PSRAM modules (N8R8, N16R8) the HAL refuses GPIO 33-37, so the examples' J6
-motor pins 35-37 must move (for example to 4, 5, 12).
+`Serial`).
+
+Octal-PSRAM modules (N8R8, N16R8) wire GPIO 33-37 to their PSRAM, but the HAL does not refuse
+these pins there. The precompiled archive is built against Arduino-ESP32's quad PSRAM
+configuration (qio_qspi), and the supported PSRAM setting is QSPI PSRAM (or Disabled), whose
+driver only has the quad PSRAM implementation: it does not bring up an octal PSRAM, so such a
+module runs without PSRAM (malloc stays internal) and nothing reserves 33-37 (not tried on
+hardware). Do not use 33-37 there: move the examples' J6 motor pins 35-37 (for example to 4, 5,
+12). OPI PSRAM (`PSRAM=opi`) is not supported: it links the qio_opi ESP-IDF libraries and
+sdkconfig, not the configuration the archive is compiled against.
 
 ## Capacities
 
@@ -235,9 +251,13 @@ motor pins 35-37 must move (for example to 4, 5, 12).
   output. A full 1024-LED frame takes about 31 ms.
 
 ### I2C (I2C.cpp)
-- Port 0 is controller 0, the bus `Wire` uses. If `Wire` (or probot-core's INA battery sensor)
-  already started it, the HAL shares it as is (pins and clock unchanged); otherwise the HAL starts
-  it on `prosdk::platform::SetI2CPins(0, ...)` pins (default SDA 1, SCL 2, 400 kHz: the Pulse J3).
+- Port 0 is controller 0, the bus `Wire` uses. If `Wire` already started it, the HAL shares it
+  as is (pins and clock unchanged). With probot-core's INA battery sensor (`PROBOT_BATTERY_INA`)
+  the HAL starts it through core's own `Wire.begin` on core's pins (`PROBOT_BATTERY_INA_SDA` /
+  `SCL`, else the variant's 8/9), registered by the bridge (`prosdk::platform::SetCoreI2CStart`):
+  core starts `Wire` from its battery task, which races the robot's construction, so either side
+  may come first and both end on the same bus at core's 100 kHz. Otherwise the HAL starts it on
+  `prosdk::platform::SetI2CPins(0, ...)` pins (default SDA 1, SCL 2, 400 kHz: the Pulse J3).
 - Port 1 needs `prosdk::platform::SetI2CPins(1, sda, scl[, hz])` first.
 - Transfers go through Arduino's I2C HAL (serialized per bus, 50 ms timeout) and return 0 on
   success, -1 on failure (NACK, timeout, short read), like systemcore. Combined write-read uses a

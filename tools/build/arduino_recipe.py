@@ -17,6 +17,8 @@ sketch's `Serial` macro, PSRAM=enabled only adds -DBOARD_HAS_PSRAM (psram_type s
 the qio_qspi include dir is the same) and FlashSize/PartitionScheme only change the partition
 table and image header. So the archive is built once with the generic defaults below
 (ARDUINO_USB_CDC_ON_BOOT=0, no BOARD_HAS_PSRAM) and linked into SKETCH_FQBN sketches.
+PSRAM=opi (octal-PSRAM modules) is not supported: it selects the qio_opi ESP-IDF libraries and
+sdkconfig, which the archive is not built against (design/hal-esp32.md "Other ESP32-S3 boards").
 tools/build/hal_link_test.py checks that no archive source or undefined symbol depends on those
 options.
 """

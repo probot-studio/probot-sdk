@@ -121,6 +121,7 @@ constexpr CoreOps kDefaultOps{
 // Written once (static initialization, single-threaded) before gInstalled is set.
 constinit CoreOps gOps = kDefaultOps;
 constinit std::atomic<uint64_t> gReservedPins{0};
+constinit std::atomic<CoreI2CStart> gCoreI2CStart{nullptr};
 constinit std::atomic<bool> gEStopped{false};
 constinit std::atomic<bool> gBooted{false};
 // start of core's current loop pass (core's user task only)
@@ -303,6 +304,14 @@ void ReserveCorePins(const int* pins, size_t count) noexcept {
 
 uint64_t GetCoreReservedPins() noexcept {
   return gReservedPins.load(std::memory_order_acquire);
+}
+
+void SetCoreI2CStart(CoreI2CStart start) noexcept {
+  gCoreI2CStart.store(start, std::memory_order_release);
+}
+
+CoreI2CStart GetCoreI2CStart() noexcept {
+  return gCoreI2CStart.load(std::memory_order_acquire);
 }
 
 void NoteFrameworkInstall(bool installed) noexcept {

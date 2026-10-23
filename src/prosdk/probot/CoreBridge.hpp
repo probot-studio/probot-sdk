@@ -138,6 +138,10 @@
 #include <probot/files/files.hpp>
 #endif
 
+#if defined(PROBOT_BATTERY_INA)
+#include <Wire.h>
+#endif
+
 #include <concepts>
 #include <new>
 
@@ -649,6 +653,18 @@ inline bool UtilityAvailable() { return probot::ds::utilityAvailable(); }
   .utilityAvailable = nullptr
 #endif
 
+// Core's boot hook. With USB CDC On Boot Enabled (the Pulse settings) Arduino's Serial is HWCDC
+// on USB-C, whose write waits up to 20 times its TX timeout (100 ms, so about 2 s) per call while
+// the CDC link counts as connected but the host does not read (a serial monitor opened, then
+// closed, cable still in). Core prints from its sysloop, the DS timeout line before it stops the
+// robot, so 1 ms bounds that to about 20 ms per write; text that does not fit is dropped.
+inline void Boot() {
+#if ARDUINO_USB_CDC_ON_BOOT && ARDUINO_USB_MODE
+  HWCDCSerial.setTxTimeoutMs(1);
+#endif
+  pf::detail::Boot();
+}
+
 // Designated initializers: several fields share a type (matchInfoSeq and dashMaxValue are both
 // uint32_t (*)()), so a positional table could swap two of them and still compile; a name that is
 // wrong or out of the struct's order does not.
@@ -694,7 +710,7 @@ inline bool Install() {
   };
   bool ok = pf::InstallCoreOps(&kOps);
   bool hooks = probot::framework::install(probot::framework::Hooks{
-      &pf::detail::Boot, &pf::detail::PreCycle, &pf::detail::PostCycle,
+      &Boot, &pf::detail::PreCycle, &pf::detail::PostCycle,
       &pf::detail::EmergencyStop});
   pf::NoteFrameworkInstall(hooks);
   return ok && hooks;
@@ -715,6 +731,18 @@ inline const bool kInstalled = Install();
 
 #if defined(PROBOT_BATTERY_INA) && !defined(PROBOT_BATTERY_INA_SDA)
 #warning "probot-core starts the INA battery sensor's I2C bus on GPIO 8/9, which are not on a Pulse header, and prosdk I2C port 0 then shares that bus. Define PROBOT_BATTERY_INA_SDA 1 and PROBOT_BATTERY_INA_SCL 2 (J3), or 8/9 on another board."
+#endif
+
+#if defined(PROBOT_BATTERY_INA)
+// Core's Wire.begin for its INA sensor, so prosdk's I2C port 0 starts the bus the same way
+// (pf::SetCoreI2CStart).
+inline bool StartCoreI2C() {
+#if defined(PROBOT_BATTERY_INA_SDA) && defined(PROBOT_BATTERY_INA_SCL)
+  return Wire.begin(PROBOT_BATTERY_INA_SDA, PROBOT_BATTERY_INA_SCL);
+#else
+  return Wire.begin();
+#endif
+}
 #endif
 
 namespace {
@@ -742,6 +770,9 @@ inline bool ReservePinsOfThisUnit() {
       -1,
   };
   pf::ReserveCorePins(pins, sizeof(pins) / sizeof(pins[0]));
+#if defined(PROBOT_BATTERY_INA)
+  pf::SetCoreI2CStart(&StartCoreI2C);
+#endif
   return kInstalled;
 }
 const bool kPinsReserved = ReservePinsOfThisUnit();

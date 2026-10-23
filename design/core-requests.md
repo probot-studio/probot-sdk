@@ -313,12 +313,22 @@ headers and its sketch FQBN is
   shares that bus, so J3 (SDA 1 / SCL 2) devices stop working. Wanted: either the INA pins default
   to 1/2 for the Pulse, or core's docs say "Pulse: `#define PROBOT_BATTERY_INA_SDA 1` /
   `PROBOT_BATTERY_INA_SCL 2`". Whatever core picks, prosdk's `CoreBridge.hpp` pin reservation
-  (8, 9 today) and its `#warning` follow.
+  (8, 9 today) and its `#warning` follow. Core starts `Wire` from its battery task's first poll,
+  which races prosdk's robot construction; prosdk's I2C port 0 therefore starts the bus with the
+  same `Wire.begin(...)` call (`StartCoreI2C` in `CoreBridge.hpp`), so either order ends on one
+  bus with `Wire`'s buffers allocated. If core changes how it starts `Wire`, that function follows.
 - **R21-b, board settings in core docs and CI.** Core prints its boot banner and the AP SSID (the
   password masked) with `Serial` (`driver_station_esp32.hpp:216-219`). On the Pulse they reach USB-C only with USB CDC On Boot
   Enabled (with it Disabled, `Serial` is UART0 on J4). Wanted: core docs show the same board
   settings as prosdk (ESP32S3 Dev Module, Flash 4MB, Huge APP, QSPI PSRAM, USB Mode Hardware CDC
-  and JTAG, USB CDC On Boot Enabled; the FQBN above); optionally core CI uses that FQBN too.
+  and JTAG, USB CDC On Boot Enabled; the FQBN above); optionally core CI uses that FQBN too. With
+  CDC On Boot, `Serial` is HWCDC: while the CDC link counts as connected but the host does not
+  read (a serial monitor opened, then closed, cable still in), each write waits up to 20 times its
+  TX timeout (100 ms), about 2 s (Arduino-ESP32 3.3.10 `HWCDC.cpp` `write`). The sysloop prints
+  the DS timeout line (`runtime.hpp:348`) before it sets STOP, so the stop comes that much later.
+  prosdk's bridge sets `HWCDCSerial.setTxTimeoutMs(1)` in core's boot hook (about 20 ms at most
+  per write; text that does not fit is dropped). Wanted: core does the same for sketches without
+  prosdk, or prints that line after `setStatus(STOP)`.
 - **R21-c, confirm only.** `NEOPIXEL_PIN` default 3 (`builtin.hpp:9`) is the Pulse's on-board
   addressable RGB LED ("RGB @ IO3" on the silkscreen). Keep it, and note it in core docs as a Pulse
   fact.

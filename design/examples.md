@@ -52,9 +52,10 @@ J7 (IO39-42) and J8 (IO45-48). The ports avoid:
 - the strapping pins 0 (BOOT), 45 and 46 (J8), which the HAL allows;
 - every GPIO that is not on a Pulse header (4-6, 8, 9, 12-14, 18, 21, 33, 34).
 
-The Pulse module (ESP32-S3-WROOM-1-N4R2) has quad PSRAM, so GPIO 33-37 are free. On an
-octal-PSRAM devkit (N8R8, N16R8) the HAL refuses 33-37: move the motor pins 35-37 there (for
-example to 4, 5, 12), see design/hal-esp32.md "Other ESP32-S3 boards".
+The Pulse module (ESP32-S3-WROOM-1-N4R2) has quad PSRAM, so GPIO 33-37 are free. An
+octal-PSRAM devkit (N8R8, N16R8) wires 33-37 to its PSRAM and the HAL does not refuse them there:
+move the motor pins 35-37 (for example to 4, 5, 12), see design/hal-esp32.md "Other ESP32-S3
+boards".
 
 SwerveBot and SwerveDrivePoseEstimator do not fit (24 signals, 20 header pins): they keep pins off
 the headers and use GPIO 46 for the back-right turning encoder B, which a normal boot ignores (it
@@ -76,8 +77,8 @@ They also stay inside the hardware limits:
 | Analog inputs | 1, 2 (J3) without I2C; 7 (J5), 10 (J4) when J3 is I2C |
 | Addressable LED strip | 48 (J8) |
 | I2C port 0 (HAL default) | SDA 1, SCL 2 (J3) |
-| I2C port 1 (Boardoza sensor examples) | SDA 17, SCL 16 (J5) |
-| SPI bus 0 (HAL default) | SCK 17, MOSI 15, MISO 16, CS 7 (J5) |
+| I2C port 1 (Boardoza sensor examples) | SDA 17, SCL 16 (J5): not together with SPI bus 0 |
+| SPI bus 0 (HAL default) | SCK 17, MOSI 15, MISO 16, CS 7 (J5): not together with I2C port 1 on J5 |
 | Serial `ONBOARD` (HAL default) | RX 10, TX 11 (J4 F1/F2) |
 
 No example uses analog inputs and I2C port 0 together. The same pins also fit the host simulation
@@ -320,11 +321,12 @@ Measured locally on 2026-10-23 (all 79 sketches in one run, prosdk `ceaa8c4`: th
 CoreOps ABI 10) against probot-core `feat/gamepad-guide` e0cb17f (#45). The numbers move with the
 archive and core; design/size.md keeps the history. The huge_app partition gives the sketch 3,145,728
 bytes of flash; static RAM is out of 327,680 bytes. The largest sketch is
-SimpleDifferentialDriveSimulation at 2,229,814 bytes (71 %); it and DifferentialDrivePoseEstimator
-use the most static RAM, 78,128 bytes. Every sketch also gets probot-core's WiFi AP and
-Driver Station. CI builds all examples on pushes to `dev` and `stable`, on pull requests and on
-manual runs; to refresh this table, take the "Sketch uses" / "Global variables use" lines after each
-"== <name>" line of the examples log.
+SimpleDifferentialDriveSimulation at 2,229,814 bytes (71 %). Four sketches share the most static
+RAM, 78,128 bytes: DifferentialDrivePoseEstimator, MecanumDrivePoseEstimator,
+SimpleDifferentialDriveSimulation and SwerveDrivePoseEstimator. Every sketch also gets
+probot-core's WiFi AP and Driver Station. CI builds all examples on pushes to `dev` and `stable`, on
+pull requests and on manual runs; to refresh this table, take the "Sketch uses" / "Global variables
+use" lines after each "== <name>" line of the examples log.
 
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|

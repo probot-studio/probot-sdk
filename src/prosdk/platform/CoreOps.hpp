@@ -433,6 +433,22 @@ void ReserveCorePins(const int* pins, size_t count) noexcept;
 /** Bit mask of the GPIO pins reserved by ReserveCorePins (bit n = GPIO n). */
 uint64_t GetCoreReservedPins() noexcept;
 
+/** Starts probot-core's I2C bus (Arduino's Wire, controller 0); true when the bus runs. */
+using CoreI2CStart = bool (*)();
+
+/**
+ * Registered by the bridge when probot-core has an INA battery sensor (PROBOT_BATTERY_INA): a
+ * sketch-side function that calls core's `Wire.begin(...)` with core's pins. Core starts Wire from
+ * its battery task, which races prosdk's robot construction, so HAL_InitializeI2C(0) starts the
+ * bus through this function instead of on its own pins: Wire.begin is idempotent, allocates
+ * Wire's buffers (core's later Wire.begin then only finds the bus running) and puts I2C port 0 on
+ * core's pins, which stay reserved for every other use. Safe during static initialization.
+ */
+void SetCoreI2CStart(CoreI2CStart start) noexcept;
+
+/** The function registered by SetCoreI2CStart, or nullptr (no INA sensor, or no core). */
+CoreI2CStart GetCoreI2CStart() noexcept;
+
 /**
  * Called once by the bridge with the result of probot::framework::install. On false (another
  * framework took core's hooks) it prints an error to the console; prosdk's per-cycle work (Driver

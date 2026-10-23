@@ -4,7 +4,7 @@
 // WPILib names buses by port (I2C PORT_0/PORT_1, SerialPort ONBOARD/MXP, CAN bus 0); the GPIO
 // matrix lets any pin carry them, so the sketch says which pins before it opens the bus:
 //
-//   prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/16);  // before I2C(I2C::Port::PORT_1, ...)
+//   prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/16);  // J5, so not with SPI bus 0
 //   prosdk::platform::SetCanConfig(/*tx=*/39, /*rx=*/40, 1'000'000);
 //   prosdk::platform::SetSPIPins(0, /*sck=*/12, /*mosi=*/11, /*miso=*/13);  // another board
 //

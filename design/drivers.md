@@ -143,16 +143,17 @@ members are built before the constructor body, so call it from the first member
 
 Address clash: probot-core's optional INA219/INA226 battery sensor (`PROBOT_BATTERY_INA`) runs on
 Arduino's `Wire`, which is I2C controller 0 (prosdk port 0, the ProHub port), at 0x40 by default
-(`PROBOT_BATTERY_INA_ADDR`), the first PCA9685's address. When core has started `Wire` on its own
-pins (GPIO 8/9, the generic esp32s3 variant's `Wire` pins, unless `PROBOT_BATTERY_INA_SDA`/`SCL`),
-port 0 shares that bus as is (design/hal-esp32.md, I2C), so the pins 1/2 do not apply. GPIO 8/9 are
-not on a Pulse header, so on the Pulse the INA needs `PROBOT_BATTERY_INA_SDA 1` /
-`PROBOT_BATTERY_INA_SCL 2` (`CoreBridge.hpp` warns when the INA is enabled without them). To use both, wire the INA
-to the ProHub bus (`PROBOT_BATTERY_INA_SDA 1`, `PROBOT_BATTERY_INA_SCL 2`) at an address other
-than 0x40/0x41 (its A0/A1 pins, `PROBOT_BATTERY_INA_ADDR`). The shared bus then runs at
-100 kHz instead of `ConfigurePins()`' 400 kHz: core's battery init calls `Wire.setClock(100000)`
-on controller 0 whichever side started the bus first, so every port 0 transfer (PCA9685, IMU,
-Pinpoint) takes about 4 times longer. Not tested on hardware.
+(`PROBOT_BATTERY_INA_ADDR`), the first PCA9685's address. With the INA enabled, port 0 runs on
+core's `Wire` pins (GPIO 8/9, the generic esp32s3 variant's `Wire` pins, unless
+`PROBOT_BATTERY_INA_SDA`/`SCL`), whichever side starts the bus first (design/hal-esp32.md, I2C), so
+the pins 1/2 do not apply. GPIO 8/9 are not on a Pulse header, so on the Pulse the INA needs
+`PROBOT_BATTERY_INA_SDA 1` / `PROBOT_BATTERY_INA_SCL 2` (`CoreBridge.hpp` warns when the INA is
+enabled without them). To use both, wire the INA to the ProHub bus (`PROBOT_BATTERY_INA_SDA 1`,
+`PROBOT_BATTERY_INA_SCL 2`) at an address other than 0x40/0x41 (its A0/A1 pins,
+`PROBOT_BATTERY_INA_ADDR`). The shared bus then runs at 100 kHz instead of `ConfigurePins()`'
+400 kHz: core's battery init calls `Wire.setClock(100000)` on controller 0 whichever side started
+the bus first, so every port 0 transfer (PCA9685, IMU, Pinpoint) takes about 4 times longer. Not
+tested on hardware.
 
 ## ProHub encoders
 

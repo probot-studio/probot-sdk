@@ -2,10 +2,12 @@
 // HAL_* semantics follow allwpilib hal/src/main/native/systemcore/I2C.cpp (WPILib BSD license).
 //
 // ESP32-S3 HAL backend: I2C masters (design/hal-esp32.md, "I2C").
-// Port 0 (kPort0) is controller 0, the bus Arduino's Wire uses: if Wire (or probot-core's INA
-// battery sensor) already started it, the HAL shares it as is; otherwise the HAL starts it on
-// the pins from prosdk::platform::SetI2CPins (default SDA 1, SCL 2, 400 kHz: the Boardoza Pulse
-// J3). Port 1 is controller 1 and needs SetI2CPins(1, ...) first. Transfers go through
+// Port 0 (kPort0) is controller 0, the bus Arduino's Wire uses: if Wire already started it, the
+// HAL shares it as is. With probot-core's INA battery sensor the HAL starts it through core's
+// Wire.begin on core's pins (prosdk::platform::GetCoreI2CStart), whichever of core's battery task
+// and the robot comes first, and core then sets 100 kHz. Otherwise the HAL starts it on the pins
+// from prosdk::platform::SetI2CPins (default SDA 1, SCL 2, 400 kHz: the Boardoza Pulse J3).
+// Port 1 is controller 1 and needs SetI2CPins(1, ...) first. Transfers go through
 // Arduino's I2C HAL, which serializes users of a bus. Transfers return 0 on success and -1 on
 // failure, like systemcore's ioctl.
 
@@ -19,6 +21,7 @@
 #include "Esp32Internal.hpp"
 #include "prosdk/hal/ErrorHandling.hpp"
 #include "prosdk/hal/Errors.h"
+#include "prosdk/platform/CoreOps.hpp"
 #include "prosdk/platform/HalConfig.hpp"
 
 using namespace prosdk::hal;
@@ -67,6 +70,16 @@ void HAL_InitializeI2C(HAL_I2CPort port, int32_t* status) {
     return;
   }
   const uint8_t num = static_cast<uint8_t>(port);
+  // probot-core's INA battery sensor owns controller 0 (Wire) on its pins, which are reserved,
+  // and starts it from its own task: start it the same way here, whichever task comes first.
+  prosdk::platform::CoreI2CStart coreStart = num == 0 ? prosdk::platform::GetCoreI2CStart()
+                                                      : nullptr;
+  if (coreStart != nullptr && !i2cIsInit(num) && !coreStart()) {
+    *status = MakeError(HAL_NO_AVAILABLE_RESOURCES,
+                        "I2C port 0 could not start on probot-core's battery sensor pins "
+                        "(PROBOT_BATTERY_INA_SDA / PROBOT_BATTERY_INA_SCL)");
+    return;
+  }
   if (i2cIsInit(num)) {
     bus.ownsBus = false;  // shared with Wire / probot-core
     bus.count = 1;
