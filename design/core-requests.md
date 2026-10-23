@@ -340,7 +340,7 @@ headers and its sketch FQBN is
   by default. Core docs could suggest a free Pulse header pin (J8 47/48, or J6 35-38 when not used
   for motors) and warn against 0, 45, 46 (strapping) and 43/44 (console).
 
-Status: written 2026-10-23, not sent yet.
+Status: sent to probot-core 2026-10-23 (bp msg), waiting for an answer.
 
 ## Status
 
