@@ -5,7 +5,7 @@
 // properties, flags, decoded value) and every struct schema, exactly. These are the layouts
 // probot-core's Driver Station widgets decode (design/core-requests.md, "Widget layouts for
 // Field2d, Mechanism2d, Scheduler"). Also the Driver Station write-back of the mutable topics
-// (a Field2d pose drag, a Scheduler cancel) and what it does on the robot.
+// (a Field2d pose write, a Scheduler cancel) and what it does on the robot.
 //
 // In this target (not prosdk_dashboard_tests) because the CommandScheduler needs the HAL
 // (HAL_Initialize in commands2/main.cpp).
@@ -210,7 +210,7 @@ FunctionalCommand Forever() {
 
 }  // namespace
 
-TEST_CASE_METHOD(WidgetFixture, "Widget layout: Field2d telemetry, tunable and pose drag",
+TEST_CASE_METHOD(WidgetFixture, "Widget layout: Field2d telemetry, tunable and pose write",
                  "[prosdk][dashboard][widgets]") {
   using prosdk::math::Pose2d;
   using prosdk::math::Rotation2d;
@@ -242,7 +242,8 @@ struct:Rotation2d | structschema | double value
 struct:Translation2d | structschema | double x;double y
 )");
 
-  // Driver Station drags the robot: a write of the whole struct:Pose2d[] value
+  // Driver Station writes the robot pose (its typed pose list; a drag keeps the rotation and moves
+  // only x and y): a write of the whole struct:Pose2d[] value
   auto robot = fake::Find("/Tunables/Field/Robot");
   REQUIRE(robot);
   fake::PushWrite("/Tunables/Field/Robot", robot->valueType, PosesBytes({{3, 1, 0.5}}));

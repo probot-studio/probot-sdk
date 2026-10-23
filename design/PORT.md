@@ -299,6 +299,9 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
   `addr2line`; `src/esp32s3/libprosdk.a` is a copy made with `objcopy --strip-debug`, redone only when
   the full archive changed.
 - Host build (`.build/host`) with system g++ in gnu++20 and the sim HAL, for upstream unit tests.
+  `prosdk_files_tests` also compiles probot-core's header-only `probot/files/files.hpp` from `$PROBOT_CORE`
+  or `.upstream/probot-core` when present (CI checks out `PROBOT_CORE_REF` for the host job), so
+  DataLogManager's share calls meet core's own rules; without it a reduced fake rule stands in.
 - ccache (static binary in `tools/bin`, cache in `.build/ccache`) and ninja (pip venv) are used when present.
 - Every compile runs as `nice -n 19 ionice -c3`, at most `-j2`, under the lock `flock .build/build.lock`, so
   parallel agents never stack compiles on the shared server.

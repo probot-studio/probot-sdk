@@ -83,7 +83,7 @@ The `CASE` line reports the task's peak stack use and the heap change.
 | b | exceptions: thrown in the sketch and unwound through the archive's trajectory parameterizer, thrown in the archive (`std::runtime_error`), the wpilibc HAL error path (`DigitalInput{22}` -> `prosdk::RuntimeError`, also initializes the HAL), nested exceptions; `std::format` (floats, units, chrono); `prosdk::cxx::println` and the platform console (Driver Station console + UART; the fake core has no R9 leveled console, so an error-level write checks the text fallback) |
 | c | `std::thread` under `ScopedThreadConfig` (name, priority, core, stack checked from inside the thread), mutex/condition variable, prosdk time against `esp_timer`, `prosdk::Notifier` periodic (10 ms for 1 s) and one-shot (50 ms) |
 | e | `prosdk::Preferences` on NVS: boot 1 writes every type, boot 2 reads them back from the same flash image |
-| f | `DataLogManager` on LittleFS (`/littlefs/logs`, the huge_app `spiffs` partition): writer thread, flush, the `.wpilog` read back; boot 2 finds boot 1's log |
+| f | `DataLogManager` on LittleFS (`/littlefs/logs`, the huge_app `spiffs` partition): writer thread, flush, the `.wpilog` read back; boot 2 finds boot 1's log; the fake core's file sharing (CoreOps ABI 8) records the folder shared as `logs` on the `datalogmgr` task and taken back on the task that called `Stop()` |
 | g | `CommandScheduler`: subsystem periodic, default command, sequence with a 100 ms wait, race, requirement interruption, the disabled rule |
 | d | the hosted `TimedRobot` (`PROSDK_ROBOT_MAIN`, 20 ms loop + 10 ms `AddPeriodic`) through disabled -> autonomous -> disabled -> teleop -> disabled -> e-stop: lifecycle order, `RobotState` in each mode, the HAL output gate (`HAL_GetSystemActive`), core loop period requested by the robot (10 ms), timing (below), nothing runs after the e-stop. Runs last (the e-stop latches) |
 | h | every FreeRTOS task: priority, core, stack high-water mark; prosdk threads must be below priority 4 and no thread may use the default pthread config; the static TLS block (at most 64 bytes, see below); heap free / minimum / largest block |
@@ -119,7 +119,7 @@ Peak stack of the 24576-byte case task and heap change per case (boot 1 / boot 2
 | b exceptions, format, HAL init | 3756 / 3756 | -16692 (HAL initialized, stays) |
 | c threads, Notifier | 2672 / 2672 (worker 1220 of 6144) | -276 |
 | e Preferences | 2428 / 3152 | -912 |
-| f DataLog | 3308 / 3312 | -3356 |
+| f DataLog | 3424 / 3428 (2026-10-23, with file sharing) | -3412 / -3404 |
 | g CommandScheduler | 3788 / 3788 | -9460 |
 | d hosted TimedRobot | 5472 / 5472 | -19376 (robot stays registered) |
 

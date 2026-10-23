@@ -3,7 +3,7 @@
 // Cross-check of the Field2d, Mechanism2d and Scheduler widget layouts (design/core-requests.md,
 // "Widget layouts for Field2d, Mechanism2d, Scheduler"): decodes the golden values of
 // test/prosdk/commands2/WidgetLayoutTest.cpp with probot-core's own Driver Station functions,
-// extracted from its ui/index.html, and encodes the DS write-backs (pose drag, cancel) to compare
+// extracted from its ui/index.html, and encodes the DS write-backs (pose write, cancel) to compare
 // them with the bytes prosdk's tests push. No browser: the canvas is a stub that records strokes.
 // The goldens are copied by hand from the C++ test; update both together.
 //
@@ -68,8 +68,9 @@ check('Field2d Targets', ctx.dkPoses({val: ctx.dkDec(6, targets)}).map(q => q.sl
 check('Field2d Robot deg', ctx.dkDeg(ctx.dkPoses({val: robot})[0][2]), 90);
 check('Field2d 25 bytes refused', ctx.dkPoses({val: new Uint8Array(25)}), null);
 check('Field2d empty array', ctx.dkPoses({val: new Uint8Array(0)}), []);
-// the drag write (whole array) equals prosdk's PosesBytes({{3, 1, 0.5}})
-check('Field2d drag write bytes', hex(ctx.dkPoseBytes([[3, 1, 0.5]])), hex(f64le(3, 1, 0.5)));
+// core's pose encoder, used for every write of the whole array (the typed pose list; a drag keeps
+// each pose's rotation and moves only x and y), equals prosdk's PosesBytes({{3, 1, 0.5}})
+check('Field2d pose write bytes', hex(ctx.dkPoseBytes([[3, 1, 0.5]])), hex(f64le(3, 1, 0.5)));
 
 // ---- Scheduler: Names string[] (vt 11), Ids int[] (vt 8), Cancel int[] write ----
 check('Scheduler Names', ctx.dkDec(11, strArr('Drive', 'Intake')), ['Drive', 'Intake']);
