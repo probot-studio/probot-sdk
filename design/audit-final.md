@@ -522,7 +522,8 @@ They depend on probot-core (R5, R11, R12, R8) or on a scope decision (NT4).
 14. With Tuna's approval, push the local commits. CI must be green on `dev` for host, esp32s3 and
     examples (70 sketches), plus a manual `qemu` dispatch. Decide how the QEMU timing checks of
     case d tolerate a loaded runner (section 1, item 5).
-15. Decide the branch and release layout. `main` still holds Probot Lib 0.2.x. prosdk is a new
+15. Decide the branch and release layout. `stable` still holds Probot Lib 0.2.x (`main` was deleted
+    on 2026-10-23). prosdk is a new
     library name (`name=prosdk`) and needs its own Library Manager registration.
 16. Package the precompiled archive for Library Manager (`precompiled=full`):
     - ship `src/esp32s3/libprosdk.a` in the release. Today it is gitignored, and at 51 MB
