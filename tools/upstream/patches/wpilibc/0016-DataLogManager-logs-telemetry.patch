@@ -1,0 +1,74 @@
+diff --git a/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp b/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
+index f47ca34..b78edb3 100644
+--- a/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
++++ b/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
+@@ -27,6 +27,7 @@
+ #include "prosdk/platform/CoreOps.hpp"
+ #include "prosdk/platform/Random.hpp"
+ #include "prosdk/platform/Storage.hpp"
++#include "prosdk/platform/TelemetryLog.hpp"
+ #include "prosdk/platform/WpilibcConfig.hpp"
+ #include "prosdk/system/Errors.hpp"
+ #include "prosdk/system/Filesystem.hpp"
+@@ -79,7 +80,8 @@ struct Thread final : public prosdk::util::SafeThread {
+   std::string m_logDir;
+   bool m_filenameOverride;
+   prosdk::log::DataLogBackgroundWriter m_log;
+-  // prosdk: no NetworkTables entry/connection loggers (ntcore is not ported). Upstream's
++  // prosdk: no NetworkTables entry/connection loggers (ntcore is not ported; StartNTLog copies
++  // telemetry into the log instead). Upstream's
+   // console logger tails /home/systemcore/WPILIB_UserProgram.log; here the console tee
+   // (prosdk::platform::SetConsoleTee) copies every prosdk console write into a bounded buffer
+   // that this thread drains into the "console" entry (created on the first
+@@ -446,10 +448,19 @@ void Thread::Main() {
+   DrainConsoleLog(true);
+ }
+ 
+-// prosdk: NetworkTables logging is not available (see above)
+-void Thread::StartNTLog() {}
++// prosdk: no ntcore. What upstream's NetworkTables entry logger records of the robot's own
++// data is its telemetry ("NT:/Telemetry/..."); here the telemetry backend registered for ""
++// also writes into this log under that name (prosdk/platform/TelemetryLog.hpp). Without a log
++// directory the writer discards its output, so nothing is copied.
++void Thread::StartNTLog() {
++  if (!m_logDir.empty()) {
++    prosdk::platform::StartTelemetryLog(m_log);
++  }
++}
+ 
+-void Thread::StopNTLog() {}
++void Thread::StopNTLog() {
++  prosdk::platform::StopTelemetryLog(m_log);
++}
+ 
+ void Thread::StartConsoleLog(bool force) {
+   if (!force && !RobotBase::IsReal()) {
+diff --git a/src/prosdk/system/DataLogManager.hpp b/src/prosdk/system/DataLogManager.hpp
+index 56b543b..a065577 100644
+--- a/src/prosdk/system/DataLogManager.hpp
++++ b/src/prosdk/system/DataLogManager.hpp
+@@ -38,7 +38,15 @@ namespace prosdk {
+  * below twice the threshold. Free space comes from esp_littlefs (only for logs
+  * under /littlefs; elsewhere, e.g. an SD card, nothing is deleted).
+  *
+- * prosdk: NetworkTables is not ported; LogNetworkTables() has no effect.
++ * prosdk: NetworkTables is not ported. LogNetworkTables() (on by default, as
++ * upstream) copies the robot's telemetry into the log instead: every value
++ * logged through prosdk telemetry while the Driver Station backend is
++ * registered (the robot framework does it) is also written as
++ * "NT:/Telemetry/<path>", the name upstream's NetworkTables logger gives it,
++ * so AdvantageScope finds the same keys (prosdk/platform/TelemetryLog.hpp).
++ * Equal consecutive values are written once (KeepDuplicates() keeps them).
++ * Tunables, Preferences and alerts are not copied. Without a log directory
++ * nothing is copied.
+  * The console log ("console" entry) holds the prosdk console output
+  * (prosdk::platform::ConsoleWrite: errors, warnings, DataLogManager::Log and
+  * other library messages), not Serial or stdout. It is copied through a
+@@ -114,6 +122,7 @@ class DataLogManager final {
+    * Enable or disable logging of NetworkTables data. Note that unlike the
+    * network interface for NetworkTables, this will capture every value change.
+    * Defaults to enabled.
++   * prosdk: logs the telemetry copy described in the class comment.
+    *
+    * @param enabled true to enable, false to disable
+    */

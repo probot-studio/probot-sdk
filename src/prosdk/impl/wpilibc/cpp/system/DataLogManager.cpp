@@ -27,6 +27,7 @@
 #include "prosdk/platform/CoreOps.hpp"
 #include "prosdk/platform/Random.hpp"
 #include "prosdk/platform/Storage.hpp"
+#include "prosdk/platform/TelemetryLog.hpp"
 #include "prosdk/platform/WpilibcConfig.hpp"
 #include "prosdk/system/Errors.hpp"
 #include "prosdk/system/Filesystem.hpp"
@@ -79,7 +80,8 @@ struct Thread final : public prosdk::util::SafeThread {
   std::string m_logDir;
   bool m_filenameOverride;
   prosdk::log::DataLogBackgroundWriter m_log;
-  // prosdk: no NetworkTables entry/connection loggers (ntcore is not ported). Upstream's
+  // prosdk: no NetworkTables entry/connection loggers (ntcore is not ported; StartNTLog copies
+  // telemetry into the log instead). Upstream's
   // console logger tails /home/systemcore/WPILIB_UserProgram.log; here the console tee
   // (prosdk::platform::SetConsoleTee) copies every prosdk console write into a bounded buffer
   // that this thread drains into the "console" entry (created on the first
@@ -446,10 +448,19 @@ void Thread::Main() {
   DrainConsoleLog(true);
 }
 
-// prosdk: NetworkTables logging is not available (see above)
-void Thread::StartNTLog() {}
+// prosdk: no ntcore. What upstream's NetworkTables entry logger records of the robot's own
+// data is its telemetry ("NT:/Telemetry/..."); here the telemetry backend registered for ""
+// also writes into this log under that name (prosdk/platform/TelemetryLog.hpp). Without a log
+// directory the writer discards its output, so nothing is copied.
+void Thread::StartNTLog() {
+  if (!m_logDir.empty()) {
+    prosdk::platform::StartTelemetryLog(m_log);
+  }
+}
 
-void Thread::StopNTLog() {}
+void Thread::StopNTLog() {
+  prosdk::platform::StopTelemetryLog(m_log);
+}
 
 void Thread::StartConsoleLog(bool force) {
   if (!force && !RobotBase::IsReal()) {

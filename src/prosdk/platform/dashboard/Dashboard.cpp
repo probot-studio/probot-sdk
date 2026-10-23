@@ -7,12 +7,12 @@
 
 #include "prosdk/platform/Console.hpp"
 #include "prosdk/platform/CoreOps.hpp"
+#include "prosdk/platform/TelemetryLog.hpp"
 #include "prosdk/platform/dashboard/DashboardAlerts.hpp"
 #include "prosdk/platform/dashboard/DashboardPreferences.hpp"
 #include "prosdk/platform/dashboard/DashboardStore.hpp"
 #include "prosdk/platform/dashboard/ProbotTelemetryBackend.hpp"
 #include "prosdk/platform/dashboard/ProbotTunableBackend.hpp"
-#include "prosdk/telemetry/TelemetryRegistry.hpp"
 #include "prosdk/tunables/TunableRegistry.hpp"
 
 namespace prosdk::platform {
@@ -35,8 +35,9 @@ void DashboardPostCycle(void*) {
 void RegisterDashboardBackends() {
   static std::once_flag once;
   std::call_once(once, [] {
-    prosdk::telemetry::TelemetryRegistry::RegisterBackend(
-        "", std::make_shared<prosdk::backend::ProbotTelemetryBackend>("/Telemetry"));
+    // registered for "" with DataLogManager's log copy while it runs (prosdk/platform/TelemetryLog.hpp)
+    SetDefaultTelemetryBackend(
+        std::make_shared<prosdk::backend::ProbotTelemetryBackend>("/Telemetry"));
     prosdk::tunables::TunableRegistry::RegisterBackend(
         "", std::make_shared<prosdk::backend::ProbotTunableBackend>("/Tunables"));
     dashboard::TrackPreferences();
