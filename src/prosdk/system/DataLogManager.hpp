@@ -18,8 +18,9 @@ namespace prosdk {
  * automatically cleans up old files when disk space is low and renames the file
  * based either on current date/time or (if available) competition match number.
  * prosdk: the data file is saved to prosdk::platform::GetLogDirectory()
- * (prosdk/platform/Storage.hpp): /littlefs/logs on the robot when the sketch has
- * mounted LittleFS, otherwise the log is kept but its data is discarded (and
+ * (prosdk/platform/Storage.hpp): /littlefs/logs on the robot when LittleFS is
+ * mounted (by the sketch, or by prosdk itself, which formats only a blank
+ * partition), otherwise the log is kept but its data is discarded (and
  * GetLogDir() returns ""); <operating directory>/logs on the host.
  *
  * Log files are initially named "WPILIB_TBD_{random}.wpilog" until the DS

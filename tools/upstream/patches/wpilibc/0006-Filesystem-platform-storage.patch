@@ -43,20 +43,21 @@ diff --git a/src/prosdk/system/DataLogManager.hpp b/src/prosdk/system/DataLogMan
 index fac56f8..f0961bd 100644
 --- a/src/prosdk/system/DataLogManager.hpp
 +++ b/src/prosdk/system/DataLogManager.hpp
-@@ -17,8 +17,10 @@ namespace prosdk {
+@@ -17,8 +17,11 @@ namespace prosdk {
   * Centralized data log that provides automatic data log file management. It
   * automatically cleans up old files when disk space is low and renames the file
   * based either on current date/time or (if available) competition match number.
 - * The data file will be saved to a USB flash drive in a folder named "logs" if
 - * one is attached, or to /home/systemcore/logs otherwise.
 + * prosdk: the data file is saved to prosdk::platform::GetLogDirectory()
-+ * (prosdk/platform/Storage.hpp): /littlefs/logs on the robot when the sketch has
-+ * mounted LittleFS, otherwise the log is kept but its data is discarded (and
++ * (prosdk/platform/Storage.hpp): /littlefs/logs on the robot when LittleFS is
++ * mounted (by the sketch, or by prosdk itself, which formats only a blank
++ * partition), otherwise the log is kept but its data is discarded (and
 + * GetLogDir() returns ""); <operating directory>/logs on the host.
   *
   * Log files are initially named "WPILIB_TBD_{random}.wpilog" until the DS
   * connects. After the DS connects, the log file is renamed to
-@@ -30,7 +32,9 @@ namespace prosdk {
+@@ -30,7 +33,9 @@ namespace prosdk {
   * than 50 MB of free space on the target storage, WPILIB_ log files are deleted
   * (oldest to newest) until there is 50 MB free OR there are 10 files remaining.
   *
