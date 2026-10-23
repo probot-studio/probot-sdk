@@ -58,7 +58,8 @@ namespace prosdk {
  * core waits at most 1 s for a running download to stop, and a download
  * stalled on a slow browser can keep a file open longer (each chunk may
  * take 2 s or more), so a sketch that unmounts the file system after Stop()
- * should wait a few seconds first. prosdk itself never unmounts.
+ * first waits until probot::files::busy() is false (probot-core R17; with an
+ * older core, a few seconds). prosdk itself never unmounts.
  * With an older core nothing is shared.
  */
 class DataLogManager final {

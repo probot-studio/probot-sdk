@@ -450,8 +450,9 @@ bool ShareFiles(const char* name, const char* vfsDir) noexcept;
 /**
  * Stops offering the share name (core's probot::files::unshare(name)). May block up to 1 s while a
  * running transfer stops; a transfer stalled on a slow browser can keep its file open longer, so
- * wait a few seconds before unmounting the file system. Returns false without file sharing support
- * or when no share has that name.
+ * before unmounting the file system wait until probot::files::busy() is false (probot-core R17;
+ * with an older core, a few seconds). Returns false without file sharing support or when no share
+ * has that name.
  */
 bool UnshareFiles(const char* name) noexcept;
 
