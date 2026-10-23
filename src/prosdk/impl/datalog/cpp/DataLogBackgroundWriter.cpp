@@ -298,6 +298,10 @@ void DataLogBackgroundWriter::StartLogFile(WriterThreadState& state) {
 
     if (state.f == WPI_INVALID_FILE) {
       WPI_ERROR(m_msglog, "Could not open log file, no log being saved");
+    } else if (state.freeSpace == UINTMAX_MAX) {
+      // prosdk: free space unknown (no statvfs on the ESP32): leave it out
+      // instead of printing UINTMAX_MAX bytes
+      WPI_INFO(m_msglog, "Logging to '{}'", state.path.string());
     } else {
       WPI_INFO(m_msglog, "Logging to '{}' ({} free space)", state.path.string(),
                FormatBytesSize(state.freeSpace));
