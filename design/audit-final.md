@@ -557,7 +557,7 @@ Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attac
    R6 (loop rate) and R8 (gamepads). The latest release today is 0.3.0. core-requests.md holds the
    PRs until 0.4.0 itself is on stable, so the release that carries them may be numbered above
    0.4.0. Then:
-   - change CI's `PROBOT_CORE_REF` from `feat/multi-gamepad` to the release tag;
+   - change CI's `PROBOT_CORE_REF` from `feat/pulse-board` to the release tag;
    - set the `CoreBridge.hpp` gate to the released version number. Today it checks `__has_include`
      of the framework headers and `PROBOT_VERSION >= 0.4.0` (the `sdk-target` number), plus
      `__has_include` feature probes such as `PROSDK_CORE_HAS_LOOP_RATE`;
