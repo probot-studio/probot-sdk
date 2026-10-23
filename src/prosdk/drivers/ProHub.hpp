@@ -80,6 +80,8 @@ constexpr int GetMotorPcaAddress(int port) {
  * PROBOT_BATTERY_INA_SDA/SCL), port 0 shares it as is and the pins set here do not apply. To use
  * both, wire the INA to the ProHub bus (PROBOT_BATTERY_INA_SDA 1, PROBOT_BATTERY_INA_SCL 2) and
  * give it an address other than 0x40 and 0x41 (PROBOT_BATTERY_INA_ADDR, set by its A0/A1 pins).
+ * With the INA enabled the bus runs at 100 kHz, not 400 kHz: core sets Wire.setClock(100000)
+ * whichever side starts the bus first, so every port 0 transfer takes about 4 times longer.
  */
 bool ConfigurePins();
 

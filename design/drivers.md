@@ -144,7 +144,10 @@ Arduino's `Wire`, which is I2C controller 0 (prosdk port 0, the ProHub port), at
 pins (GPIO 8/9 unless `PROBOT_BATTERY_INA_SDA`/`SCL`), port 0 shares that bus as is
 (design/hal-esp32.md, I2C), so `ConfigurePins()`' pins 1/2 do not apply. To use both, wire the INA
 to the ProHub bus (`PROBOT_BATTERY_INA_SDA 1`, `PROBOT_BATTERY_INA_SCL 2`) at an address other
-than 0x40/0x41 (its A0/A1 pins, `PROBOT_BATTERY_INA_ADDR`). Not tested on hardware.
+than 0x40/0x41 (its A0/A1 pins, `PROBOT_BATTERY_INA_ADDR`). The shared bus then runs at
+100 kHz instead of `ConfigurePins()`' 400 kHz: core's battery init calls `Wire.setClock(100000)`
+on controller 0 whichever side started the bus first, so every port 0 transfer (PCA9685, IMU,
+Pinpoint) takes about 4 times longer. Not tested on hardware.
 
 ## ProHub encoders
 
