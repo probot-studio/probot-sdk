@@ -842,25 +842,34 @@ items below; the signatures the bridge probes (`limits()`, `clearPersisted()`, `
 `files::share()`/`unshare()`) are unchanged.
 
 R16 (#42): a refused `set()` (longer than `PROBOT_DASH_MAX_VALUE`: reason 1 TooLarge; no room in the pool
-or heap: 2 NoMemory, now also counted in `stats().dropped`) is sent to the DS in a new robot -> DS frame
-`'E'` 0x45 (repeated `{u16 id, u8 reason, u32 last refused length}`, LE) after the topic's remaining value:
-at once when the reason changes, then after every resend of that value (resync, re-announce, write
-echo). The next stored `set()` clears it and sends `'V'` even for an unchanged value. The DS shows "Güncel
-değil: <sebep>" on the row (widget topics without a row are listed under the widget) and logs it once;
-older pages ignore the frame. Core also added prosdk's sizing note to `API.md`. The robot side gets only
-the public enum `probot::dashboard::SetRefusal`; `set()` still returns `bool` and there is no accessor
-of a topic's reason, so prosdk adds no CoreOps field: the console report (`Limit::kValue`, once) stays
-as it is. Documented in design/API-DIFFERENCES.md section 3 (the `Field2d` advice: the DS now marks the
-topic not current with #42; an older core still shows the old value as current) and the
-`DashboardStore.hpp` store notes.
+or heap: 2 NoMemory; a failed heap allocation is now counted in `stats().dropped` too, a full pool
+already was) is sent to the DS in a new robot -> DS frame `'E'` 0x45 (repeated `{u16 id, u8 reason, u32
+last refused length}`, LE) after the topic's remaining value: at once when the reason changes, then after
+every resend of that value (resync, re-announce, write echo). The next stored `set()` clears it and sends
+`'V'` even for an unchanged value. The DS shows "Güncel değil: <sebep>" on the row (widget topics without
+a row are listed under the widget) and logs it once; older pages ignore the frame. Core also added
+prosdk's sizing note to `API.md`. The robot side gets only the public enum
+`probot::dashboard::SetRefusal`; `set()` still returns `bool` and there is no accessor of a topic's
+reason. prosdk could still tell the two reasons apart itself: core's TooLarge test is only the length
+against `limits().maxValue` (R15, which the bridge already probes), so one more CoreOps field such as
+`dashMaxValue` would let `SetTopicValue()` split the message as `ReportSchemaRefused()` does for schemas;
+no core request is needed. Not done (minimal): with #42 the DS shows the reason, and the console report
+(`Limit::kValue`, once) keeps naming both causes. Documented in design/API-DIFFERENCES.md section 3 (the
+`Field2d` advice: the DS now marks the topic not current with #42; an older core still shows the old
+value as current) and the `DashboardStore.hpp` store notes.
 
 R17 (folded into #38, same `PROBOT_HAS_FILES_SHARE`): `probot::files::busy()` is true while a DS listing
 or download holds a folder or file of any share; `unshare()` waits at most 1 s (core's comment and
-`API.md` now call it a cap). Before unmounting: unshare, then wait until `busy()` is false. prosdk never
-unmounts, so no CoreOps field: a sketch that unmounts already calls ESP-IDF (prosdk has no unmount) and
-sees core's `<probot.h>`, so `probot::files::busy()` does not make it mix layers more than it does.
-DataLogManager.hpp, `UnshareFiles()` in CoreOps.hpp and design/API-DIFFERENCES.md now say: after
-`Stop()`/`UnshareFiles()`, poll `probot::files::busy()` until false (older core: wait a few seconds).
+`API.md` now call it a cap). Before unmounting: unshare, then wait until `busy()` is false. `busy()` is a
+separate query, not a result of `unshare()`, so R17's "`UnshareFiles()` can pass the result on" does not
+apply. prosdk never unmounts, so no CoreOps field: a sketch that unmounts already calls ESP-IDF (prosdk
+has no unmount) and sees core's `<probot.h>`, so `probot::files::busy()` does not make it mix layers more
+than it does. DataLogManager.hpp (and its patch `wpilibc/0015`), `UnshareFiles()` in CoreOps.hpp and
+design/API-DIFFERENCES.md now say: after `Stop()`/`UnshareFiles()`, poll `probot::files::busy()` until
+false. Since the macro is unchanged, an earlier #38 draft (such as the 15defc1 stack) has file sharing
+without `busy()` and a sketch cannot detect that at compile time; the docs name the sha (`busy()` from
+ba2500b on, before it wait a few seconds). A core without file sharing shares nothing, so there is
+nothing to wait for. Merged #38 will have `busy()`.
 
 - DS widget check (`node tools/build/ds_widget_check.js .upstream/probot-core/ui/index.html`): all golden
   layouts decode as before (core's #42 page changes add the `'E'` handler and stale marks; no decoder
@@ -869,3 +878,5 @@ DataLogManager.hpp, `UnshareFiles()` in CoreOps.hpp and design/API-DIFFERENCES.m
   the incremental archive, the HAL link test (1,709,877 B flash / 75,996 B RAM), examples TemplateTimed
   1,797,756 / 72,308 and DriversShowcase 1,924,612 / 73,900 (design/size.md section 12). The bridge did
   not change, so neither the oldest-core link test nor QEMU was re-run.
+- Vendoring check (`python3 tools/upstream/wpilib.py --check`): all 2406 generated files match; the R17
+  comment in DataLogManager.hpp is made in its patch `wpilibc/0015`.

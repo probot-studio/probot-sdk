@@ -13,7 +13,7 @@
 //     PROBOT_DASH_MAX_VALUE or an exhausted pool (PROBOT_DASH_POOL_BYTES);
 //   - set() copies at most PROBOT_DASH_MAX_VALUE (1024) bytes and drops values equal to the last
 //     one unless the topic has KEEP_DUPLICATES; with R16 (core draft PR #42) a refused value makes
-//     the Driver Station mark the topic's previous value not current until a later set() is stored;
+//     the Driver Station mark the topic not current until a later set() is stored;
 //   - addSchema() keeps at most PROBOT_DASH_MAX_SCHEMAS (32) schemas of at most
 //     PROBOT_DASH_MAX_SCHEMA_BYTES (4096) bytes each (R13; kinematics.proto's descriptor, 4332
 //     bytes, needs more; an older core: PROBOT_DASH_MAX_VALUE, which refuses protobuf

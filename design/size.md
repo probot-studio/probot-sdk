@@ -392,5 +392,6 @@ the R11 column is the last measurement against 15defc1 (design/core-requests.md 
 | HAL link test | 1,708,993 | 1,709,877 | +884 | - | 75,996 | 0 / - |
 
 - The growth since R11 is core's: the 'E' frame in the dashboard store (refusal fields in each slot,
-  one more pass in the frame builder), `files::busy()` and the regenerated DS page. prosdk's code did
-  not change. Not attributed further.
+  setting and clearing them in `set()`, one more pass in the frame builder) and the regenerated DS
+  page. `files::busy()` is an inline function nothing calls, so it adds nothing. prosdk's code did not
+  change. Not attributed further.
