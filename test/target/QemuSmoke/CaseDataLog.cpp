@@ -1,24 +1,30 @@
 // Copyright (c) Probot Studio. Hand-written; see LICENSE.
 //
-// (f) DataLogManager on LittleFS (the huge_app "spiffs" data partition, mounted by the runner
-// with LittleFS.begin(true)): Start() picks /littlefs/logs (prosdk::platform::GetLogDirectory),
-// the writer thread writes a .wpilog, Stop() flushes it; the file is then read back with stdio.
-// Boot 2 checks that boot 1's log survived the restart. With the fake core's file sharing
-// (FakeCore.hpp, CoreOps ABI 8) the manager's own task offers /littlefs/logs as "logs" and Stop()
-// takes it back on the caller's task.
+// (f) DataLogManager on LittleFS (the huge_app "spiffs" data partition). Nothing mounts it before
+// this case: the first default-directory lookup (prosdk::platform::GetLogDirectory) auto-mounts
+// it. Boot 1 starts from a freshly merged flash image whose partition is blank (0xFF), so it is
+// formatted; every later boot finds the file system and mounts it without formatting (the
+// non-blank refusal is covered by test/prosdk/StorageAutoMountTest.cpp). Start() picks
+// /littlefs/logs, the writer thread writes a .wpilog, Stop() flushes it; the file is then read
+// back with stdio. Boot 2 checks that boot 1's log survived the restart. With the fake core's file
+// sharing (FakeCore.hpp, CoreOps ABI 8) the manager's own task offers /littlefs/logs as "logs" and
+// Stop() takes it back on the caller's task.
 
 #include <dirent.h>
 #include <sys/stat.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
 
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
 #include <prosdk/datalog/DataLog.hpp>
 #include <prosdk/platform/Storage.hpp>
+#include <prosdk/platform/StorageAutoMount.hpp>
 #include <prosdk/system/DataLogManager.hpp>
 
 #include "FakeCore.hpp"
@@ -58,11 +64,27 @@ std::vector<std::string> ListLogs(const std::string& dir) {
 }  // namespace
 
 void CaseDataLog(Ctx& ctx) {
+  using prosdk::platform::detail::LittleFsAutoMount;
   const int boot = BootNumber();
+  QCHECK_MSG(ctx, !prosdk::platform::IsLittleFsMounted(), "{} mounted before the auto-mount",
+             prosdk::platform::kLittleFsBasePath);
+  QCHECK(ctx, prosdk::platform::detail::GetLittleFsAutoMountResult() ==
+                  LittleFsAutoMount::kNotTried);
+  const int64_t t0 = esp_timer_get_time();
+  const std::string dir = prosdk::platform::GetLogDirectory();
+  const int64_t mountMs = (esp_timer_get_time() - t0) / 1000;
+  QCHECK_MSG(ctx, dir == "/littlefs/logs", "log dir '{}'", dir);
   QCHECK_MSG(ctx, prosdk::platform::IsLittleFsMounted(), "LittleFS not mounted at {}",
              prosdk::platform::kLittleFsBasePath);
-  const std::string dir = prosdk::platform::GetLogDirectory();
-  QCHECK_MSG(ctx, dir == "/littlefs/logs", "log dir '{}'", dir);
+  // boot 1: blank partition, formatted; later boots: mounted as it is (never formatted again)
+  const auto mount = prosdk::platform::detail::GetLittleFsAutoMountResult();
+  const auto expected = boot == 1 ? LittleFsAutoMount::kFormatted : LittleFsAutoMount::kMounted;
+  QCHECK_MSG(ctx, mount == expected, "auto-mount result {} (expected {})",
+             static_cast<int>(mount), static_cast<int>(expected));
+  ctx.Note("automount={} automount_ms={}", mount == LittleFsAutoMount::kFormatted ? "formatted"
+                                           : mount == LittleFsAutoMount::kMounted ? "mounted"
+                                                                                  : "other",
+           mountMs);
   if (auto space = prosdk::platform::GetStorageSpace(dir)) {
     ctx.Note("fs_capacity={} fs_free={}", space->capacity, space->available);
   } else {

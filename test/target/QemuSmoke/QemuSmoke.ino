@@ -14,7 +14,6 @@
 //   TASK <name> prio=<n> core=<n> stack_free_min=<bytes>
 //   QEMU-SMOKE END boot=<n> pass=<n> fail=<n>
 
-#include <LittleFS.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <esp_timer.h>
@@ -23,6 +22,8 @@
 
 #include <cstring>
 #include <vector>
+
+#include <prosdk/platform/Storage.hpp>
 
 #include "FakeCore.hpp"
 #include "Harness.hpp"
@@ -103,11 +104,14 @@ void ReportTasks(int& pass, int& fail) {
 
 void RunnerTask(void*) {
   qemu::Line("QEMU-SMOKE runner started");
-  // LittleFS on the huge_app "spiffs" data partition (formatted on the first boot)
-  bool fsMounted = LittleFS.begin(true);
+  // LittleFS on the huge_app "spiffs" data partition: not mounted here; case f's DataLogManager
+  // mounts it (prosdk's auto-mount, which formats it only while it is blank, on the first boot).
+  // This sketch must not include <LittleFS.h>: with Arduino's library linked, prosdk leaves the
+  // mount to the sketch.
   int boot = qemu::BootNumber();
   qemu::Linef("QEMU-SMOKE BEGIN boot={} fake_core={} littlefs={} heap_free={}", boot,
-              qemu::fakecore::Installed() ? 1 : 0, fsMounted ? 1 : 0, HeapFree());
+              qemu::fakecore::Installed() ? 1 : 0,
+              prosdk::platform::IsLittleFsMounted() ? 1 : 0, HeapFree());
   int pass = 0;
   int fail = 0;
   for (const CaseDef& def : kCases) {
