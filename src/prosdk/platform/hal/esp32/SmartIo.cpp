@@ -219,9 +219,14 @@ bool EStopped() {
 // Without prosdk's framework hooks (another framework owns core's hooks) the e-stop callback
 // and the pre-cycle gate never run, so the gate stays closed. A halted robot program (constructor
 // or loop exception, prosdk/platform/RobotHost.hpp) keeps it closed too.
+// core's outputsEnabled() does not check the Driver Station link, so isAttached() is required
+// as well: it is what the control word's enabled/DS-attached bits come from (DriverStation.cpp
+// MakeControlWord), so the gate closes when the framework sees the robot disabled after the DS
+// owner slot is released (PROBOT_DS_OWNER_TIMEOUT_MS, 5 s), not only at core's DS timeout stop.
 bool OutputsEnabled() {
+  const platform::CoreOps& ops = platform::GetCoreOps();
   return !EStopped() && platform::FrameworkInstalled() && !platform::RobotProgramHalted() &&
-         platform::GetCoreOps().outputsEnabled();
+         ops.outputsEnabled() && ops.isAttached();
 }
 
 void UpdateOutputGate() {

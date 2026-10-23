@@ -11,9 +11,10 @@
 //
 // Output safety (PORT.md section 8): servo/ESC PWM pulses and digital PWM duty cycles (LEDC)
 // only leave the chip while probot-core reports outputsEnabled() (started RUN phase, no deadline
-// miss, no e-stop; it does not check the Driver Station link: a lost link closes the gate only
-// when core's DS timeout stops the robot, PROBOT_DS_TIMEOUT_MS 10 s with
-// PROBOT_DS_TIMEOUT_FORCE_STOP 1, the defaults). The output gate
+// miss, no e-stop) and isAttached() (a Driver Station client owns the robot). outputsEnabled()
+// alone does not check the link; isAttached() goes false when core releases the DS owner slot
+// (no DS frame for PROBOT_DS_OWNER_TIMEOUT_MS, 5 s by default), the same moment the control word
+// reports the robot disabled. The output gate
 // is re-evaluated on core's user task (pre-cycle) and every 10 ms by an esp_timer. On an emergency
 // stop every HAL-owned output pin (SetOutputPin: PWM, DIO outputs, LED data lines, pulse TX) is
 // routed to plain GPIO and driven low, lock-free.
@@ -133,7 +134,7 @@ void SetOutputPin(int32_t gpio, bool isOutput);
 /** True after probot-core reported an emergency stop (latched until reboot). */
 bool EStopped();
 
-/** Current output gate: probot-core's outputsEnabled() and not e-stopped. */
+/** Current output gate: probot-core's outputsEnabled() and isAttached(), not e-stopped. */
 bool OutputsEnabled();
 
 /** Re-evaluates the gate now and applies a change to the PWM outputs and the digital PWM

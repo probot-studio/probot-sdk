@@ -10,7 +10,7 @@
 // the comparator (the pulse width in us). A period change moves the output to a timer that has
 // that period (or a free one); HAL_NO_AVAILABLE_RESOURCES when there is none.
 //
-// Output gate: while probot-core's outputsEnabled() is false (or after an emergency stop) every
+// Output gate: while the HAL gate is closed (OutputsEnabled(), Esp32Internal.hpp) every
 // output is forced low (no pulses: ESCs and servos see "no signal"). Pulse 0 also forces low and
 // 0xFFFF forces high, like systemcore.
 

@@ -76,8 +76,9 @@ hardware validation is done.
   (UART1)/`MXP` (UART2); SPI keeps `SPI::kPort0` (SPI2)/`kPort1` (SPI3).
 - Capacities: 12 PWM outputs, 4 counters/encoders, 6 duty-cycle inputs, 10 analog inputs (ADC1),
   3 LED/pulse outputs, 2 I2C, 2 serial, 1 CAN (external transceiver), 2 SPI buses.
-- Output safety: outputs are gated while disabled; a lost Driver Station link closes the gate only
-  when core's DS timeout stops the robot (10 s by default; `design/hal-esp32.md` "Output safety");
+- Output safety: outputs are gated while disabled; a lost Driver Station link disables the robot
+  and closes the gate when core releases the DS owner slot (5 s without a frame by default;
+  `design/hal-esp32.md` "Output safety"); the robot keeps its last outputs until then;
   e-stop drives outputs low. PCA9685 limitation: `design/drivers.md` "PCA9685 and ProHub".
 - Not on the kit (API compiles, does nothing or reports an error): pneumatics, PowerDistribution,
   OnboardIMU, DIO pulses, interrupts (`API-DIFFERENCES.md` section 3). `OnboardIMU` constructs fine;
@@ -158,9 +159,12 @@ hardware validation is done.
 - E-stop: logs survive. The e-stop needs a reboot, and neither the DS reboot nor a PB-E305 restart
   erases flash; the writer fsyncs every 0.25 s on its own task. A sketch upload keeps the partition
   unless "Erase All Flash" is on or the partition scheme changes. Only dated
-  `WPILIB_<date>.wpilog` files are kept: a `WPILIB_TBD_` file (no DS clock) is deleted at the next
-  `Start()`; below 128 KiB free the oldest go until 3 remain. No download while e-stopped.
-- File names get the real UTC date once the DS has set the robot clock (core R10).
+  `WPILIB_<date>.wpilog` files are kept: a `WPILIB_TBD_` file that never got its date is deleted at
+  the next `Start()`; below 128 KiB free the oldest go until 3 remain. No download while e-stopped.
+- File names get the real UTC date once the DS has set the robot clock (core R10): after the DS
+  has been attached for about 1 s with the clock set, the open `WPILIB_TBD_` file is renamed to
+  `WPILIB_<date>.wpilog`, so data logged before the DS page was opened is kept. Only a file that
+  is closed (reboot) before that happens stays `WPILIB_TBD_`.
 - Telemetry can be copied into the log as `NT:/Telemetry/<path>` (the keys AdvantageScope knows
   from upstream logs). On the robot the copy is off by default: call
   `DataLogManager::LogNetworkTables(true)` after `Start()`. Say how fast it fills LittleFS: a double
