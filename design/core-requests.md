@@ -260,7 +260,7 @@ prosdk side: one more CoreOps block (ABI 9; null entries mean today's behavior) 
 into the snapshot, so `HAL_GetAllianceStation`, `HAL_GetGameData` and `HAL_GetMatchInfo` return them. Until then the
 deferral is recorded in design/API-DIFFERENCES.md section 3 (`MatchState` row) and design/hal-esp32.md.
 
-Status: delivered as draft PR #43 (`feat/ds-match-info` 3751146, all optional fields included) and wired
+Status: delivered as draft PR #43 (`feat/ds-match-info` 73c7e10, all optional fields included) and wired
 (CoreOps ABI 9), see "P1 R18 delivered and wired" below.
 
 ### R19. Driver Station display widget (low priority)
@@ -938,8 +938,10 @@ nothing to wait for. Merged #38 will have `busy()`.
 
 ### P1 R18 delivered and wired (CoreOps ABI 9), 2026-10-23
 
-Core's R18: draft PR #43 `feat/ds-match-info` 3751146, stacked on #42 (940d300, unchanged). `.upstream/probot-core`
-`sdk-target` is at 3751146 (`git reset --keep`); CI's `PROBOT_CORE_REF` names `feat/ds-match-info`
+Core's R18: draft PR #43 `feat/ds-match-info` 73c7e10, stacked on #42 (940d300, unchanged). Core
+force-pushed it over the first wired 3751146; the new commit changes no header, only the DS page and
+`API.md` (text boxes take Space while the robot is disabled, STOPPED or TRANSITION, not only STOPPED).
+`.upstream/probot-core` `sdk-target` is at 73c7e10 (`git reset --keep`); CI's `PROBOT_CORE_REF` names `feat/ds-match-info`
 (`PROBOT_CORE_OLDEST_REF` stays `feat/dashboard-store`). API (core `API.md`, `<probot/robot/match_info.hpp>`
 through `<probot/ds.hpp>`): `ds::allianceStation()` (`AllianceStation` Unknown 0, Red1-3 1-3, Blue1-3 4-6,
 the `HAL_AllianceStationID` numbering), `ds::gameData(out, cap)` (snprintf semantics), `ds::matchInfo()`
@@ -956,7 +958,8 @@ Wired:
 - CoreOps ABI 9: `matchInfoSeq()` and `matchInfo(CoreMatchInfo*)`. `CoreMatchInfo` is prosdk's copy of
   core's `MatchInfo` (station and type as `uint8_t` in the HAL numbering, the two 65-byte texts);
   `CopyCoreMatchInfo()` (a template in `CoreOps.hpp`, so the archive never names a core type) copies it,
-  the text bounded at 64 bytes. Defaults (no core, or null): counter 0, empty values.
+  the text through `CopyCoreMatchText()` (at most 64 bytes, cut on a UTF-8 boundary; the HAL's
+  conversion uses the same function for a table filled another way). Defaults (no core, or null): counter 0, empty values.
 - Bridge: `kCoreHasMatchInfo` = `PROBOT_HAS_DS_MATCH_INFO` plus requires-checks on `matchInfoSeq()`
   (returns `uint32_t`) and `matchInfo()` (returns `probot::ds::MatchInfo`), looked up through a
   using-directive in `match_probe` as for `clearPersisted()`; `static_assert`s pin the text size (64) and
@@ -980,17 +983,21 @@ Wired:
   every station and type (out-of-range values), all fields, the counter (no read while unchanged over
   100 checks, a change between autonomous and TeleOp, a change while the values are read is seen on
   the next check, a clear), text at 64 bytes (exactly 64 kept, 65 without a NUL cut, a two-byte
-  character across byte 64 dropped whole, `CopyCoreMatchInfo` bounded), and the null fallback through an
+  character across byte 64 dropped whole, the same through `CopyCoreMatchInfo`, also from a wider core
+  array), and the null fallback through an
   installed table with both fields null. With the core clone (`PROSDK_TEST_PROBOT_CORE_MATCH`, core's
   `src` and `tests/stubs` on the include path; CI's host job checks out `PROBOT_CORE_REF`) one more case
   reads core's own `ds::matchInfoSeq()`/`matchInfo()` as the bridge does, with values set through core's
   `applyMatchForm()` (the DS form): an unchanged form does not move the counter, 64 bytes of UTF-8 pass
   whole and 65 are refused by core, `canChangeMatchInfo` allows TRANSITION and refuses TELEOP_INIT.
-  CoreOpsTest: no-core and null-field defaults. QEMU FakeCore leaves ABI 9 null.
+  CoreOpsTest: no-core and null-field defaults. QEMU: FakeCore records ABI 9 (counter 0 until set), and
+  CaseRobot, after the e-stop with no packet, control-word or joystick change, sets the match info and
+  checks that the next pass alone makes a new snapshot, that `HAL_GetAllianceStation`/`HAL_GetGameData`/
+  `HAL_GetMatchInfo` return it after `HAL_RefreshDSData`, and that the values are read once.
 - Docs: design/API-DIFFERENCES.md (`MatchState` row, section 6), design/hal-esp32.md, design/PORT.md,
   design/user-docs-handoff.md, design/examples.md and the SnippetDigitalCommunication /
   SnippetI2CCommunication headers.
-- Checked against 3751146: host tests (`build.sh host all header_check --test`: every binary passes
+- Checked against 3751146 (first wiring; the review fixes below re-ran what they touch against 73c7e10): host tests (`build.sh host all header_check --test`: every binary passes
   except a known flaky `prosdk_drivers_tests` case, "W25QFlash splits programs on page boundaries", whose
   10 ms wall-clock busy timeout fails about 1 run in 5 standalone too; untouched by this change), the
   incremental archive and header check, a single-TU host syntax check of `CoreBridge.hpp` with core's
@@ -1001,3 +1008,11 @@ Wired:
   8/8 on both boots (FakeCore, fields null), examples TemplateTimed 1,812,016 / 73,164 and
   SnippetDigitalCommunication 1,809,160 / 73,172, `ds_widget_check.js` on core's page, `wpilib.py
   --check` and `examples.py --check`. Sizes: design/size.md section 13.
+- Review fixes (2026-10-23): repinned to 73c7e10 (above); the bridge's copy now cuts text on a UTF-8
+  boundary itself (`CopyCoreMatchText`, shared with the HAL, whose own cut could never run on what the
+  bridge delivered); `HAL_GetMatchInfo` returns `HAL_INCOMPATIBLE_STATE` after the backend's shutdown
+  like the other getters; the QEMU check above. Re-run against 73c7e10: `prosdk_match_tests` (5 cases),
+  `prosdk_tests`, the incremental archive and header check, QEMU smoke 8/8 on both boots (case d 37
+  checks), the HAL link test (1,731,185 / 76,956; against 940d300 1,725,921 / 76,812; against
+  `feat/dashboard-store` 1,761,353 / 69,772), examples TemplateTimed 1,812,056 / 73,164 and
+  SnippetDigitalCommunication 1,809,196 / 73,172, `ds_widget_check.js` on core's page.

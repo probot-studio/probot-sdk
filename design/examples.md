@@ -304,7 +304,7 @@ Flash is "Sketch uses", RAM is "Global variables use" (static RAM; the robot als
 at run time).
 
 Measured by CI on 2026-10-23 (run 39890517789, prosdk `85ed58e`, CoreOps ABI 8) against probot-core
-`feat/dash-set-refused` (#42, the top of core's draft stack: R11 files, R12 persistence, R5 widgets, R15,
+`feat/dash-set-refused` (#42, then the top of core's draft stack: R11 files, R12 persistence, R5 widgets, R15,
 R16). The numbers move with the archive and core; design/size.md keeps the history (R14's gzipped
 Driver Station page saved about 100 KB per sketch, core's #38-#42 added about 16-24 KB).
 The huge_app partition gives the sketch 3,145,728 bytes of flash; static RAM is out of 327,680
@@ -320,7 +320,9 @@ about 4 KB of flash and 64-128 B of RAM more, and a sketch that uses DataLogMana
 copy (about 9 KB in all). Local builds (`tools/build/build.sh examples`, same archive and core) after
 the review fixes: TemplateTimed 1,802,508 / 72,372, DriverStationDisplayLines 1,826,176 / 72,484,
 DriverStationDisplayAnsi 1,805,464 / 72,484, DSGamepadChooser 1,845,324 / 72,556, SysIdRoutine
-2,017,108 / 76,284. The next CI run gives the figures for all 79 sketches.
+2,017,108 / 76,284. Since then CI pins core #43 (`feat/ds-match-info` 73c7e10, R18 match info, about
+5 KB of core flash): TemplateTimed 1,812,056 / 73,164 and SnippetDigitalCommunication 1,809,196 /
+73,172 locally (design/size.md section 13). The next CI run gives the figures for all 79 sketches.
 
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|

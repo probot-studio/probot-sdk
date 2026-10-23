@@ -2,7 +2,8 @@
 
 For probot-docs (probotstudio.com/docs). Release checklist item 18 (`design/audit-final.md` section
 6.4). Written 2026-10-23 at prosdk `79cdeb7` (branch `dev`) against probot-core's draft stack up to
-#42 (`feat/dash-set-refused` 940d300, `library.properties` version 0.4.0). Today the docs mention
+#42 (`feat/dash-set-refused` 940d300, `library.properties` version 0.4.0); the match info item (R18)
+needs #43 on top of it (`feat/ds-match-info` 73c7e10, which CI now pins). Today the docs mention
 probot-sdk only as a future library (`docs/ornekler.md:917`).
 
 Every item below names the source in this repository. The source is the reference; this file only

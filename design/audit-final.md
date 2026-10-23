@@ -271,7 +271,7 @@ Changes since wave 4:
   - RSL state, comms-disable count and 3.3 V current;
   - serial flow control and buffer sizes;
   - rumble, LEDs and touchpads;
-  - alliance, match and game data;
+  - alliance, match and game data (wired since through core R18, CoreOps ABI 9; section 5);
   - team number and comments;
   - the `DashboardOpMode` no-op and the field images.
 - **Hand-written messages.** Every "not supported" message in the hand-written code
@@ -434,8 +434,9 @@ As found on 2026-10-22:
 
    Each has 4 `TEST_CASE_METHOD`s (alliance, enabled, autonomous, alert). The "Example tests"
    section of `design/examples.md` says upstream has three example tests and does not mention these
-   two. They would run on the host sim, where `DriverStationSim` sets the alliance (the robot's DS
-   never sends one). Either port them like `test/examples/ArmSimulation` or record why not.
+   two. They would run on the host sim, where `DriverStationSim` sets the alliance (on the robot it
+   comes only from the DS page's "Maç Bilgisi" card, core R18). Either port them like
+   `test/examples/ArmSimulation` or record why not.
 2. **NOTICE does not cover the ported examples.** NOTICE's component table does not name:
    - `examples/`, which now holds 63 sketches derived from `wpilibcExamples` (WPILib BSD-3; each
      `.ino` keeps upstream's copyright lines);
@@ -485,8 +486,9 @@ Completeness critic, 2026-10-23 (five more gaps, checked against the tree and up
 - `DriverStationDisplay`: no longer console lines. A small terminal keeps the screen and publishes it
   as the telemetry table `DriverStationDisplay` (`prosdk/platform/dashboard/DashboardDisplay.hpp`, test
   `test/prosdk/DashboardDisplayTest.cpp`); a DS panel for it is core request R19.
-- Alliance, station, game data and match info: need probot-core; request R18, deferral recorded in
-  API-DIFFERENCES.md section 3.
+- Alliance, station, game data and match info: done with core R18 (draft PR #43), CoreOps ABI 9
+  (`8bf488e`): `MatchState` returns the values of the DS page's "Maç Bilgisi" card (API-DIFFERENCES.md
+  section 3, core-requests.md "P1 R18 delivered and wired").
 - Desktop simulation of a sketch: recorded as not in the first release (API-DIFFERENCES.md section 5,
   PORT.md section 10); examples.md no longer says the sketches run in a host simulator.
 - Stale widget text in API-DIFFERENCES.md (`Scheduler`) and examples.md (`Field2d`, `Mechanism2d`):
@@ -546,8 +548,8 @@ Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attac
 
 ### 6.2 probot-core
 
-9. **Open.** probot-core's stack is now draft PRs #26-#42 (R1-R17). Its latest release is still
-   0.3.0. CI's `PROBOT_CORE_REF` is `feat/dash-set-refused` (#42, 940d300), and the oldest supported
+9. **Open.** probot-core's stack is now draft PRs #26-#43 (R1-R18). Its latest release is still
+   0.3.0. CI's `PROBOT_CORE_REF` is `feat/ds-match-info` (#43, 73c7e10), and the oldest supported
    core is `feat/dashboard-store`. As written on 2026-10-22: **PRs #26-#31 merged and released**
    as probot-core 0.4.0 or later, on stable and in Library
    Manager. These carry R1-R4 (framework, ds, api), R5 (dashboard store and DS page), R7 (opmodes),
@@ -572,6 +574,7 @@ Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attac
     - R14: no prosdk code.
     - R15: `9ec2023`, ABI 7.
     - R16 and R17: documented; they add no prosdk API.
+    - R18: `8bf488e`, ABI 9 (match info).
 
     core-requests.md has the details. The core PRs are part of item 9. As written on 2026-10-22:
     **R11-R14 delivered and wired, or explicitly deferred** with the limitation in the user docs:
