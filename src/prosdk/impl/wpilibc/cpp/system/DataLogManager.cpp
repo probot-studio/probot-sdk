@@ -88,9 +88,11 @@ struct Thread final : public prosdk::util::SafeThread {
   prosdk::log::StringLogEntry m_consoleLog;
   prosdk::log::StringLogEntry m_messageLog;
   // prosdk: the log folder's Driver Station share. Written by this thread, read by ~Thread after
-  // Main() returned.
+  // Main() returned. kWaiting: the folder is missing or core refused it (tried again once a
+  // second; a refusal is reported once).
   enum class LogShare { kWaiting, kShared, kOff };
   LogShare m_logShare = LogShare::kWaiting;
+  bool m_logShareRefused = false;
 };
 
 struct Instance {
@@ -213,8 +215,8 @@ Thread::Thread(std::string_view dir, std::string_view filename, double period)
 Thread::~Thread() {
   StopNTLog();
   StopConsoleLog();
-  // prosdk: take the folder off the Driver Station; this waits (at most 1 s) for a running
-  // download to stop, so the file system may be unmounted after Stop()
+  // prosdk: take the folder off the Driver Station. Core waits at most 1 s for a running download
+  // to stop; a download stalled on a slow browser can keep a file open longer.
   if (m_logShare == LogShare::kShared) {
     prosdk::platform::UnshareFiles(kLogShareName);
   }
@@ -235,12 +237,14 @@ void Thread::ShareLogDir() {
   }
   if (prosdk::platform::ShareFiles(kLogShareName, m_logDir.c_str())) {
     m_logShare = LogShare::kShared;
-  } else {
-    m_logShare = LogShare::kOff;
+  } else if (!m_logShareRefused) {
+    // tried again later too: with 4 shares, a slot may free up when the sketch unshares one
+    m_logShareRefused = true;
     prosdk::platform::ConsolePrint(
         prosdk::platform::ConsoleLevel::kWarning,
         "DataLogManager: the Driver Station cannot offer the logs in {} (probot-core shares an "
-        "absolute path of at most 95 bytes without . or .., and at most 4 folders)\n",
+        "absolute path of at most 95 bytes without . or .., and at most 4 folders); trying again "
+        "once a second\n",
         m_logDir);
   }
 }
@@ -320,8 +324,8 @@ void Thread::Main() {
     }
   }
 
-  // prosdk: offer the folder on the Driver Station; while it does not exist, look again once a
-  // second
+  // prosdk: offer the folder on the Driver Station; while it does not exist or core refuses it,
+  // try again once a second
   ShareLogDir();
   uint64_t shareTry = prosdk::util::Now();
 

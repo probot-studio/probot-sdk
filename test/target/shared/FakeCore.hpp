@@ -14,10 +14,16 @@
 #pragma once
 
 #include <stdint.h>
+#include <sys/stat.h>
 
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <utility>
+#include <vector>
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include <prosdk/platform/CoreOps.hpp>
 
@@ -40,6 +46,14 @@ struct State {
   std::atomic<uint32_t> schemas{0};
 };
 
+/** The fake file sharing: every share()/unshare() call and the FreeRTOS task that made it. */
+struct FileCall {
+  bool share;
+  std::string name;
+  std::string dir;
+  std::string task;
+};
+
 namespace detail {
 
 namespace pf = prosdk::platform;
@@ -47,6 +61,8 @@ namespace pf = prosdk::platform;
 inline State gState;
 inline std::mutex gConsoleMutex;
 inline std::string gConsole;
+inline std::mutex gFilesMutex;
+inline std::vector<FileCall> gFileCalls;
 
 inline uint8_t Phase() { return gState.phase.load(); }
 inline uint8_t SelectedMode() { return gState.selectedMode.load(); }
@@ -103,6 +119,22 @@ inline bool SetOpModeOptions(const pf::CoreOpModeOption*, size_t) { return true;
 inline uint64_t NoOpMode() { return 0; }
 inline bool NoUtility() { return false; }
 
+inline void RecordFileCall(bool share, const char* name, const char* dir) {
+  const char* task = pcTaskGetName(nullptr);
+  std::scoped_lock lock{gFilesMutex};
+  gFileCalls.push_back({share, name, dir != nullptr ? dir : "", task != nullptr ? task : ""});
+}
+// core's file task is not here (no WiFi); what it would read must be a folder of a mounted VFS
+inline bool FilesShare(const char* name, const char* vfsDir) {
+  RecordFileCall(true, name, vfsDir);
+  struct stat st {};
+  return vfsDir != nullptr && vfsDir[0] == '/' && ::stat(vfsDir, &st) == 0 && S_ISDIR(st.st_mode);
+}
+inline bool FilesUnshare(const char* name) {
+  RecordFileCall(false, name, nullptr);
+  return true;
+}
+
 inline bool Install() {
   static constexpr pf::CoreOps kOps{
       pf::kCoreOpsAbiVersion, sizeof(pf::CoreOps), 400, "0.4.0-qemu-fake",
@@ -130,9 +162,9 @@ inline bool Install() {
       // ABI 7 (R15 loopGridRestarts) null, as the bridge leaves it for a core without R15: the
       // robot host re-aligns on counted overruns only
       nullptr,
-      // ABI 8 (R11 filesShare/filesUnshare) null, as the bridge leaves them for a core without
-      // file sharing: DataLogManager's folder is not offered on the Driver Station
-      nullptr, nullptr,
+      // ABI 8 (R11 filesShare/filesUnshare) recorded, so DataLogManager's share of its LittleFS
+      // folder runs on the target (the null fallback is covered by prosdk_files_legacy_tests)
+      &FilesShare, &FilesUnshare,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   // what CoreBridge.hpp reports after probot::framework::install succeeded
@@ -151,6 +183,12 @@ inline State& Get() { return detail::gState; }
 inline std::string Console() {
   std::scoped_lock lock{detail::gConsoleMutex};
   return detail::gConsole;
+}
+
+/** The share()/unshare() calls so far, cleared. */
+inline std::vector<FileCall> TakeFileCalls() {
+  std::scoped_lock lock{detail::gFilesMutex};
+  return std::exchange(detail::gFileCalls, {});
 }
 
 /** True when the table was installed at static initialization. */

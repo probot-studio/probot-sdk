@@ -44,6 +44,18 @@ endif()
 # without file sharing (a probot-core before R11: CoreOps ABI 8 filesShare/filesUnshare null)
 file(GLOB _files_tests CONFIGURE_DEPENDS "${PROSDK_ROOT}/test/prosdk/files/*.cpp")
 prosdk_add_test(prosdk_files_tests SOURCES "${PROSDK_ROOT}/test/prosdk/main.cpp" ${_files_tests})
+# with the probot-core clone ($PROBOT_CORE, default .upstream/probot-core) the fake passes the calls
+# on to core's own header-only probot::files::share()/unshare(), so core's rules decide
+set(_probot_core "$ENV{PROBOT_CORE}")
+if(NOT _probot_core)
+  set(_probot_core "${PROSDK_ROOT}/.upstream/probot-core")
+endif()
+if(TARGET prosdk_files_tests AND EXISTS "${_probot_core}/src/probot/files/files.hpp")
+  target_include_directories(prosdk_files_tests PRIVATE "${_probot_core}/src")
+  target_compile_definitions(prosdk_files_tests PRIVATE PROSDK_TEST_PROBOT_CORE_FILES=1)
+elseif(TARGET prosdk_files_tests)
+  message(STATUS "prosdk_files_tests: no probot-core with R11 at ${_probot_core}, core's rules untested")
+endif()
 prosdk_add_test(prosdk_files_legacy_tests SOURCES "${PROSDK_ROOT}/test/prosdk/main.cpp"
   ${_files_tests})
 if(TARGET prosdk_files_legacy_tests)

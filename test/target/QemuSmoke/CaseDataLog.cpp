@@ -3,7 +3,9 @@
 // (f) DataLogManager on LittleFS (the huge_app "spiffs" data partition, mounted by the runner
 // with LittleFS.begin(true)): Start() picks /littlefs/logs (prosdk::platform::GetLogDirectory),
 // the writer thread writes a .wpilog, Stop() flushes it; the file is then read back with stdio.
-// Boot 2 checks that boot 1's log survived the restart.
+// Boot 2 checks that boot 1's log survived the restart. With the fake core's file sharing
+// (FakeCore.hpp, CoreOps ABI 8) the manager's own task offers /littlefs/logs as "logs" and Stop()
+// takes it back on the caller's task.
 
 #include <dirent.h>
 #include <sys/stat.h>
@@ -19,6 +21,7 @@
 #include <prosdk/platform/Storage.hpp>
 #include <prosdk/system/DataLogManager.hpp>
 
+#include "FakeCore.hpp"
 #include "Harness.hpp"
 
 namespace qemu {
@@ -76,6 +79,7 @@ void CaseDataLog(Ctx& ctx) {
   }
 
   const std::string name = std::format("qemu_smoke_{}.wpilog", boot);
+  fakecore::TakeFileCalls();
   prosdk::DataLogManager::Start("", name);
   prosdk::DataLogManager::Log(std::format("qemu-smoke boot {}", boot));
   auto& log = prosdk::DataLogManager::GetLog();
@@ -87,6 +91,18 @@ void CaseDataLog(Ctx& ctx) {
   }
   vTaskDelay(pdMS_TO_TICKS(400));  // > the writer's 0.25 s flush period
   prosdk::DataLogManager::Stop();
+
+  // R11: shared once by the datalogmgr task (the fake accepts a folder stat() finds), and unshared
+  // on this task, which only happens for a share the manager made
+  auto calls = fakecore::TakeFileCalls();
+  QCHECK_MSG(ctx, calls.size() == 2, "{} share/unshare calls", calls.size());
+  if (calls.size() == 2) {
+    QCHECK(ctx, calls[0].share && calls[0].name == "logs" && calls[0].dir == dir);
+    QCHECK_MSG(ctx, calls[0].task == "datalogmgr", "share on task '{}'", calls[0].task);
+    QCHECK(ctx, !calls[1].share && calls[1].name == "logs");
+    QCHECK_MSG(ctx, calls[1].task != "datalogmgr", "unshare on task '{}'", calls[1].task);
+    ctx.Note("share_task={} unshare_task={}", calls[0].task, calls[1].task);
+  }
 
   const std::string path = dir + "/" + name;
   std::string data = ReadFile(path);

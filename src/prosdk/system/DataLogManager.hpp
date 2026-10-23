@@ -51,9 +51,15 @@ namespace prosdk {
  * prosdk: with a probot-core that shares files (R11), the log directory is
  * offered on the Driver Station as "logs" once it exists (Logs page,
  * "Dosyalar" card: listed and downloaded while the robot is idle). A share
- * named "logs" made by the sketch is replaced. Stop() takes it back, waiting
- * at most 1 s for a running download to stop, so the file system may be
- * unmounted afterwards. With an older core nothing is shared.
+ * named "logs" made by the sketch is replaced. A share core refuses (a path
+ * against its rules, see prosdk::platform::ShareFiles, or 4 other shares
+ * already offered) is reported once and tried again once a second, so it
+ * succeeds once the sketch unshares a folder. Stop() takes the share back;
+ * core waits at most 1 s for a running download to stop, and a download
+ * stalled on a slow browser can keep a file open longer (each chunk may
+ * take 2 s or more), so a sketch that unmounts the file system after Stop()
+ * should wait a few seconds first. prosdk itself never unmounts.
+ * With an older core nothing is shared.
  */
 class DataLogManager final {
  public:

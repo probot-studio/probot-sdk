@@ -1,5 +1,5 @@
 diff --git a/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp b/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
-index 03f0e98..6d86aa4 100644
+index 03f0e98..f47ca34 100644
 --- a/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
 +++ b/src/prosdk/impl/wpilibc/cpp/system/DataLogManager.cpp
 @@ -24,6 +24,7 @@
@@ -29,23 +29,25 @@ index 03f0e98..6d86aa4 100644
  
    std::string m_logDir;
    bool m_filenameOverride;
-@@ -81,6 +87,10 @@ struct Thread final : public prosdk::util::SafeThread {
+@@ -81,6 +87,12 @@ struct Thread final : public prosdk::util::SafeThread {
    std::mutex m_consoleLogMutex;
    prosdk::log::StringLogEntry m_consoleLog;
    prosdk::log::StringLogEntry m_messageLog;
 +  // prosdk: the log folder's Driver Station share. Written by this thread, read by ~Thread after
-+  // Main() returned.
++  // Main() returned. kWaiting: the folder is missing or core refused it (tried again once a
++  // second; a refusal is reported once).
 +  enum class LogShare { kWaiting, kShared, kOff };
 +  LogShare m_logShare = LogShare::kWaiting;
++  bool m_logShareRefused = false;
  };
  
  struct Instance {
-@@ -203,6 +213,36 @@ Thread::Thread(std::string_view dir, std::string_view filename, double period)
+@@ -203,6 +215,38 @@ Thread::Thread(std::string_view dir, std::string_view filename, double period)
  Thread::~Thread() {
    StopNTLog();
    StopConsoleLog();
-+  // prosdk: take the folder off the Driver Station; this waits (at most 1 s) for a running
-+  // download to stop, so the file system may be unmounted after Stop()
++  // prosdk: take the folder off the Driver Station. Core waits at most 1 s for a running download
++  // to stop; a download stalled on a slow browser can keep a file open longer.
 +  if (m_logShare == LogShare::kShared) {
 +    prosdk::platform::UnshareFiles(kLogShareName);
 +  }
@@ -66,30 +68,32 @@ index 03f0e98..6d86aa4 100644
 +  }
 +  if (prosdk::platform::ShareFiles(kLogShareName, m_logDir.c_str())) {
 +    m_logShare = LogShare::kShared;
-+  } else {
-+    m_logShare = LogShare::kOff;
++  } else if (!m_logShareRefused) {
++    // tried again later too: with 4 shares, a slot may free up when the sketch unshares one
++    m_logShareRefused = true;
 +    prosdk::platform::ConsolePrint(
 +        prosdk::platform::ConsoleLevel::kWarning,
 +        "DataLogManager: the Driver Station cannot offer the logs in {} (probot-core shares an "
-+        "absolute path of at most 95 bytes without . or .., and at most 4 folders)\n",
++        "absolute path of at most 95 bytes without . or .., and at most 4 folders); trying again "
++        "once a second\n",
 +        m_logDir);
 +  }
  }
  
  void Thread::Main() {
-@@ -280,6 +320,11 @@ void Thread::Main() {
+@@ -280,6 +324,11 @@ void Thread::Main() {
      }
    }
  
-+  // prosdk: offer the folder on the Driver Station; while it does not exist, look again once a
-+  // second
++  // prosdk: offer the folder on the Driver Station; while it does not exist or core refuses it,
++  // try again once a second
 +  ShareLogDir();
 +  uint64_t shareTry = prosdk::util::Now();
 +
    int timeoutCount = 0;
    bool paused = false;
    int dsAttachCount = 0;
-@@ -303,6 +348,10 @@ void Thread::Main() {
+@@ -303,6 +352,10 @@ void Thread::Main() {
        break;
      }
      DrainConsoleLog(false);
@@ -101,10 +105,10 @@ index 03f0e98..6d86aa4 100644
        ++timeoutCount;
        // pause logging after being disconnected for 10 seconds
 diff --git a/src/prosdk/system/DataLogManager.hpp b/src/prosdk/system/DataLogManager.hpp
-index 685af03..cefcc6e 100644
+index 685af03..dc67ced 100644
 --- a/src/prosdk/system/DataLogManager.hpp
 +++ b/src/prosdk/system/DataLogManager.hpp
-@@ -47,6 +47,13 @@ namespace prosdk {
+@@ -47,6 +47,19 @@ namespace prosdk {
   * overflow is counted in a "bytes dropped" line. As upstream it starts by
   * default only on the robot (RobotBase::IsReal()); LogConsoleOutput(true) also
   * starts it on the host.
@@ -112,13 +116,19 @@ index 685af03..cefcc6e 100644
 + * prosdk: with a probot-core that shares files (R11), the log directory is
 + * offered on the Driver Station as "logs" once it exists (Logs page,
 + * "Dosyalar" card: listed and downloaded while the robot is idle). A share
-+ * named "logs" made by the sketch is replaced. Stop() takes it back, waiting
-+ * at most 1 s for a running download to stop, so the file system may be
-+ * unmounted afterwards. With an older core nothing is shared.
++ * named "logs" made by the sketch is replaced. A share core refuses (a path
++ * against its rules, see prosdk::platform::ShareFiles, or 4 other shares
++ * already offered) is reported once and tried again once a second, so it
++ * succeeds once the sketch unshares a folder. Stop() takes the share back;
++ * core waits at most 1 s for a running download to stop, and a download
++ * stalled on a slow browser can keep a file open longer (each chunk may
++ * take 2 s or more), so a sketch that unmounts the file system after Stop()
++ * should wait a few seconds first. prosdk itself never unmounts.
++ * With an older core nothing is shared.
   */
  class DataLogManager final {
   public:
-@@ -67,6 +74,8 @@ class DataLogManager final {
+@@ -67,6 +80,8 @@ class DataLogManager final {
  
    /**
     * Stop data log manager.

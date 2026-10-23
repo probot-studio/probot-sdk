@@ -1,7 +1,8 @@
 # prosdk CI (design/PORT.md sections 2, 5, 9):
 #   host:    vendoring drift check (tools/upstream/wpilib.py --check), examples drift check
 #            (tools/upstream/examples.py --check), host build, host header check and the
-#            upstream + prosdk unit tests
+#            upstream + prosdk unit tests (prosdk_files_tests with probot-core's probot::files
+#            from PROBOT_CORE_REF)
 #   esp32s3: the same drift check with the Arduino toolchain installed (also verifies
 #            tools/upstream/arduino-macros.txt), the precompiled archive and the header check
 #            (every public header after #include <Arduino.h>, exact Arduino flags)
@@ -42,6 +43,16 @@ jobs:
 
       - name: Examples drift check
         run: python3 tools/upstream/examples.py --check
+
+      # prosdk_files_tests runs DataLogManager's share calls through core's own probot::files rules
+      - name: Check out probot-core
+        uses: actions/checkout@v4
+        with:
+          repository: probot-studio/probot-core
+          ref: ${{ env.PROBOT_CORE_REF }}
+          path: .upstream/probot-core
+          # a private core repository needs a read token in this secret
+          token: ${{ secrets.PROBOT_CORE_TOKEN || github.token }}
 
       - name: Host build, header check and tests
         run: tools/build/build.sh host all header_check --test

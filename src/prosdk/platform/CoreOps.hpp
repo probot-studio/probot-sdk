@@ -282,7 +282,8 @@ struct CoreOps {
   // replacing a share of the same name; false for an invalid name or path (relative, "." or ".."
   // segments, longer than 95 bytes) or a fifth name. filesUnshare removes a share; false when no
   // share has that name. Both wait (at most 1 s) until a running Driver Station transfer of the
-  // old share stopped, so the file system may be unmounted afterwards. Any task, not an ISR. Null
+  // old share stopped; a transfer stalled on a slow browser can keep its file open longer, so the
+  // 1 s is a cap, not a guarantee that the file system may be unmounted. Any task, not an ISR. Null
   // (core without R11): nothing is shared.
   bool (*filesShare)(const char* name, const char* vfsDir);
   bool (*filesUnshare)(const char* name);
@@ -447,9 +448,10 @@ bool FileSharingSupported() noexcept;
 bool ShareFiles(const char* name, const char* vfsDir) noexcept;
 
 /**
- * Stops offering the share name (core's probot::files::unshare(name)); afterwards its file system
- * may be unmounted. May block up to 1 s while a running transfer stops. Returns false without file
- * sharing support or when no share has that name.
+ * Stops offering the share name (core's probot::files::unshare(name)). May block up to 1 s while a
+ * running transfer stops; a transfer stalled on a slow browser can keep its file open longer, so
+ * wait a few seconds before unmounting the file system. Returns false without file sharing support
+ * or when no share has that name.
  */
 bool UnshareFiles(const char* name) noexcept;
 
