@@ -283,99 +283,95 @@ ESP32-S3 (`esp32:esp32:esp32s3`, huge_app), compiled with `tools/build/build.sh 
 Flash is "Sketch uses", RAM is "Global variables use" (static RAM; the robot also allocates heap
 at run time).
 
-Measured on 2026-10-22 (after R9/R10, CoreOps ABI 4) against the `src/esp32s3/libprosdk.a` of
-that day and probot-core `feat/wall-clock` (b46069e); the numbers move with the archive and core.
+Measured by CI on 2026-10-23 (run 39890517789, prosdk `85ed58e`, CoreOps ABI 8) against probot-core
+`feat/dash-set-refused` (#42, the top of core's draft stack: R11 files, R12 persistence, R5 widgets, R15,
+R16). The numbers move with the archive and core; design/size.md keeps the history (R14's gzipped
+Driver Station page saved about 100 KB per sketch, core's #38-#42 added about 16-24 KB).
 The huge_app partition gives the sketch 3,145,728 bytes of flash; static RAM is out of 327,680
-bytes. Every sketch also gets probot-core's WiFi AP and Driver Station.
-The same archive against core `feat/multi-gamepad` (no R9/R10) gives TemplateTimed 1,864,712 /
-69,764: core's R9 console and R10 clock add about 7 KB flash and 1.5 KB static RAM to every sketch.
-The nine Boardoza rows were measured later the same day, against the archive of `bd0d149` (with the
-Boardoza drivers) and the same core. That archive gives TemplateTimed 1,871,876 / 71,220 (+132 B
-flash) and DriversShowcase 1,998,728 / 72,828 (+160 B; 1,998,568 in design/PORT.md): no Boardoza
-driver is linked into them, the growth is the six-step e-stop hooks in `SmartIo.cpp` and the
-unwind tables of the SPI pin functions in `HalConfig.cpp` (design/size.md section 8).
-
-Rows marked "(small-items)" were re-measured later on 2026-10-22 with CoreOps ABI 5 (prosdk 3450336)
-against probot-core `feat/small-items` (09a6fe4, R12 part 1, R13 and R14; CI has since moved to
-`feat/loop-grid-restarts`, where four sketches were re-measured: design/size.md sections 10 and 11);
-every other row was last measured against `feat/wall-clock` as above. Core R14 (the gzipped Driver
-Station page) makes every sketch about 100 KB smaller: 99,856-100,940 B less flash and 16-96 B more
-static RAM in the eight sketches re-measured (design/size.md section 9, which also lists
-TimedRobotDifferential, CommandBasedRobot, AprilTagFieldPose, DriversShowcase and HalSmoke; their
-numbers are in design/PORT.md 8.1). CI builds all examples on pushes to `dev` and `stable`, on pull
-requests and on manual runs.
+bytes. Every sketch also gets probot-core's WiFi AP and Driver Station. The same CI run links the HAL
+link test sketch at 1,709,957 / 75,996 against this core and at 1,745,453 / 68,956 against the oldest
+supported core (`feat/dashboard-store`). CI builds all examples on pushes to `dev` and `stable`, on pull requests and
+on manual runs; to refresh this table, take the "Sketch uses" / "Global variables use" lines after each
+"== <name>" line of the examples job log.
 
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|
-| ArcadeDriveGamepad | 1,906,064 | 71,556 |
-| ArmSimulation | 2,000,648 | 74,756 |
-| BoardozaClimate | 1,918,108 | 72,340 |
-| BoardozaEveDisplay | 1,921,260 | 71,872 |
-| BoardozaGnss | 1,923,512 | 72,428 |
-| BoardozaLoadCell | 1,906,372 | 72,364 |
-| BoardozaLoRa | 1,920,648 | 71,872 |
-| BoardozaMultizoneToF | 1,995,000 | 72,372 |
-| BoardozaRotaryArgb | 1,926,612 | 72,544 |
-| BoardozaSdLog (small-items) | 1,905,237 | 74,680 |
-| BoardozaThermalCamera | 1,905,060 | 72,364 |
-| DifferentialDriveBot | 1,971,912 | 73,348 |
-| DifferentialDrivePoseEstimator | 2,093,956 | 75,844 |
-| DriveDistanceOffboard | 1,952,336 | 71,660 |
-| DriverStationDisplayAnsi | 1,874,692 | 71,284 |
-| DriverStationDisplayLines | 1,895,472 | 71,284 |
-| DSGamepadChooser | 1,914,608 | 71,356 |
-| DutyCycleEncoder | 1,880,816 | 71,484 |
-| ElevatorExponentialProfile | 1,873,664 | 71,276 |
-| ElevatorExponentialSimulation | 1,996,048 | 74,756 |
-| ElevatorProfiledPID | 1,942,120 | 72,196 |
-| ElevatorSimulation | 2,006,000 | 74,756 |
-| ElevatorTrapezoidProfile | 1,871,756 | 71,276 |
-| Encoder | 1,885,172 | 71,876 |
-| GettingStarted | 1,906,568 | 71,556 |
-| Gyro | 1,940,216 | 72,700 |
-| MecanumBot | 2,057,652 | 73,412 |
-| MecanumDrive | 1,940,100 | 72,700 |
-| MecanumDrivePoseEstimator | 2,066,344 | 75,908 |
-| Mechanism2d | 1,946,940 | 72,484 |
-| SimpleDifferentialDriveSimulation | 2,288,304 | 75,908 |
-| SnippetAccelerometerCollision | 1,895,996 | 72,372 |
-| SnippetAccelerometerFilter | 1,897,684 | 72,356 |
-| SnippetAddressableLED | 1,877,444 | 74,292 |
-| SnippetADXLAccelerometers | 1,890,544 | 72,340 |
-| SnippetAnalogAccelerometer | 1,877,956 | 71,444 |
-| SnippetAnalogEncoder | 1,879,064 | 71,444 |
-| SnippetAnalogInput | 1,877,148 | 71,444 |
-| SnippetAnalogPotentiometer | 1,878,152 | 71,444 |
-| SnippetDifferentialDrive | 1,907,452 | 71,556 |
-| SnippetDigitalCommunication | 1,868,700 | 71,236 |
-| SnippetDigitalInput | 1,867,032 | 71,244 |
-| SnippetDutyCycleEncoder | 1,880,332 | 71,484 |
-| SnippetDutyCycleInput | 1,878,180 | 71,468 |
-| SnippetEncoder | 1,885,424 | 71,876 |
-| SnippetEncoderDrive | 1,919,952 | 72,148 |
-| SnippetEncoderHoming | 1,916,336 | 72,172 |
-| SnippetEventLoop | 1,935,860 | 72,196 |
-| SnippetFlywheelBangBangController | 1,958,640 | 74,764 |
-| SnippetI2CCommunication | 1,887,840 | 72,348 |
-| SnippetLimitSwitch | 1,902,080 | 71,572 |
-| SnippetMecanumDrive | 1,940,468 | 72,700 |
-| SnippetMotorControl | 1,920,940 | 72,204 |
-| SnippetOnboardIMU | 1,898,756 | 72,372 |
-| SnippetProfiledPIDFeedforward | 1,934,640 | 72,140 |
-| SnippetSelectCommand | 1,913,744 | 71,348 |
-| StateSpaceArm | 2,251,272 | 72,260 |
-| StateSpaceElevator | 2,251,280 | 72,260 |
-| StateSpaceFlywheel | 2,089,356 | 72,260 |
-| StateSpaceFlywheelSysId | 2,089,344 | 72,260 |
-| SwerveBot | 2,116,600 | 73,348 |
-| SwerveDrivePoseEstimator | 2,127,292 | 75,908 |
-| SysIdRoutine | 2,080,340 | 75,084 |
-| TankDriveGamepad (small-items) | 1,805,856 | 71,636 |
-| TemplateCommandItems | 1,923,316 | 71,348 |
-| TemplateCommandV2 | 1,930,184 | 71,468 |
-| TemplateCommandV2Skeleton | 1,904,380 | 71,348 |
-| TemplateOpMode | 1,871,184 | 71,220 |
-| TemplateTimed (small-items) | 1,771,768 | 71,252 |
-| TemplateTimedSkeleton | 1,859,744 | 71,220 |
-| TemplateTimeslice | 1,874,968 | 71,220 |
-| TemplateTimesliceSkeleton | 1,863,092 | 71,220 |
+| AprilTagFieldPose | 2,025,492 | 72,372 |
+| ArcadeDriveGamepad | 1,833,196 | 72,692 |
+| ArmSimulation | 1,928,352 | 75,892 |
+| BoardozaClimate | 1,844,948 | 73,476 |
+| BoardozaEveDisplay | 1,848,156 | 72,976 |
+| BoardozaGnss | 1,850,324 | 73,500 |
+| BoardozaLoRa | 1,847,568 | 72,976 |
+| BoardozaLoadCell | 1,833,356 | 73,436 |
+| BoardozaMultizoneToF | 1,921,908 | 73,444 |
+| BoardozaRotaryArgb | 1,853,524 | 73,648 |
+| BoardozaSdLog | 1,932,817 | 75,752 |
+| BoardozaThermalCamera | 1,831,948 | 73,500 |
+| CommandBasedRobot | 2,010,312 | 76,420 |
+| DSGamepadChooser | 1,841,596 | 72,428 |
+| DifferentialDriveBot | 1,899,176 | 74,484 |
+| DifferentialDrivePoseEstimator | 2,021,248 | 76,980 |
+| DriveDistanceOffboard | 1,879,752 | 72,732 |
+| DriverStationDisplayAnsi | 1,801,624 | 72,356 |
+| DriverStationDisplayLines | 1,822,384 | 72,420 |
+| DriversShowcase | 1,925,972 | 73,900 |
+| DutyCycleEncoder | 1,807,844 | 72,556 |
+| ElevatorExponentialProfile | 1,800,704 | 72,348 |
+| ElevatorExponentialSimulation | 1,923,640 | 75,828 |
+| ElevatorProfiledPID | 1,869,244 | 73,332 |
+| ElevatorSimulation | 1,933,564 | 75,828 |
+| ElevatorTrapezoidProfile | 1,798,780 | 72,348 |
+| Encoder | 1,812,196 | 72,948 |
+| GettingStarted | 1,833,700 | 72,692 |
+| Gyro | 1,867,452 | 73,836 |
+| HalSmoke | 1,613,941 | 74,380 |
+| MecanumBot | 1,985,652 | 74,484 |
+| MecanumDrive | 1,867,396 | 73,836 |
+| MecanumDrivePoseEstimator | 1,994,340 | 76,980 |
+| Mechanism2d | 1,874,232 | 73,572 |
+| OpModeRobotExample | 1,867,980 | 73,276 |
+| SimpleDifferentialDriveSimulation | 2,216,612 | 76,980 |
+| SnippetADXLAccelerometers | 1,817,624 | 73,476 |
+| SnippetAccelerometerCollision | 1,823,032 | 73,444 |
+| SnippetAccelerometerFilter | 1,824,740 | 73,428 |
+| SnippetAddressableLED | 1,804,648 | 75,428 |
+| SnippetAnalogAccelerometer | 1,804,984 | 72,596 |
+| SnippetAnalogEncoder | 1,806,124 | 72,596 |
+| SnippetAnalogInput | 1,804,172 | 72,596 |
+| SnippetAnalogPotentiometer | 1,805,196 | 72,596 |
+| SnippetDifferentialDrive | 1,834,560 | 72,692 |
+| SnippetDigitalCommunication | 1,795,660 | 72,308 |
+| SnippetDigitalInput | 1,794,080 | 72,316 |
+| SnippetDutyCycleEncoder | 1,807,348 | 72,556 |
+| SnippetDutyCycleInput | 1,805,156 | 72,540 |
+| SnippetEncoder | 1,812,436 | 72,948 |
+| SnippetEncoderDrive | 1,847,048 | 73,284 |
+| SnippetEncoderHoming | 1,843,388 | 73,244 |
+| SnippetEventLoop | 1,863,316 | 73,332 |
+| SnippetFlywheelBangBangController | 1,886,168 | 75,836 |
+| SnippetI2CCommunication | 1,814,776 | 73,420 |
+| SnippetLimitSwitch | 1,829,276 | 72,644 |
+| SnippetMecanumDrive | 1,867,772 | 73,836 |
+| SnippetMotorControl | 1,848,056 | 73,340 |
+| SnippetOnboardIMU | 1,825,808 | 73,444 |
+| SnippetProfiledPIDFeedforward | 1,861,664 | 73,276 |
+| SnippetSelectCommand | 1,840,848 | 72,484 |
+| StateSpaceArm | 2,179,660 | 73,332 |
+| StateSpaceElevator | 2,179,668 | 73,332 |
+| StateSpaceFlywheel | 2,017,596 | 73,332 |
+| StateSpaceFlywheelSysId | 2,017,584 | 73,332 |
+| SwerveBot | 2,044,648 | 74,484 |
+| SwerveDrivePoseEstimator | 2,055,412 | 76,980 |
+| SysIdRoutine | 2,008,384 | 76,220 |
+| TankDriveGamepad | 1,833,004 | 72,692 |
+| TemplateCommandItems | 1,850,556 | 72,484 |
+| TemplateCommandV2 | 1,857,364 | 72,540 |
+| TemplateCommandV2Skeleton | 1,831,536 | 72,484 |
+| TemplateOpMode | 1,798,108 | 72,292 |
+| TemplateTimed | 1,798,684 | 72,308 |
+| TemplateTimedSkeleton | 1,786,708 | 72,292 |
+| TemplateTimeslice | 1,801,948 | 72,308 |
+| TemplateTimesliceSkeleton | 1,790,092 | 72,292 |
+| TimedRobotDifferential | 1,873,636 | 73,332 |
+| TimesliceRobotExample | 1,849,924 | 73,276 |
