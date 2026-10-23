@@ -76,8 +76,9 @@ hardware validation is done.
   (UART1)/`MXP` (UART2); SPI keeps `SPI::kPort0` (SPI2)/`kPort1` (SPI3).
 - Capacities: 12 PWM outputs, 4 counters/encoders, 6 duty-cycle inputs, 10 analog inputs (ADC1),
   3 LED/pulse outputs, 2 I2C, 2 serial, 1 CAN (external transceiver), 2 SPI buses.
-- Output safety: outputs are gated while disabled and on Driver Station loss; e-stop drives outputs
-  low. PCA9685 limitation: `design/drivers.md` "PCA9685 and ProHub".
+- Output safety: outputs are gated while disabled; a lost Driver Station link closes the gate only
+  when core's DS timeout stops the robot (10 s by default; `design/hal-esp32.md` "Output safety");
+  e-stop drives outputs low. PCA9685 limitation: `design/drivers.md` "PCA9685 and ProHub".
 - Not on the kit (API compiles, does nothing or reports an error): pneumatics, PowerDistribution,
   OnboardIMU, DIO pulses, interrupts (`API-DIFFERENCES.md` section 3). `OnboardIMU` constructs fine;
   yaw reads 0 and every other getter throws (the program halts if uncaught): use `MPU6050`.

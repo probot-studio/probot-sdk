@@ -82,7 +82,11 @@ Driver Station (design/PORT.md section 8).
 ## Output safety
 
 - **Gate**: servo/ESC PWM pulses only leave the chip while probot-core's `outputsEnabled()` is
-  true (RUN phase, Driver Station connected, no loop deadline miss, no e-stop). While it is false
+  true (started RUN phase, no loop deadline miss, no e-stop). It does not check the Driver Station
+  link: when the link is lost, the gamepads go neutral (stale frames, owner release) but the gate
+  closes only when core's DS timeout stops the robot (no DS activity for `PROBOT_DS_TIMEOUT_MS`,
+  10 s, with `PROBOT_DS_TIMEOUT_FORCE_STOP` 1, core's defaults; with `FORCE_STOP` 0 it stays
+  open). While it is false
   every PWM output is forced low (no pulses: ESCs and servos see "no signal" and stop). The gate
   is re-evaluated on core's user task before every loop iteration and every 10 ms by the
   `prosdk-gate` esp_timer, so outputs stop within about 10 ms of a disable even if the user loop
