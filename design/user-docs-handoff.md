@@ -22,9 +22,21 @@ hardware validation is done.
 - Board package: Arduino-ESP32 **3.3.10** (`esp32:esp32`), the version the archive is built with
   (`tools/build/esp32s3.cmake`, CI `ARDUINO_ESP32_VERSION`). Tell users to install exactly this
   version; another one is untested and the library has no compile-time check for it.
-- Board settings: ESP32S3 Dev Module (`esp32:esp32:esp32s3`), **Partition Scheme: Huge APP (3MB No
-  OTA/1MB SPIFFS)**. probot-core alone is about 1.08 MB; prosdk sketches are 1.6-2.3 MB
+- Board: the Boardoza ESP32-S3 Pulse is the Probot main board (Tuna, 2026-10-23, "for now";
+  `design/hal-esp32.md` "Boards", `design/boardoza/P14-existing.md` 3.1).
+- Board settings: ESP32S3 Dev Module, **Flash Size 4MB, Partition Scheme Huge APP (3MB No OTA/1MB
+  SPIFFS), PSRAM QSPI PSRAM, USB Mode Hardware CDC and JTAG, USB CDC On Boot Enabled, Upload Mode
+  UART0 / Hardware CDC** (FQBN
+  `esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc`). With
+  USB CDC On Boot Enabled, `Serial` (core's boot banner and WiFi name) reaches the Pulse's USB-C
+  port. probot-core alone is about 1.08 MB; prosdk sketches are 1.6-2.3 MB
   (`design/PORT.md` 7.1, `design/examples.md` "Sizes").
+- Other ESP32-S3 boards: the robot's first member calls `prosdk::platform::SetI2CPins(0, 8, 9)`,
+  `SetSerialPins(0, 15, 16)` and `SetSPIPins(0, 12, 11, 13)` (or the board's pins), as
+  `prosdk::prohub::ConfigurePins()` does; USB CDC On Boot Disabled when a USB-UART bridge port
+  carries `Serial`; on octal-PSRAM modules (N8R8, N16R8) GPIO 33-37 are refused, so the examples'
+  motor pins 35-37 move (for example to 4, 5, 12). Source: `design/hal-esp32.md` "Other ESP32-S3
+  boards".
 - probot-core version: prosdk needs probot-core 0.4.0 or later (the framework hooks R1-R4). Older
   core features are detected at compile time; what each core feature adds is in
   `design/core-requests.md` "Status". Until core 0.4.0 is released this is a draft stack.
@@ -74,6 +86,10 @@ hardware validation is done.
   ignores it. Use them last, 46 first, and never wire an encoder or idle-high input to 45.
 - Bus port names are the 2027 enums: `I2C::Port::PORT_0`/`PORT_1`, `SerialPort::Port::ONBOARD`
   (UART1)/`MXP` (UART2); SPI keeps `SPI::kPort0` (SPI2)/`kPort1` (SPI3).
+- Default pins = the Pulse headers: I2C `PORT_0` SDA 1 / SCL 2 (J3), `ONBOARD` RX 10 / TX 11 (J4
+  F1/F2), `kPort0` SCK 17 / MOSI 15 / MISO 16 (J5, chip select 7 in the examples). A wiring page
+  needs the Pulse header table (`design/hal-esp32.md` "Boards"): only GPIO 1, 2, 7, 10, 11, 15-17,
+  35-42 and 45-48 reach a header; analog (ADC1) on 1, 2, 7, 10.
 - Capacities: 12 PWM outputs, 4 counters/encoders, 6 duty-cycle inputs, 10 analog inputs (ADC1),
   3 LED/pulse outputs, 2 I2C, 2 serial, 1 CAN (external transceiver), 2 SPI buses.
 - Output safety: outputs are gated while disabled; a lost Driver Station link disables the robot
@@ -83,8 +99,10 @@ hardware validation is done.
 - Not on the kit (API compiles, does nothing or reports an error): pneumatics, PowerDistribution,
   OnboardIMU, DIO pulses, interrupts (`API-DIFFERENCES.md` section 3). `OnboardIMU` constructs fine;
   yaw reads 0 and every other getter throws (the program halts if uncaught): use `MPU6050`.
-- The kit electronics and pin map are not final (KIT.md section 3); the examples' pin map is in
-  `design/examples.md` "Pin map". Check before publishing wiring pages.
+- Main board: Boardoza ESP32-S3 Pulse (decided 2026-10-23, "for now"); the rest of the kit
+  electronics is not final (KIT.md section 3). The examples' pin map (`design/examples.md` "Pin
+  map") uses the Pulse headers. Nothing has run on a Pulse yet; check before publishing wiring
+  pages.
 
 ## 4. Driver Station
 

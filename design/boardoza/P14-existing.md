@@ -22,9 +22,12 @@ ESP32-S3 rules that apply to every row (design/hal-esp32.md):
   - flash and PSRAM pins: 26-32, plus 33-37 on octal-PSRAM modules;
   - the probot-core pins: `NEOPIXEL_PIN` (3), RSL, e-stop and the battery pins;
   - pins already in use by an Arduino peripheral.
-- I2C port 0 defaults to SDA 8 / SCL 9 at 400 kHz. Other pins need `platform::SetI2CPins`.
+- I2C port 0 defaults to SDA 1 / SCL 2 (the Pulse J3, section 3.1) at 400 kHz. Other pins need
+  `platform::SetI2CPins`.
+- SPI bus 0 defaults to SCK 17 / MOSI 15 / MISO 16 (the Pulse J5). Other pins need
+  `platform::SetSPIPins`.
 - Serial ports:
-  - `SerialPort::Port::ONBOARD` is UART1, on RX 15 / TX 16 by default.
+  - `SerialPort::Port::ONBOARD` is UART1, on RX 10 / TX 11 (the Pulse J4 F1/F2) by default.
   - `MXP` is UART2 and needs `platform::SetSerialPins(1, rx, tx)`.
   - There is no hardware flow control.
 - CAN is TWAI, classic CAN only. Call `platform::SetCanConfig(tx, rx, bitrate)` before opening
@@ -331,7 +334,7 @@ prosdk::VNH5019 motor{/*ina=*/39, /*inb=*/40, /*pwm=*/41};
 - Unverified: whether TXD/RXD are named from the host's side or the transceiver's. If no data
   arrives, swap them. Local echo of transmitted bytes is possible.
 ```cpp
-prosdk::SerialPort rs485{115200, prosdk::SerialPort::Port::ONBOARD};  // RX 15, TX 16
+prosdk::SerialPort rs485{115200, prosdk::SerialPort::Port::ONBOARD};  // RX 10, TX 11
 ```
 
 **RS485 5V transceiver** (RS485_5V_Transceiver_Breakout_Board)
@@ -460,19 +463,29 @@ source. Tones are only an option on a robot with no LEDC motor drivers.
 
 ## 3. Boards with the `doc_only` status
 
-### 3.1 ESP32-S3 Pulse (ESP32-S3_Pulse_Development_Board): possible robot controller
+### 3.1 ESP32-S3 Pulse (ESP32-S3_Pulse_Development_Board): the Probot main board
 
+- Status: the Probot main board and the default prosdk target (Tuna, 2026-10-23, "for now"). The
+  `prosdk::platform` bus defaults are its J3/J4/J5 headers, the sketch FQBN is
+  `esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc`
+  (README.md "Board", design/hal-esp32.md "Boards"). Not yet run on a board.
 - Module: ESP32-S3-WROOM-1-N4R2, with 4 MB flash and 2 MB **quad** PSRAM. GPIO 33-37 are
-  therefore free; only 26-32 are flash/PSRAM.
+  therefore free; only 26-32 are flash/PSRAM. The README's "Technical Specifications" says
+  "Flash Memory: 8MB", but its "Model" line and the module datasheet in the same repo (ordering
+  table: N4R2 = 4 MB quad flash, 2 MB quad PSRAM) say 4 MB. The FQBN uses FlashSize=4M, which
+  works either way; `esptool.py flash_id` on the first board settles it.
+- USB-C: native USB on GPIO 19/20 (README: "Power + Programming"; no USB-UART bridge chip is
+  visible on the board render). Unverified: there is no schematic; `lsusb` on the first board
+  should show Espressif 303a:1001 (USB-Serial-JTAG).
 - Source: the repo README and the board silkscreen (Pulse_S32-S3_Front/Back.png). There is no
   schematic in the repo.
 
 | Header | Pins (1 -> n) | prosdk use |
 |---|---|---|
 | J1 BAT | BAT-, BAT+ | Battery input. The battery voltage pin is unknown, so no ADC reading. |
-| J3 I2C | 1 GND, 2 IO2 = SCL, 3 IO1 = SDA, 4 +3V3 | `platform::SetI2CPins(0, /*sda=*/1, /*scl=*/2)` before any I2C device. The default 8/9 is not on a header. |
-| J4 UART | 1 GND, 2 TX IO43, 3 RX IO44, 4 IO11 (F2), 5 IO10 (F1), 6 +3V3 | IO43/44 are UART0, the console, and the HAL refuses them. For a user UART, use IO10/IO11: `SetSerialPins(1, rx, tx)` + `Port::MXP`. |
-| J5 SPI | 1 GND, 2 IO17 CLK, 3 IO7 CS, 4 IO16 MISO, 5 IO15 MOSI, 6 +3V3 | For an SPI device: `platform::SetSPIPins(0, /*sck=*/17, /*mosi=*/15, /*miso=*/16)` and `SPI(SPI::Port::kPort0, /*cs=*/7)`. The `Port::ONBOARD` serial defaults (RX 15 / TX 16) are the same pins: a robot that also opens that port moves it with `SetSerialPins(0, rx, tx)` first. |
+| J3 I2C | 1 GND, 2 IO2 = SCL, 3 IO1 = SDA, 4 +3V3 | I2C port 0 default (SDA 1, SCL 2): no `SetI2CPins` needed. |
+| J4 UART | 1 GND, 2 TX IO43, 3 RX IO44, 4 IO11 (F2), 5 IO10 (F1), 6 +3V3 | IO43/44 are UART0, the console, and the HAL refuses them. `Port::ONBOARD` defaults to RX 10 (F1) / TX 11 (F2): no `SetSerialPins` needed. |
+| J5 SPI | 1 GND, 2 IO17 CLK, 3 IO7 CS, 4 IO16 MISO, 5 IO15 MOSI, 6 +3V3 | SPI bus 0 default (SCK 17, MOSI 15, MISO 16): no `SetSPIPins` needed; `SPI(SPI::Port::kPort0, /*cs=*/7)`. |
 | J6 | GND, IO38, IO37, IO36, IO35, +3V3 | GPIO (35-37 are free on quad PSRAM). |
 | J7 | GND, IO42, IO41, IO40, IO39, +3V3 | GPIO. These are also the JTAG pins. |
 | J8 | GND, IO45, IO46, IO47, IO48, +3V3 | GPIO. IO45/IO46 are strapping pins: do not drive or load them at boot. |
@@ -480,8 +493,10 @@ source. Tones are only an option on a robot with no LEDC motor drivers.
 
 - ADC1 pins on the headers: IO1, IO2, IO7 and IO10.
 - Using IO1/IO2 for I2C leaves IO7 and IO10 for analog.
-- Unverified: whether the board's I2C pins clash with the probot-core battery I2C pins in a
-  given core configuration.
+- probot-core's INA battery sensor (`PROBOT_BATTERY_INA`) starts `Wire` on the variant pins 8/9
+  unless `PROBOT_BATTERY_INA_SDA`/`SCL` are set; 8/9 are not on a header and prosdk I2C port 0
+  then shares that bus. On the Pulse define `PROBOT_BATTERY_INA_SDA 1` and
+  `PROBOT_BATTERY_INA_SCL 2` (prosdk's `CoreBridge.hpp` warns otherwise; core request R21-a).
 
 ### 3.2 Coprocessors and closed boards
 

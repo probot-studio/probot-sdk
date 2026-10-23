@@ -46,6 +46,7 @@ Support:
 - **existing**: existing prosdk classes drive it; P14 shows how.
 - **doc_only**: no prosdk class; the reason is given, and P14 documents the board.
 - **not_applicable**: nothing for software to control (power, MCU, antenna or passive boards).
+- **main_board**: the board prosdk runs on (the Probot robot controller); P14 documents it.
 
 Ozdisan ids are the catalog's product ids; "-" means the board has no Ozdisan entry (repo only).
 A repo "-" means the board has no Boardoza repo (Ozdisan only). I2C addresses are 7-bit.
@@ -143,7 +144,7 @@ A repo "-" means the board has no Boardoza repo (Ozdisan only). I2C addresses ar
 | TPA3111 | - | TPA3111_Mono_Audio_Amplifier_Breakout_Board | existing | `prosdk::DigitalOutput` (SD) | repo only; SD is pulled up to PVCC; same audio-source note as FM8002A | [P14 2.8](boardoza/P14-existing.md#28-audio-amplifiers) |
 | TPP60308 | - | TPP60308_60V_Buck_Breakout_Board | existing | `prosdk::DigitalOutput` (EN) or none | repo only; EN active high; input up to 60 V, measure the EN level before wiring a GPIO | [P14 2.7](boardoza/P14-existing.md#27-power-boards-with-an-enable-pin) |
 | SenseTech-RFM68LCW | - | SenseTech-Competition-2026 | doc_only | none until a hardware test shows that it answers the SX126x command set | SenseTech aggregate repo; its other folders are boards listed in their own rows | [P11](boardoza/P11-lora.md) |
-| ESP32-S3-Pulse | 1473942 | ESP32-S3_Pulse_Development_Board | doc_only | board profile doc (pins, I2C/UART defaults) | it is a possible robot controller itself | [P14 3.1](boardoza/P14-existing.md#31-esp32-s3-pulse-esp32-s3_pulse_development_board-possible-robot-controller) |
+| ESP32-S3-Pulse | 1473942 | ESP32-S3_Pulse_Development_Board | main_board | Probot robot controller (default prosdk target): the bus defaults are its J3/J4/J5 headers | main board since 2026-10-23 ("for now"), not yet run on a board | [P14 3.1](boardoza/P14-existing.md#31-esp32-s3-pulse-esp32-s3_pulse_development_board-the-probot-main-board) |
 | Data-Logger | 1473935 | Data_Logger_Multi_Sensor_Logging_Module | doc_only | SerialPort doc (separate MCU) | - | [P14 3.2](boardoza/P14-existing.md#32-coprocessors-and-closed-boards) |
 | Blue-Pill | - | STM32F103_Blue_Pill_Development_Board | doc_only | coprocessor over SerialPort/I2C/CAN, doc | - | [P14 3.2](boardoza/P14-existing.md#32-coprocessors-and-closed-boards) |
 | NSP2340-VoiceIC | 1202690 | NSP2340T16L_VoiceIC_Development_Board | doc_only | none: control protocol not public | - | [P14 3.2](boardoza/P14-existing.md#32-coprocessors-and-closed-boards) |
@@ -184,7 +185,8 @@ A repo "-" means the board has no Boardoza repo (Ozdisan only). I2C addresses ar
 Coverage, checked on 2026-10-22 with a script that reads this table: the Ozdisan Boardoza catalog
 (114 product ids) and the Boardoza GitHub organisation (111 repos, `SenseTech-Competition-2026`
 included) were both listed, and every id and every repo appears in exactly one row. The table
-has 128 rows: 54 driver, 4 wrapper, 32 existing, 9 doc_only, 29 not_applicable. A row can carry
+has 128 rows: 54 driver, 4 wrapper, 32 existing, 9 doc_only, 29 not_applicable (on 2026-10-23
+the Pulse moved from doc_only to main_board: 8 doc_only, 1 main_board). A row can carry
 several ids (the FT8xx bundles, Chameleon, Boarduino), and several rows use one class (the
 VL53L7CX-1..4 boards).
 

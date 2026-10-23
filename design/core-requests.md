@@ -297,6 +297,41 @@ Status: delivered as draft PR #45 (`feat/gamepad-guide` e0cb17f, stacked on #44)
 code change was needed; the docs and tests are updated), see "P1 R19 and R20 delivered and wired"
 below.
 
+### R21. Boardoza ESP32-S3 Pulse main board
+
+Tuna decided on 2026-10-23 that the Probot main board is the Boardoza ESP32-S3 Pulse ("for now"):
+ESP32-S3-WROOM-1-N4R2 (4 MB flash, 2 MB quad PSRAM), native USB-C on GPIO 19/20, an addressable RGB
+LED on IO3, BOOT on IO0, headers J3 (I2C SDA 1 / SCL 2), J4 (UART0 43/44, IO10, IO11), J5 (SPI 17,
+7, 16, 15), J6 (35-38), J7 (39-42), J8 (45-48). prosdk's bus defaults and examples now use these
+headers and its sketch FQBN is
+`esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc`
+(design/hal-esp32.md "Boards", design/boardoza/P14-existing.md 3.1).
+
+- **R21-a, INA I2C pins on the Pulse.** With `PROBOT_BATTERY_INA` and no
+  `PROBOT_BATTERY_INA_SDA`/`SCL`, `battery.hpp:248` calls `Wire.begin()`, which uses the generic
+  esp32s3 variant pins SDA 8 / SCL 9. They are not on any Pulse header, and prosdk I2C port 0 then
+  shares that bus, so J3 (SDA 1 / SCL 2) devices stop working. Wanted: either the INA pins default
+  to 1/2 for the Pulse, or core's docs say "Pulse: `#define PROBOT_BATTERY_INA_SDA 1` /
+  `PROBOT_BATTERY_INA_SCL 2`". Whatever core picks, prosdk's `CoreBridge.hpp` pin reservation
+  (8, 9 today) and its `#warning` follow.
+- **R21-b, board settings in core docs and CI.** Core prints its boot banner and the AP SSID (the
+  password masked) with `Serial` (`driver_station_esp32.hpp:216-219`). On the Pulse they reach USB-C only with USB CDC On Boot
+  Enabled (with it Disabled, `Serial` is UART0 on J4). Wanted: core docs show the same board
+  settings as prosdk (ESP32S3 Dev Module, Flash 4MB, Huge APP, QSPI PSRAM, USB Mode Hardware CDC
+  and JTAG, USB CDC On Boot Enabled; the FQBN above); optionally core CI uses that FQBN too.
+- **R21-c, confirm only.** `NEOPIXEL_PIN` default 3 (`builtin.hpp:9`) is the Pulse's on-board
+  addressable RGB LED ("RGB @ IO3" on the silkscreen). Keep it, and note it in core docs as a Pulse
+  fact.
+- **R21-d, battery ADC on the Pulse (docs only).** `PROBOT_BATTERY_ADC_PIN` must be ADC1 (core
+  checks 1-10). On the Pulse headers that is IO7 (J5 CS) or IO10 (J4 F1), or IO1/IO2 when J3 is not
+  used for I2C. The Pulse's own J1 1S battery input has no known sense pin (no schematic), so core
+  should not set a default.
+- **R21-e, RSL and e-stop pins (docs only).** `PROBOT_RSL_PIN` and `PROBOT_ESTOP_ENABLE_PIN` stay -1
+  by default. Core docs could suggest a free Pulse header pin (J8 47/48, or J6 35-38 when not used
+  for motors) and warn against 0, 45, 46 (strapping) and 43/44 (console).
+
+Status: written 2026-10-23, not sent yet.
+
 ## Status
 
 ### P0 delivered (2026-10-22): probot-core branch `feat/framework-api`, draft PR #26 to `dev`

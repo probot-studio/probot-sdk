@@ -56,7 +56,7 @@ ported. The BNO055 library is CC BY-SA, and all three have bugs (see the researc
   LSM303AGR TXS0104E).
 - The interrupt pins on the J2/J3 headers are 3.3 V logic and are not used by the drivers.
 - The I2C bus is `prosdk::platform::SetI2CPins(port, sda, scl[, hz])`. Port 0 defaults to
-  SDA 8 / SCL 9 at 400 kHz. BNO055 (4.6) and BMI088 (6.2) support standard and fast mode only.
+  SDA 1 / SCL 2 (the Pulse J3) at 400 kHz. BNO055 (4.6) and BMI088 (6.2) support standard and fast mode only.
   The LSM303AGR datasheet also lists faster modes, but its board's TXS0104E shifter is not rated
   for them here, so 400 kHz is the maximum for all three.
 

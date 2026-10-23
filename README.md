@@ -44,8 +44,22 @@ class Robot : public prosdk::TimedRobot {
 PROSDK_ROBOT_MAIN(Robot)
 ```
 
-- Board: ESP32S3 Dev Module with Arduino-ESP32 3.3.10 (the version the precompiled archive is
-  built with) and Partition Scheme "Huge APP"; probot-core alone needs about 1 MB of flash.
+- Board: the Boardoza ESP32-S3 Pulse (the Probot main board for now; ESP32-S3-WROOM-1-N4R2,
+  4 MB flash, 2 MB quad PSRAM, USB-C). Arduino IDE settings: ESP32S3 Dev Module, Arduino-ESP32
+  3.3.10 (the version the precompiled archive is built with), Flash Size 4MB, Partition Scheme
+  Huge APP (3MB No OTA/1MB SPIFFS), PSRAM QSPI PSRAM, USB Mode Hardware CDC and JTAG, USB CDC On
+  Boot Enabled, Upload Mode UART0 / Hardware CDC. FQBN:
+  `esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc`.
+  probot-core alone needs about 1 MB of flash. The bus default pins are the Pulse headers: I2C
+  port 0 SDA 1 / SCL 2 (J3), serial `ONBOARD` RX 10 / TX 11 (J4), SPI bus 0 SCK 17 / MOSI 15 /
+  MISO 16 (J5); the examples use J6-J8 for motors and encoders (design/examples.md "Pin map").
+- Other ESP32-S3 boards: the robot's first member moves the buses before any device is built,
+  for example `bool m_pinsConfigured = prosdk::platform::SetI2CPins(0, 8, 9) &&
+  prosdk::platform::SetSerialPins(0, 15, 16) && prosdk::platform::SetSPIPins(0, 12, 11, 13);`
+  (the same pattern as `prosdk::prohub::ConfigurePins()`). Set USB CDC On Boot for the USB port
+  in use (Disabled when a USB-UART bridge port carries `Serial`). On octal-PSRAM modules (N8R8,
+  N16R8) GPIO 33-37 are refused, so the examples' motor pins 35-37 must move (for example to 4, 5,
+  12). Details: design/hal-esp32.md "Boards".
 - `TimedRobot`, `TimesliceRobot` and `OpModeRobot` are supported. The robot is constructed when
   probot-core boots and its loop runs inside core's loop; core's loop period follows the robot's
   periods (`TimedRobot(10_ms)`, `AddPeriodic`), 1 ms to 1000 ms.
@@ -73,7 +87,7 @@ python3 tools/upstream/wpilib.py --check      # verify the tree matches the scri
 tools/build/build.sh esp32s3                  # build src/esp32s3/libprosdk.a
 tools/build/build.sh esp32s3 header_check     # compile every public header after <Arduino.h>
 tools/build/build.sh host --test              # build and run host unit tests
-tools/build/build.sh examples                 # compile examples/* (huge_app) against the archive
+tools/build/build.sh examples                 # compile examples/* (Pulse FQBN) against the archive
 python3 tools/upstream/examples.py --check    # ported examples still match the upstream pin
 tools/release/package.sh                      # release zip in .build/package, smoke compile
 ```
