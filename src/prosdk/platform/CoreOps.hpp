@@ -23,7 +23,8 @@
 // and core's low-voltage threshold is not set; without R13 (schema size limit) the dashboard
 // reports a refused schema against PROBOT_DASH_MAX_VALUE; without R15 (grid restarts) the robot
 // host re-aligns its schedule only when loopOverruns changes; without R11 (file sharing) the
-// Driver Station offers no files and DataLogManager's folder is not shared.
+// Driver Station offers no files and DataLogManager's folder is not shared; without R18 (match
+// info) the alliance station is unknown and the game data and match info are empty.
 //
 // ABI rules: only append fields, bump kCoreOpsAbiVersion on any change of meaning or layout. The
 // archive refuses a table whose abiVersion differs or whose size is smaller than its own.
@@ -41,7 +42,7 @@
 namespace prosdk::platform {
 
 /** Layout/meaning version of CoreOps; both sides must agree. */
-inline constexpr uint32_t kCoreOpsAbiVersion = 8;
+inline constexpr uint32_t kCoreOpsAbiVersion = 9;
 
 /** probot-core robot::Phase values (probot/robot/state.hpp). */
 enum CorePhase : uint8_t {
@@ -173,6 +174,46 @@ struct CoreDashboardStats {
 /** Invalid dashboard topic id (core dashboard::kInvalid). */
 inline constexpr uint16_t kCoreDashboardInvalid = 0xFFFF;
 
+/** Longest match text field (event name, game data) in bytes, UTF-8 (core MatchInfo::kMaxText). */
+inline constexpr size_t kCoreMatchInfoMaxText = 64;
+
+/**
+ * The Driver Station's match information (prosdk-owned copy of probot-core's ds::MatchInfo, R18;
+ * CoreBridge.hpp fills it with CopyCoreMatchInfo). Numbered like the WPILib HAL enums.
+ */
+struct CoreMatchInfo {
+  uint8_t station;       // HAL_AllianceStationID: 0 unknown, 1-3 red 1-3, 4-6 blue 1-3
+  uint8_t type;          // HAL_MatchType: 0 none, 1 practice, 2 qualification, 3 elimination
+  uint16_t matchNumber;
+  uint8_t replayNumber;
+  char eventName[kCoreMatchInfoMaxText + 1];  // UTF-8, NUL-terminated, no control characters
+  char gameData[kCoreMatchInfoMaxText + 1];   // WPILib's game-specific message, same rules
+};
+
+/**
+ * Copies core's match info `m` (probot::ds::MatchInfo, or any type with its fields) into `out`.
+ * The text fields are copied up to their NUL and at most kCoreMatchInfoMaxText bytes; the HAL
+ * checks the rest (prosdk/platform/hal/CoreMatchInfo.hpp). A template so that the archive never
+ * names a core type: the bridge and the host tests instantiate it.
+ */
+template <typename M>
+void CopyCoreMatchInfo(const M& m, CoreMatchInfo* out) noexcept {
+  auto text = [](const char* src, size_t cap, char* dst) {
+    size_t n = 0;
+    while (n < cap && n < kCoreMatchInfoMaxText && src[n] != '\0') {
+      dst[n] = src[n];
+      ++n;
+    }
+    dst[n] = '\0';
+  };
+  out->station = static_cast<uint8_t>(m.station);
+  out->type = static_cast<uint8_t>(m.type);
+  out->matchNumber = static_cast<uint16_t>(m.matchNumber);
+  out->replayNumber = static_cast<uint8_t>(m.replayNumber);
+  text(m.eventName, sizeof(m.eventName), out->eventName);
+  text(m.gameData, sizeof(m.gameData), out->gameData);
+}
+
 /** Everything prosdk calls in probot-core. All pointers are non-null in an installed table. */
 struct CoreOps {
   uint32_t abiVersion;  // kCoreOpsAbiVersion
@@ -287,6 +328,19 @@ struct CoreOps {
   // (core without R11): nothing is shared.
   bool (*filesShare)(const char* name, const char* vfsDir);
   bool (*filesUnshare)(const char* name);
+
+  // ---- ABI 9 ----
+  // match information (probot-core R18: probot::ds::matchInfoSeq(), probot::ds::matchInfo()). The
+  // Driver Station's "Maç Bilgisi" card sets the alliance station, game data, event name, match
+  // type and match/replay number while the robot is disabled with nothing pending (STOPPED, or
+  // TRANSITION between autonomous and TeleOp; never during INIT or RUN, never after an e-stop);
+  // core keeps them in RAM only (a reboot clears them). matchInfoSeq changes whenever any field
+  // changes, 0 = never set since boot. matchInfo copies the current values (under core's lock):
+  // read the counter first, then the values, so a change in between is seen again on the next
+  // check. Any task, not an ISR. Null (core without R18): counter 0 and empty values (unknown
+  // station, no game data, match type none).
+  uint32_t (*matchInfoSeq)();
+  void (*matchInfo)(CoreMatchInfo* out);
 };
 
 /**

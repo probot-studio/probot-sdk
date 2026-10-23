@@ -179,6 +179,10 @@ inline bool Install() {
       // ABI 8 (R11 filesShare/filesUnshare) recorded, so DataLogManager's share of its LittleFS
       // folder runs on the target (the null fallback is covered by prosdk_files_legacy_tests)
       &FilesShare, &FilesUnshare,
+      // ABI 9 (R18 matchInfoSeq/matchInfo) null, as the bridge leaves them for a core without
+      // R18: unknown alliance station, empty game data and match info (the values and the
+      // counter are covered by prosdk_match_tests)
+      nullptr, nullptr,
   };
   bool ok = pf::InstallCoreOps(&kOps);
   // what CoreBridge.hpp reports after probot::framework::install succeeded

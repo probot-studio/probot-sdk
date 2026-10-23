@@ -7,6 +7,7 @@
 // part runs only on the first pass.
 
 #include <cstdint>
+#include <cstring>
 #include <ctime>
 #include <string>
 #include <string_view>
@@ -128,6 +129,16 @@ TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][plat
     CHECK_FALSE(pf::FileSharingSupported());
     CHECK_FALSE(pf::ShareFiles("logs", "/littlefs/logs"));
     CHECK_FALSE(pf::UnshareFiles("logs"));
+    // no core: no match info (ABI 9), never set
+    CHECK(pf::GetCoreOps().matchInfoSeq() == 0);
+    pf::CoreMatchInfo match;
+    std::memset(&match, 0x5A, sizeof(match));
+    pf::GetCoreOps().matchInfo(&match);
+    CHECK(match.station == 0);
+    CHECK(match.type == 0);
+    CHECK(match.matchNumber == 0);
+    CHECK(match.eventName[0] == '\0');
+    CHECK(match.gameData[0] == '\0');
 
     // ---- fake core (unset entries fall back to the defaults) ----
     pf::CoreOps ops{};
@@ -211,6 +222,13 @@ TEST_CASE("CoreOps R6-R12 accessors: defaults, then a fake core", "[prosdk][plat
   CHECK_FALSE(pf::ShareFiles("logs", "/littlefs/logs"));
   CHECK_FALSE(pf::UnshareFiles("logs"));
   CHECK_FALSE(pf::ShareFiles(nullptr, nullptr));
+  // ABI 9 left null (a core without R18): counter 0, empty values
+  CHECK(pf::GetCoreOps().matchInfoSeq() == 0);
+  pf::CoreMatchInfo match;
+  std::memset(&match, 0x5A, sizeof(match));
+  pf::GetCoreOps().matchInfo(&match);
+  CHECK(match.station == 0);
+  CHECK(match.gameData[0] == '\0');
 
   SECTION("invalid options are dropped, long strings truncated at a UTF-8 boundary") {
     std::string longName(70, 'a');

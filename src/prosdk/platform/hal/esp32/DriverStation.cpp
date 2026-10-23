@@ -27,7 +27,12 @@
 //    its deadzone, raw = the analog button value), POV 0 from core's 8-way D-pad; the name and
 //    the standard-mapping flag go to the descriptor (prosdk/platform/hal/CoreJoystick.hpp).
 //    Rumble and LEDs are not supported (ignored).
-//  - no alliance station, match info or game data (zero/unknown); match time from core.
+//  - alliance station, game data and match info (probot-core R18, CoreOps ABI 9): the pump checks
+//    core's matchInfoSeq() every cycle and re-reads the values only when it changed (the
+//    Driver Station's "Maç Bilgisi" card, editable while the robot is disabled, also between
+//    autonomous and TeleOp); they go into the snapshot like the joysticks, so the getters return
+//    them after the next HAL_RefreshDSData (prosdk/platform/hal/CoreMatchInfo.hpp). A core without
+//    R18: unknown station, empty game data and match info (MatchType NONE). Match time from core.
 //  - DriverStationDisplay (HAL_WriteDisplayAnsi): the screen as plain text in the telemetry table
 //    DriverStationDisplay (prosdk/platform/dashboard/DashboardDisplay.hpp), not the console.
 
@@ -48,6 +53,7 @@
 #include "prosdk/platform/CoreOps.hpp"
 #include "prosdk/platform/dashboard/DashboardDisplay.hpp"
 #include "prosdk/platform/hal/CoreJoystick.hpp"
+#include "prosdk/platform/hal/CoreMatchInfo.hpp"
 #include "prosdk/util/EventVector.hpp"
 #include "prosdk/util/string.hpp"
 
@@ -67,6 +73,9 @@ struct Snapshot {
   HAL_JoystickDescriptor descriptors[HAL_MAX_JOYSTICKS];
   double matchTime;
   HAL_ControlWord controlWord;
+  HAL_AllianceStationID allianceStation;
+  HAL_GameData gameData;
+  HAL_MatchInfo matchInfo;
 };
 static_assert(std::is_standard_layout_v<Snapshot>);
 static_assert(HAL_MAX_JOYSTICKS == prosdk::platform::kCoreMaxGamepads);
@@ -173,6 +182,8 @@ class ProbotCoreDs final : public MrcLibDs {
   // Poll state (core's user task only)
   Snapshot m_scratch;  // not on the stack: about 2.5 KB
   prosdk::platform::CoreJoystickData m_stick;
+  prosdk::platform::CoreMatchData m_match;  // core's match info as of m_matchSeq
+  uint32_t m_matchSeq = 0;                  // core matchInfoSeq(), 0 = never set since boot
   uint32_t m_lastSeq = 0;
   uint64_t m_lastWord = ~uint64_t{0};
   uint8_t m_connected = 0;  // ports (bit n = port n) connected in m_latest
@@ -180,6 +191,8 @@ class ProbotCoreDs final : public MrcLibDs {
 
 ProbotCoreDs::ProbotCoreDs() {
   m_newestControlWord.value = 0;
+  // unknown station, no game data, MatchType NONE until core reports a change
+  std::memset(&m_match, 0, sizeof(m_match));
   m_backendPrintFunc = [](bool, int32_t, const struct WPI_String*, const struct WPI_String*,
                           const struct WPI_String*, bool* forcePrintMsg) {
     // the console is the Driver Station console: always print
@@ -214,10 +227,12 @@ void ProbotCoreDs::Poll() {
   const CoreOps& ops = GetCoreOps();
   const uint32_t seq = ops.packetSeq();
   const HAL_ControlWord controlWord = MakeControlWord(ops);
+  // match info: one counter read per cycle, the values only when it changed
+  const bool matchChanged = prosdk::platform::RefreshCoreMatchData(ops, &m_matchSeq, &m_match);
   // Without a new packet a joystick can still be lost: core neutralizes a port whose frames
   // stopped (input timeout) without counting a packet, so connected ports are re-read every cycle
   // and the last stick values of a lost gamepad are never kept.
-  if (seq == m_lastSeq && controlWord.value == m_lastWord &&
+  if (!matchChanged && seq == m_lastSeq && controlWord.value == m_lastWord &&
       prosdk::platform::LostCoreJoysticks(ops, m_connected, &m_stick) == 0) {
     return;
   }
@@ -228,6 +243,9 @@ void ProbotCoreDs::Poll() {
   std::memset(&next, 0, sizeof(next));
   next.controlWord = controlWord;
   next.matchTime = ops.matchTimeSeconds();
+  next.allianceStation = m_match.station;
+  next.gameData = m_match.gameData;
+  next.matchInfo = m_match.info;
   uint8_t connected = 0;
   for (int i = 0; i < HAL_MAX_JOYSTICKS; ++i) {
     // ports with no frame stay empty (disconnected)
@@ -337,8 +355,13 @@ int32_t ProbotCoreDs::setOpModeOptions(const struct HAL_OpModeOption* options, i
 }
 
 int32_t ProbotCoreDs::getAllianceStation(HAL_AllianceStationID* allianceStation) {
-  *allianceStation = HAL_ALLIANCE_STATION_UNKNOWN;
-  return gShutdown ? HAL_INCOMPATIBLE_STATE : 0;
+  if (gShutdown) {
+    *allianceStation = HAL_ALLIANCE_STATION_UNKNOWN;
+    return HAL_INCOMPATIBLE_STATE;
+  }
+  std::scoped_lock lock(m_cacheMutex);
+  *allianceStation = m_current.allianceStation;
+  return 0;
 }
 
 #define CHECK_JOYSTICK_NUMBER(stickNum)                  \
@@ -409,8 +432,13 @@ int32_t ProbotCoreDs::getJoystickDescriptor(int32_t joystickNum, HAL_JoystickDes
 }
 
 int32_t ProbotCoreDs::getGameData(HAL_GameData* gameData) {
-  std::memset(gameData, 0, sizeof(*gameData));
-  return gShutdown ? HAL_INCOMPATIBLE_STATE : 0;
+  if (gShutdown) {
+    std::memset(gameData, 0, sizeof(*gameData));
+    return HAL_INCOMPATIBLE_STATE;
+  }
+  std::scoped_lock lock(m_cacheMutex);
+  *gameData = m_current.gameData;
+  return 0;
 }
 
 int32_t ProbotCoreDs::setJoystickRumble(int32_t, int32_t, int32_t, int32_t, int32_t) {
@@ -432,8 +460,8 @@ int32_t ProbotCoreDs::getMatchTime(double* matchTime) {
 }
 
 int32_t ProbotCoreDs::getMatchInfo(HAL_MatchInfo* info) {
-  std::memset(info, 0, sizeof(*info));
-  info->matchType = HAL_MATCH_TYPE_NONE;
+  std::scoped_lock lock(m_cacheMutex);
+  *info = m_current.matchInfo;
   return 0;
 }
 

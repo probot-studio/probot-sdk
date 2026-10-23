@@ -61,3 +61,17 @@ prosdk_add_test(prosdk_files_legacy_tests SOURCES "${PROSDK_ROOT}/test/prosdk/ma
 if(TARGET prosdk_files_legacy_tests)
   target_compile_definitions(prosdk_files_legacy_tests PRIVATE PROSDK_FAKE_CORE_NO_FILES_SHARE=1)
 endif()
+
+# own executable: probot-core R18 match info -> HAL (prosdk/platform/hal/CoreMatchInfo.hpp) against
+# fake tables, with a core table whose ABI 9 fields are null installed (CoreOps is installed once
+# per process). With a probot-core clone that has R18 ($PROBOT_CORE, as above) one more case reads
+# core's own probot::ds match store; core's <probot/ds.hpp> needs its Arduino test stubs.
+file(GLOB _match_tests CONFIGURE_DEPENDS "${PROSDK_ROOT}/test/prosdk/match/*.cpp")
+prosdk_add_test(prosdk_match_tests SOURCES "${PROSDK_ROOT}/test/prosdk/main.cpp" ${_match_tests})
+if(TARGET prosdk_match_tests AND EXISTS "${_probot_core}/src/probot/robot/match_info.hpp")
+  target_include_directories(prosdk_match_tests PRIVATE "${_probot_core}/src"
+    "${_probot_core}/tests/stubs")
+  target_compile_definitions(prosdk_match_tests PRIVATE PROSDK_TEST_PROBOT_CORE_MATCH=1)
+elseif(TARGET prosdk_match_tests)
+  message(STATUS "prosdk_match_tests: no probot-core with R18 at ${_probot_core}, core's store untested")
+endif()

@@ -56,6 +56,10 @@
 //     on the VFS-path overload probot::files::share(name, vfsDir) and on unshare(name):
 //     kCoreHasFilesShare). Without it filesShare/filesUnshare stay null and nothing is shared
 //     (DataLogManager's folder does not appear on the Driver Station).
+//   - R18 match info (PROBOT_HAS_DS_MATCH_INFO from <probot/robot/match_info.hpp>, which
+//     <probot/ds.hpp> includes, and requires-checks on probot::ds::matchInfoSeq() and
+//     probot::ds::matchInfo(): kCoreHasMatchInfo). Without it matchInfoSeq/matchInfo stay null:
+//     the HAL reports an unknown alliance station and empty game data and match info.
 //
 // ODR: every function here only calls core's config-free headers, so all definitions are the same
 // in every translation unit. The pin reservation depends on the sketch's configuration macros and
@@ -555,6 +559,67 @@ constexpr bool (*FilesUnshareOp())(const char*) {
   return nullptr;
 }
 
+// R18 match info, looked up like clearPersisted (persist_probe). The macro marks the feature; the
+// requires-checks make sure the two calls prosdk makes exist with the expected shapes.
+#if defined(PROBOT_HAS_DS_MATCH_INFO)
+static_assert(probot::ds::MatchInfo::kMaxText == pf::kCoreMatchInfoMaxText &&
+                  sizeof(probot::ds::MatchInfo{}.eventName) == pf::kCoreMatchInfoMaxText + 1 &&
+                  sizeof(probot::ds::MatchInfo{}.gameData) == pf::kCoreMatchInfoMaxText + 1,
+              "probot-core match text limits changed");
+static_assert(static_cast<uint8_t>(probot::ds::AllianceStation::Unknown) == 0 &&
+                  static_cast<uint8_t>(probot::ds::AllianceStation::Red1) == 1 &&
+                  static_cast<uint8_t>(probot::ds::AllianceStation::Blue1) == 4 &&
+                  static_cast<uint8_t>(probot::ds::AllianceStation::Blue3) == 6 &&
+                  static_cast<uint8_t>(probot::ds::MatchType::None) == 0 &&
+                  static_cast<uint8_t>(probot::ds::MatchType::Elimination) == 3,
+              "probot-core match info numbering changed (prosdk expects the WPILib HAL values)");
+namespace match_probe {
+using namespace probot::ds;
+template <typename... A>
+inline uint32_t MatchInfoSeq(A... a) {
+  return matchInfoSeq(a...);
+}
+template <typename... A>
+inline void ReadMatchInfo(pf::CoreMatchInfo* out, A... a) {
+  if (out != nullptr) {
+    pf::CopyCoreMatchInfo(matchInfo(a...), out);
+  }
+}
+template <typename... A>
+inline constexpr bool kHasMatchInfoSeq = requires(A... a) {
+  { matchInfoSeq(a...) } -> std::same_as<uint32_t>;
+};
+template <typename... A>
+inline constexpr bool kHasMatchInfo = requires(A... a) {
+  { matchInfo(a...) } -> std::same_as<probot::ds::MatchInfo>;
+};
+}  // namespace match_probe
+
+/** True when the sketch's probot-core has the Driver Station's match information (R18). */
+inline constexpr bool kCoreHasMatchInfo =
+    match_probe::kHasMatchInfoSeq<> && match_probe::kHasMatchInfo<>;
+#else
+inline constexpr bool kCoreHasMatchInfo = false;
+#endif
+
+constexpr uint32_t (*MatchInfoSeqOp())() {
+#if defined(PROBOT_HAS_DS_MATCH_INFO)
+  if constexpr (kCoreHasMatchInfo) {
+    return &match_probe::MatchInfoSeq<>;
+  }
+#endif
+  return nullptr;
+}
+
+constexpr void (*MatchInfoOp())(pf::CoreMatchInfo*) {
+#if defined(PROBOT_HAS_DS_MATCH_INFO)
+  if constexpr (kCoreHasMatchInfo) {
+    return &match_probe::ReadMatchInfo<>;
+  }
+#endif
+  return nullptr;
+}
+
 #if PROSDK_CORE_HAS_OPMODES
 inline bool SetOpModeOptions(const pf::CoreOpModeOption* options, size_t count) {
   if (count > pf::kCoreOpModeMaxOptions || (count != 0 && options == nullptr)) {
@@ -604,6 +669,7 @@ inline bool Install() {
       DashClearPersistedOp(),
       LoopGridRestartsOp(),
       FilesShareOp(), FilesUnshareOp(),
+      MatchInfoSeqOp(), MatchInfoOp(),
   };
   bool ok = pf::InstallCoreOps(&kOps);
   bool hooks = probot::framework::install(probot::framework::Hooks{

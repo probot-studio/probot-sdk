@@ -91,6 +91,12 @@ uint32_t DefLoopGridRestarts() { return 0; }
 // No core, or core without R11 (FileSharingSupported() recognizes it): nothing is shared.
 bool DefFilesShare(const char*, const char*) { return false; }
 bool DefFilesUnshare(const char*) { return false; }
+// No core, or core without R18: never set (counter 0), empty values.
+void DefMatchInfo(CoreMatchInfo* out) {
+  if (out != nullptr) {
+    *out = CoreMatchInfo{};
+  }
+}
 
 constexpr CoreOps kDefaultOps{
     kCoreOpsAbiVersion, sizeof(CoreOps), 0, "",
@@ -106,6 +112,7 @@ constexpr CoreOps kDefaultOps{
     DefClearPersisted,
     DefLoopGridRestarts,
     DefFilesShare, DefFilesUnshare,
+    DefSeq, DefMatchInfo,
 };
 
 // Written once (static initialization, single-threaded) before gInstalled is set.
@@ -257,6 +264,8 @@ bool InstallCoreOps(const CoreOps* ops) noexcept {
   PROSDK_COREOPS_FILL(loopGridRestarts);
   PROSDK_COREOPS_FILL(filesShare);
   PROSDK_COREOPS_FILL(filesUnshare);
+  PROSDK_COREOPS_FILL(matchInfoSeq);
+  PROSDK_COREOPS_FILL(matchInfo);
 #undef PROSDK_COREOPS_FILL
   if (copy.coreVersionString == nullptr) {
     copy.coreVersionString = "";
