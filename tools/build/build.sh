@@ -40,7 +40,9 @@ low() { flock "$LOCK" nice -n 19 ionice -c3 "$@"; }
 # CI and the HAL link test use the same), against the precompiled archive (build it first with
 # tools/build/build.sh esp32s3) and probot-core from $PROBOT_CORE (default .upstream/probot-core).
 # Libraries come from .build/examples/libraries (symlinks prosdk and probot); each sketch keeps its
-# build folder .build/examples/<name>, so a rebuild only recompiles what changed.
+# build folder .build/examples/<name>, so a rebuild only recompiles what changed. The link outputs
+# (.elf, .map, .bin: about 75% of the folder, 5.8 GB for all sketches) are deleted after each
+# compile; the next build relinks. PROSDK_EXAMPLES_KEEP_ELF=1 keeps them (to inspect a sketch).
 # PROSDK_LIBRARY (default: this repository) is the prosdk library folder to link and to take the
 # sketches from, PROSDK_EXAMPLES_OUT (default .build/examples) the output folder; the release
 # smoke test (tools/release/package.sh) sets both to compile against an unpacked release zip.
@@ -69,6 +71,8 @@ if [ "$cfg" = examples ]; then
     low arduino-cli compile --fqbn "$fqbn" \
       --libraries "$out/libraries" --build-path "$out/$name" --jobs "$JOBS" \
       --warnings default "$lib/examples/$name" || { echo "FAILED: $name"; status=1; }
+    [ "${PROSDK_EXAMPLES_KEEP_ELF:-0}" = 1 ] ||
+      rm -f "$out/$name"/*.elf "$out/$name"/*.map "$out/$name"/*.bin
   done
   exit $status
 fi
