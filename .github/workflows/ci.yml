@@ -155,8 +155,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install ninja
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Install ninja and the QEMU runtime libraries
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libsdl2-2.0-0 libslirp0 libpixman-1-0 libgcrypt20 libglib2.0-0t64
 
       - name: Install arduino-cli and Arduino-ESP32
         run: |
