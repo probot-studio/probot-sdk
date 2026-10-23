@@ -7,17 +7,20 @@
 #include <stdint.h>
 
 namespace prosdk::hal {
+// prosdk: the DIO/PWM/analog counts follow the ESP32-S3 HAL (Esp32Internal.hpp kNumSmartIo =
+// GPIO 0-48, kNumAnalogInputs = ADC1 channels up to 10), so host tests take the same pins as
+// the robot. NUM_PWM_HEADERS = NUM_PWM_CHANNELS: no PWM channel takes the roboRIO MXP remap.
 constexpr int32_t NUM_CAN_BUSES = 5;
 constexpr int32_t ACCELEROMETERS = 1;
 constexpr int32_t NUM_SMART_IO = 6;
 constexpr int32_t NUM_ACCUMULATORS = 2;
-constexpr int32_t NUM_ANALOG_INPUTS = 8;
+constexpr int32_t NUM_ANALOG_INPUTS = 11;
 constexpr int32_t NUM_ANALOG_OUTPUTS = 2;
 constexpr int32_t NUM_COUNTERS = 8;
 constexpr int32_t NUM_DIGITAL_HEADERS = 10;
-constexpr int32_t NUM_PWM_HEADERS = 10;
-constexpr int32_t NUM_DIGITAL_CHANNELS = 31;
-constexpr int32_t NUM_PWM_CHANNELS = 20;
+constexpr int32_t NUM_PWM_HEADERS = 49;
+constexpr int32_t NUM_DIGITAL_CHANNELS = 49;
+constexpr int32_t NUM_PWM_CHANNELS = 49;
 constexpr int32_t NUM_DIGITAL_PWM_OUTPUTS = 6;
 constexpr int32_t NUM_ENCODERS = 8;
 constexpr int32_t I2C_PORTS = 2;

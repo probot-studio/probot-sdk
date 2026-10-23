@@ -211,7 +211,7 @@ TEST_CASE("DRV8317H commutation table, fault and pins", "[drv8317h]") {
   DigitalOutput dio{26};
   DRV8317H::Pins dioTaken{20, 21, 22, 23, 24, 25, 26, 27, 28};
   CHECK_THROWS_AS(DRV8317H{dioTaken}, RuntimeError);
-  DRV8317H::Pins outOfRange{20, 21, 22, 23, 24, 25, 27, 28, 31};
+  DRV8317H::Pins outOfRange{20, 21, 22, 23, 24, 25, 27, 28, 49};  // GPIO 0-48
   CHECK_THROWS_AS(DRV8317H{outOfRange}, RuntimeError);
 
   DRV8317H::Pins free{20, 21, 22, 23, 24, 25, 27, 28, 29};
