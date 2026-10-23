@@ -43,8 +43,10 @@ class Robot : public prosdk::TimedRobot {
   void TeleopInit() override {}
 
   void TeleopPeriodic() override {
-    // Drive with arcade style (use right stick to steer)
-    robotDrive.ArcadeDrive(-controller.GetLeftY(), controller.GetRightX());
+    // Drive with arcade style (use right stick to steer). prosdk: X is negated
+    // (upstream passes +GetRightX()): zRotation is counterclockwise-positive and
+    // the stick's X is right-positive, so stick right must turn right.
+    robotDrive.ArcadeDrive(-controller.GetLeftY(), -controller.GetRightX());
   }
 
   void UtilityInit() override {}

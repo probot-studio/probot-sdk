@@ -17,8 +17,9 @@
 // booting.
 // Does not fit the ESP32-S3 as written: upstream uses 8 quadrature encoders and the chip has 4
 // PCNT units (encoders and counters together), so on the robot the fifth Encoder fails and the
-// program halts with the error on the Driver Station console. It runs in simulation; on real
-// hardware use absolute turning encoders (DutyCycleEncoder, 6 inputs; AnalogEncoder, GPIO 1-10).
+// program halts with the error on the Driver Station console (there is no desktop simulation of
+// a sketch, design/examples.md). On real hardware use absolute turning encoders
+// (DutyCycleEncoder, 6 inputs; AnalogEncoder, GPIO 1-10).
 // Gamepad 0: left stick drives (field relative in teleop), right stick X turns.
 // The Probot board has no onboard IMU: upstream's OnboardIMU is replaced by the kit IMU,
 // prosdk::MPU6050 (same getters), on I2C port 0 (GPIO 8 SDA, GPIO 9 SCL, the HAL default).

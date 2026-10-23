@@ -1,6 +1,8 @@
-// DriversShowcase: one of each prosdk driver (src/prosdk/drivers, design/drivers.md) in a
-// TimedRobot. Gamepad 0 drives every motor and servo at once; every sensor goes to the Driver
-// Station (/Telemetry).
+// DriversShowcase: a selection of prosdk's drivers in a TimedRobot: the ProHub board (PCA9685
+// motor port and servo, encoder stream, MPU-6050, goBILDA Pinpoint) and the Spark, servo, BTS7960
+// and VNH5019 outputs. The library has more (the full list is design/drivers.md; the Boardoza*
+// examples show the Boardoza boards). Gamepad 0 drives every motor and servo at once; every
+// sensor goes to the Driver Station (/Telemetry).
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin):
 //   GPIO 4           Spark (or any 1000-2000 us PWM motor controller) signal

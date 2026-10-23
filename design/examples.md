@@ -148,12 +148,12 @@ Status values:
 | ElevatorExponentialProfile | ported (smart controller placeholder) | ElevatorExponentialProfile |
 | ElevatorTrapezoidProfile | ported (smart controller placeholder) | ElevatorTrapezoidProfile |
 | ElevatorProfiledPID | ported | ElevatorProfiledPID |
-| GettingStarted | ported | GettingStarted |
+| GettingStarted | ported (teleop steering negated: upstream's `+GetRightX()` turns left on stick right) | GettingStarted |
 | HAL | merged: a C program with its own blocking `main()` loop; a sketch has no `main()` on the robot (the robot host runs inside probot-core's loop). The HAL C API on hardware is shown by HalSmoke | HalSmoke |
 | HatchbotTraditional | not ported: pneumatics (DoubleSolenoid; the pneumatics HAL refuses on the ESP32) | |
 | HatchbotInlined | not ported: pneumatics (DoubleSolenoid) | |
 | RapidReactCommandBot | not ported: pneumatics (intake DoubleSolenoid) | |
-| SwerveBot | ported (simulation only on hardware: 8 encoders) | SwerveBot |
+| SwerveBot | ported (does not run on the ESP32-S3 as written: 8 quadrature encoders, 4 PCNT units) | SwerveBot |
 | MecanumBot | ported | MecanumBot |
 | DifferentialDriveBot | ported | DifferentialDriveBot |
 | ArcadeDriveGamepad | ported | ArcadeDriveGamepad |
@@ -177,7 +177,7 @@ Status values:
 | ArmSimulation | ported, with its host test | ArmSimulation |
 | UnitTest | not ported: pneumatics (the intake is a DoubleSolenoid; the example and its test are about that piston) | |
 | SimpleDifferentialDriveSimulation | ported (MPU6050) | SimpleDifferentialDriveSimulation |
-| SwerveDrivePoseEstimator | ported (simulation only on hardware: 8 encoders) | SwerveDrivePoseEstimator |
+| SwerveDrivePoseEstimator | ported (does not run on the ESP32-S3 as written: 8 quadrature encoders, 4 PCNT units) | SwerveDrivePoseEstimator |
 | SysIdRoutine | ported | SysIdRoutine |
 
 ### Snippets (snippets.json, 31)
@@ -188,8 +188,8 @@ Status values:
 | DutyCycleEncoder | ported | SnippetDutyCycleEncoder |
 | AnalogEncoder | ported | SnippetAnalogEncoder |
 | EncoderDrive | ported | SnippetEncoderDrive |
-| EncoderHoming | ported | SnippetEncoderHoming |
-| LimitSwitch | ported | SnippetLimitSwitch |
+| EncoderHoming | ported (switch read inverted: active-low switch to GND with the pull-up) | SnippetEncoderHoming |
+| LimitSwitch | ported (switch reads inverted: active-low switches to GND with the pull-up) | SnippetLimitSwitch |
 | DigitalInput | ported | SnippetDigitalInput |
 | AnalogInput | ported | SnippetAnalogInput |
 | AnalogPotentiometer | ported | SnippetAnalogPotentiometer |

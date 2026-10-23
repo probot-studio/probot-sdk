@@ -39,6 +39,8 @@ void Robot::AutonomousInit() {
   autoSelected = chooser.GetSelected();
   // autoSelected = SmartDashboard::GetString("Auto Selector",
   //     AUTO_NAME_DEFAULT);
+  // prosdk: util::print writes to stdout, the USB serial on the robot (not the
+  // Driver Station console; design/examples.md, "Console output")
   prosdk::util::print("Auto selected: {}\n", autoSelected);
 
   if (autoSelected == AUTO_NAME_CUSTOM) {

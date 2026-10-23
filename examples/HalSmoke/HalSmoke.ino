@@ -10,7 +10,8 @@
 //   GPIO 21  LED strip    8 WS2812 LEDs, a moving dot
 //
 // Enable from the Driver Station: the PWM output only drives pulses while core's outputs are
-// enabled. Output goes to the Driver Station console (and Serial).
+// enabled. Output goes to Serial only (115200 baud, opened by probot-core), not to the Driver
+// Station console.
 
 #define PROBOT_WIFI_AP_PASSWORD "halsmoke1"
 #define PROBOT_WIFI_AP_CHANNEL 6

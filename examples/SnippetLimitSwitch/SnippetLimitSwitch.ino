@@ -6,7 +6,8 @@
 // wpilibcExamples/src/main/cpp/snippets/LimitSwitch), ported to prosdk.
 //
 // Wiring (GPIO numbers; channel = GPIO):
-//   GPIO 17  top limit switch     GPIO 18  bottom limit switch (to GND, internal pull-up)
+//   GPIO 17  top limit switch     GPIO 18  bottom limit switch
+//   (both normally open, to GND, internal pull-up: open reads true, pressed reads false)
 //   GPIO 4   PWMVictorSPX (or any PWM ESC)
 // Joystick 0, axis 2 drives the motor.
 
@@ -26,9 +27,11 @@
 class Robot : public prosdk::TimedRobot {
  public:
   void TeleopPeriodic() override { SetMotorVelocity(joystick.GetRawAxis(2)); }
+  // prosdk: the switches are active low (upstream reads true as tripped), so a
+  // tripped switch is !Get().
   void SetMotorVelocity(double velocity) {
     if (velocity > 0) {
-      if (toplimitSwitch.Get()) {
+      if (!toplimitSwitch.Get()) {
         // We are going up and top limit is tripped so stop
         motor.SetThrottle(0);
       } else {
@@ -37,7 +40,7 @@ class Robot : public prosdk::TimedRobot {
         motor.SetThrottle(velocity);
       }
     } else {
-      if (bottomlimitSwitch.Get()) {
+      if (!bottomlimitSwitch.Get()) {
         // We are going down and bottom limit is tripped so stop
         motor.SetThrottle(0);
       } else {

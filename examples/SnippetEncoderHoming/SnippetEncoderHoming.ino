@@ -8,7 +8,8 @@
 //
 // Wiring (GPIO numbers; channel = GPIO):
 //   GPIO 6/7  encoder A/B         GPIO 4  Spark (or any PWM ESC)
-//   GPIO 17   limit switch to GND (internal pull-up: open reads true)
+//   GPIO 17   normally-open limit switch to GND (internal pull-up: open reads true,
+//             pressed reads false)
 
 #define PROBOT_WIFI_AP_PASSWORD "probot-robot"
 #define PROBOT_WIFI_AP_CHANNEL 6
@@ -27,8 +28,10 @@ class Robot : public prosdk::TimedRobot {
  public:
   void AutonomousPeriodic() override {
     // Runs the motor backwards at half velocity until the limit switch is
-    // pressed then turn off the motor and reset the encoder
-    if (!limit.Get()) {
+    // pressed then turn off the motor and reset the encoder. prosdk: the switch
+    // is active low (upstream reads true as pressed), so Get() is true until it
+    // is pressed.
+    if (limit.Get()) {
       spark.SetThrottle(-0.5);
     } else {
       spark.SetThrottle(0);
