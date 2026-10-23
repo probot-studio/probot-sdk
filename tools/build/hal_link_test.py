@@ -14,7 +14,7 @@ link error.
 
 --compile links against probot-core from .upstream/probot-core (or --core PATH) through a
 libraries folder of symlinks in DIR, with the sketch FQBN of tools/build/arduino_recipe.py (the
-Boardoza ESP32-S3 Pulse settings), under the shared build lock at the lowest priority (2 jobs).
+Boardoza Pulse S32-S3 settings), under the shared build lock at the lowest priority (2 jobs).
 Needs src/esp32s3/libprosdk.a (tools/build/build.sh esp32s3). The build folder DIR/build is kept
 between runs.
 

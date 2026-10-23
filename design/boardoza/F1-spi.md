@@ -25,7 +25,7 @@ the WPILib 2026 `frc::SPI` API shape as a hand-written class, as `Servo` does.
 - Two buses: `SPI::kPort0` is SPI2 (FSPI), `SPI::kPort1` is SPI3. SPI0/SPI1 (flash and PSRAM)
   are never used.
 - Bus 0 defaults to SCK 17 / MOSI 15 / MISO 16, the J5 header of the Probot main board (Boardoza
-  ESP32-S3 Pulse, since 2026-10-23); bus 1 has no default. Other pins, before the first device on
+  Pulse S32-S3, since 2026-10-23); bus 1 has no default. Other pins, before the first device on
   a bus: `prosdk::platform::SetSPIPins(bus, sck, mosi, miso)`. `miso` may be -1 on a bus that only
   transmits (clocked LEDs). It returns false for a bad bus or pin (0-48) or two equal pins. A bus
   that is already running keeps its pins until its last device closes.

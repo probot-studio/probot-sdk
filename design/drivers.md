@@ -28,7 +28,7 @@ Example: `examples/DriversShowcase` (one of each driver in a TimedRobot).
 
 - Motor and servo pins are GPIO numbers (any free GPIO, `design/hal-esp32.md`). The ProHub pins
   (I2C SDA 1 / SCL 2, encoder UART RX 10 / TX 11) are the platform defaults on the Probot main
-  board, the Boardoza ESP32-S3 Pulse (J3, J4 F1/F2). On another board, set them with
+  board, the Boardoza Pulse S32-S3 (J3, J4 F1/F2). On another board, set them with
   `prosdk::prohub::ConfigurePins()` before the first PCA9685, MPU6050 or ProHubEncoders is
   constructed (for example as the first member of the robot class); on the Pulse the call changes
   nothing.
@@ -136,7 +136,7 @@ drives the forward channel, negative the reverse channel, the other one fully of
 old SDK; brake behaviour is therefore not offered.
 
 `prosdk/drivers/ProHub.hpp` holds the board constants (pins, addresses, frequencies, channel map)
-and `ConfigurePins()`. On the Boardoza ESP32-S3 Pulse its pins are the platform defaults and the
+and `ConfigurePins()`. On the Boardoza Pulse S32-S3 its pins are the platform defaults and the
 call changes nothing; on another board it must run before any ProHub device is constructed; robot
 members are built before the constructor body, so call it from the first member
 (`bool m_pinsConfigured = prosdk::prohub::ConfigurePins();`, examples/DriversShowcase).

@@ -9,7 +9,7 @@
 //   prosdk::platform::SetSPIPins(0, /*sck=*/12, /*mosi=*/11, /*miso=*/13);  // another board
 //
 // A change applies the next time the bus is opened. The defaults are the headers of the Probot
-// main board, the Boardoza ESP32-S3 Pulse: I2C port 0 on SDA 1 / SCL 2 (J3; shared with Wire when
+// main board, the Boardoza Pulse S32-S3: I2C port 0 on SDA 1 / SCL 2 (J3; shared with Wire when
 // Wire already runs) at 400 kHz; serial onboard (UART1) on RX 10 / TX 11 (J4 F1/F2); SPI bus 0 on
 // SCK 17 / MOSI 15 / MISO 16 (J5, chip select 7). I2C port 1, serial MXP (UART2), CAN and SPI
 // bus 1 are unset (opening them fails with a message). On another board, call the Set*Pins

@@ -4,7 +4,7 @@
 // voltage is logged every loop; the Driver Station shows whether the card is mounted.
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin). SPI bus 0 on the
-// Probot main board's J5 header (Boardoza ESP32-S3 Pulse; the HAL's default bus 0 pins):
+// Probot main board's J5 header (Boardoza Pulse S32-S3; the HAL's default bus 0 pins):
 //   MicroSD J1: 1 MISO -> GPIO 16, 2 SCK -> GPIO 17, 3 MOSI -> GPIO 15, 4 CS -> GPIO 7,
 //               5 GND -> GND, 6 +5V -> 5 V
 // The board has no 3.3 V input: it needs 5 V on pin 6 (its regulator feeds the card 3.3 V). The

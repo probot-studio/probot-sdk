@@ -23,7 +23,7 @@ hardware validation is done.
 - Board package: Arduino-ESP32 **3.3.10** (`esp32:esp32`), the version the archive is built with
   (`tools/build/esp32s3.cmake`, CI `ARDUINO_ESP32_VERSION`). Tell users to install exactly this
   version; another one is untested and the library has no compile-time check for it.
-- Board: the Boardoza ESP32-S3 Pulse is the Probot main board (Tuna, 2026-10-23, "for now";
+- Board: the Boardoza Pulse S32-S3 is the Probot main board (Tuna, 2026-10-23, "for now";
   `design/hal-esp32.md` "Boards", `design/boardoza/P14-existing.md` 3.1).
 - Board settings: ESP32S3 Dev Module, **Flash Size 4MB, Partition Scheme Huge APP (3MB No OTA/1MB
   SPIFFS), PSRAM QSPI PSRAM, USB Mode Hardware CDC and JTAG, USB CDC On Boot Enabled, Upload Mode
@@ -109,7 +109,7 @@ hardware validation is done.
 - Not on the kit (API compiles, does nothing or reports an error): pneumatics, PowerDistribution,
   OnboardIMU, DIO pulses, interrupts (`API-DIFFERENCES.md` section 3). `OnboardIMU` constructs fine;
   yaw reads 0 and every other getter throws (the program halts if uncaught): use `MPU6050`.
-- Main board: Boardoza ESP32-S3 Pulse (decided 2026-10-23, "for now"); the rest of the kit
+- Main board: Boardoza Pulse S32-S3 (decided 2026-10-23, "for now"); the rest of the kit
   electronics is not final (KIT.md section 3). The examples' pin map (`design/examples.md` "Pin
   map") uses the Pulse headers. Nothing has run on a Pulse yet; check before publishing wiring
   pages.

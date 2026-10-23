@@ -35,7 +35,7 @@ mkdir -p "$ROOT/.build"
 LOCK="$ROOT/.build/build.lock"
 low() { flock "$LOCK" nice -n 19 ionice -c3 "$@"; }
 
-# examples: every examples/<name>/<name>.ino with arduino-cli (the Boardoza ESP32-S3 Pulse FQBN
+# examples: every examples/<name>/<name>.ino with arduino-cli (the Boardoza Pulse S32-S3 FQBN
 # from tools/build/arduino_recipe.py --fqbn: 4 MB flash, huge_app, QSPI PSRAM, USB CDC on boot;
 # CI and the HAL link test use the same), against the precompiled archive (build it first with
 # tools/build/build.sh esp32s3) and probot-core from $PROBOT_CORE (default .upstream/probot-core).

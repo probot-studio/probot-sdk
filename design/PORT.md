@@ -326,7 +326,7 @@ libraries (for example ArduinoEigen). The script rewrites their angle includes, 
 - Sketch builds: `arduino-cli compile --build-path <persistent dir> --jobs 2`, never `--clean`.
   `tools/build/build.sh examples [sketch...]` compiles `examples/*` that way (sketch FQBN
   `esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc`, the Boardoza
-  ESP32-S3 Pulse, from `tools/build/arduino_recipe.py --fqbn`; the archive keeps the generic recipe
+  Pulse S32-S3, from `tools/build/arduino_recipe.py --fqbn`; the archive keeps the generic recipe
   flags, see that script's docstring; build folders
   `.build/examples/<name>`, probot-core from `$PROBOT_CORE` or `.upstream/probot-core`); CI runs it and
   `tools/build/hal_link_test.py` against probot-core at `PROBOT_CORE_REF` (`.github/workflows/ci.yml`),

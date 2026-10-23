@@ -8,7 +8,7 @@ namespace prosdk::platform {
 
 namespace {
 std::mutex gMutex;
-// Defaults: the Boardoza ESP32-S3 Pulse headers J3 (I2C), J4 F1/F2 (serial) and J5 (SPI)
+// Defaults: the Boardoza Pulse S32-S3 headers J3 (I2C), J4 F1/F2 (serial) and J5 (SPI)
 I2CConfig gI2C[kNumI2CPorts] = {{1, 2, 400000}, {-1, -1, 400000}};
 SerialConfig gSerial[kNumSerialPorts] = {{10, 11}, {-1, -1}};
 CanConfig gCan = {-1, -1, 1000000};

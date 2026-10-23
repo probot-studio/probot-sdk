@@ -4,7 +4,7 @@
 // goes to the Driver Station (/Telemetry/Display).
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin). SPI bus 0 on the
-// Probot main board's J5 header (Boardoza ESP32-S3 Pulse; the HAL's default bus 0 pins):
+// Probot main board's J5 header (Boardoza Pulse S32-S3; the HAL's default bus 0 pins):
 //   J6: 1 CS -> GPIO 7, 2 MISO -> GPIO 16, 3 MOSI -> GPIO 15, 4 SCK -> GPIO 17
 //   J1: 1 3V3 -> leave open (an output of the board), 2 5V -> 5 V, 3 GND -> GND,
 //       4 PD -> GPIO 38, 5 INT -> GPIO 37 (optional; pass -1 when it is not wired)

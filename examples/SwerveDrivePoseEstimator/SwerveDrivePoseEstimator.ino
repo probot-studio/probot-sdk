@@ -15,7 +15,7 @@
 // (GPIO 0) is held, where a high level blocks download mode; a normal boot ignores it. GPIO 45
 // (flash voltage) is avoided: an encoder line high at reset can stop a 3.3 V-flash module from
 // booting. The 24 signals do not fit the 20 header pins of the Probot main board (Boardoza
-// ESP32-S3 Pulse) either; GPIO 1/2 stay free for the IMU's I2C (J3).
+// Pulse S32-S3) either; GPIO 1/2 stay free for the IMU's I2C (J3).
 // Does not fit the ESP32-S3 as written: upstream uses 8 quadrature encoders and the chip has 4
 // PCNT units (encoders and counters together), so on the robot the fifth Encoder fails and the
 // program halts with the error on the Driver Station console (there is no desktop simulation of

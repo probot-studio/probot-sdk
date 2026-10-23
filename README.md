@@ -44,7 +44,7 @@ class Robot : public prosdk::TimedRobot {
 PROSDK_ROBOT_MAIN(Robot)
 ```
 
-- Board: the Boardoza ESP32-S3 Pulse (the Probot main board for now; ESP32-S3-WROOM-1-N4R2,
+- Board: the Boardoza Pulse S32-S3 (the Probot main board for now; ESP32-S3-WROOM-1-N4R2,
   4 MB flash, 2 MB quad PSRAM, USB-C). Arduino IDE settings: ESP32S3 Dev Module, Arduino-ESP32
   3.3.10 (the version the precompiled archive is built with), Flash Size 4MB, Partition Scheme
   Huge APP (3MB No OTA/1MB SPIFFS), PSRAM QSPI PSRAM, USB Mode Hardware CDC and JTAG, USB CDC On

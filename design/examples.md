@@ -44,7 +44,7 @@ hand-written examples are listed under `"handwritten"` in `tools/upstream/exampl
 ## Pin map
 
 The channel number is the GPIO number (design/hal-esp32.md). The pins are the header pins of the
-Probot main board, the Boardoza ESP32-S3 Pulse (design/boardoza/P14-existing.md section 3.1;
+Probot main board, the Boardoza Pulse S32-S3 (design/boardoza/P14-existing.md section 3.1;
 decision of 2026-10-23): J3 (IO1, IO2), J4 (IO10, IO11), J5 (IO7, IO15, IO16, IO17), J6 (IO35-38),
 J7 (IO39-42) and J8 (IO45-48). The ports avoid:
 - the pins the HAL refuses: 19/20 (USB), 43/44 (UART0, the console, on J4), 26-32 (flash and
@@ -311,7 +311,7 @@ All nine build with arduino-cli; their sizes are in the Sizes table below.
 
 ## Sizes
 
-ESP32-S3 with the sketch FQBN of the Probot main board, the Boardoza ESP32-S3 Pulse
+ESP32-S3 with the sketch FQBN of the Probot main board, the Boardoza Pulse S32-S3
 (`esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc`,
 `tools/build/arduino_recipe.py --fqbn`), compiled with `tools/build/build.sh examples`. Flash is
 "Sketch uses", RAM is "Global variables use" (static RAM; the robot also allocates heap at run time,

@@ -10,7 +10,7 @@
 // the power, and never transmit without an antenna on the SMA connector.
 //
 // Wiring (change the pins to match your robot; none may be a probot-core pin). SPI bus 0 on the
-// Probot main board's J5 header (Boardoza ESP32-S3 Pulse; the HAL's default bus 0 pins):
+// Probot main board's J5 header (Boardoza Pulse S32-S3; the HAL's default bus 0 pins):
 //   J1: 1 VCC -> 3.3 V (or 5 V: the board regulates to 3.3 V), 2 MISO -> GPIO 16,
 //       3 MOSI -> GPIO 15, 4 SCK -> GPIO 17, 5 nCS -> GPIO 7, 6 GND -> GND
 //   J2: 1 NRST -> GPIO 36, 2 BUSY -> GPIO 38, 3 DIO1 -> GPIO 37

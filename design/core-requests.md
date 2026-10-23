@@ -297,9 +297,9 @@ Status: delivered as draft PR #45 (`feat/gamepad-guide` e0cb17f, stacked on #44)
 code change was needed; the docs and tests are updated), see "P1 R19 and R20 delivered and wired"
 below.
 
-### R21. Boardoza ESP32-S3 Pulse main board
+### R21. Boardoza Pulse S32-S3 main board
 
-Tuna decided on 2026-10-23 that the Probot main board is the Boardoza ESP32-S3 Pulse ("for now"):
+Tuna decided on 2026-10-23 that the Probot main board is the Boardoza Pulse S32-S3 ("for now"):
 ESP32-S3-WROOM-1-N4R2 (4 MB flash, 2 MB quad PSRAM), native USB-C on GPIO 19/20, an addressable RGB
 LED on IO3, BOOT on IO0, headers J3 (I2C SDA 1 / SCL 2), J4 (UART0 43/44, IO10, IO11), J5 (SPI 17,
 7, 16, 15), J6 (35-38), J7 (39-42), J8 (45-48). prosdk's bus defaults and examples now use these

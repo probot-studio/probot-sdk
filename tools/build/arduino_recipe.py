@@ -11,7 +11,7 @@ The effective C++ standard is the one cpp_flags ends with (gnu++2a = gnu++20). N
 appends another -std flag.
 
 Sketches (tools/build/build.sh examples, tools/build/hal_link_test.py, tools/release/package.sh)
-compile with SKETCH_FQBN, the Boardoza ESP32-S3 Pulse settings (`--fqbn` prints it). The
+compile with SKETCH_FQBN, the Boardoza Pulse S32-S3 settings (`--fqbn` prints it). The
 archive does not depend on its USB, PSRAM or flash-size options: CDCOnBoot only changes the
 sketch's `Serial` macro, PSRAM=enabled only adds -DBOARD_HAS_PSRAM (psram_type stays qspi, so
 the qio_qspi include dir is the same) and FlashSize/PartitionScheme only change the partition
@@ -34,7 +34,7 @@ TOOLCHAIN_VERSION = "2601"
 # arduino-cli 1.x passes runtime.ide.version=10607
 ARDUINO_IDE_VERSION = "10607"
 MEMORY_TYPE = "qio_qspi"  # {build.boot}_{build.psram_type} defaults for esp32s3
-# Boardoza ESP32-S3 Pulse (ESP32-S3-WROOM-1-N4R2: 4 MB flash, 2 MB quad PSRAM, native USB-C).
+# Boardoza Pulse S32-S3 (ESP32-S3-WROOM-1-N4R2: 4 MB flash, 2 MB quad PSRAM, native USB-C).
 # USBMode=hwcdc and UploadMode=default are the esp32s3 defaults.
 SKETCH_FQBN = ("esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,"
                "CDCOnBoot=cdc")

@@ -60,9 +60,9 @@ Driver Station (design/PORT.md section 8).
 
 ## Boards
 
-### Main board: Boardoza ESP32-S3 Pulse
+### Main board: Boardoza Pulse S32-S3
 
-The Probot main board is the Boardoza ESP32-S3 Pulse (decision of 2026-10-23, "for now"; board
+The Probot main board is the Boardoza Pulse S32-S3 (decision of 2026-10-23, "for now"; board
 profile in design/boardoza/P14-existing.md section 3.1). Module ESP32-S3-WROOM-1-N4R2: 4 MB quad
 flash, 2 MB quad PSRAM, so GPIO 33-37 are free. The bus defaults of `prosdk::platform`
 (`HalConfig.cpp`) are its J3, J4 and J5 headers.

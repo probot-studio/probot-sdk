@@ -464,7 +464,7 @@ source. Tones are only an option on a robot with no LEDC motor drivers.
 
 ## 3. Boards with the `doc_only` status
 
-### 3.1 ESP32-S3 Pulse (ESP32-S3_Pulse_Development_Board): the Probot main board
+### 3.1 Pulse S32-S3 (ESP32-S3_Pulse_Development_Board): the Probot main board
 
 - Status: the Probot main board and the default prosdk target (Tuna, 2026-10-23, "for now"). The
   `prosdk::platform` bus defaults are its J3/J4/J5 headers, the sketch FQBN is

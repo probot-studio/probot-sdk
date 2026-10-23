@@ -73,7 +73,7 @@ constexpr int GetMotorPcaAddress(int port) {
  * constructed. Members are constructed before the robot constructor's body runs, so call it from a
  * member declared above them: `bool m_pinsConfigured = prosdk::prohub::ConfigurePins();` as the
  * first member (examples/DriversShowcase). Returns false if a pin was refused. On the Boardoza
- * ESP32-S3 Pulse (the Probot main board) these pins are already the platform defaults, so the
+ * Pulse S32-S3 (the Probot main board) these pins are already the platform defaults, so the
  * call changes nothing there; it stays for other boards.
  *
  * probot-core's optional INA219/INA226 battery sensor (PROBOT_BATTERY_INA) also uses I2C
