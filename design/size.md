@@ -377,3 +377,20 @@ Archive at `d641c18` (the tunable backend's republish memory back to accepted va
   `feat/dashboard-store` 9217ae4 (no persistence, no R15) is 1,745,189 / 68,940 B.
 - Core moved on to 15defc1 (#41) right after; the HAL link test there is 1,707,973 / 75,980 B (+2,036 B
   flash: the DS page grew from 45,837 to 47,771 B compressed). The examples were not re-measured.
+
+## 12. Core R16 refused-value frame and R17 busy() (measured 2026-10-23)
+
+Archive at `026112d` plus comment-only changes (CoreOps ABI 8 unchanged), probot-core `sdk-target` at
+`62e5dbf` (`feat/dash-set-refused`, draft PR #42 on top of #38 ba2500b, #39 29c282a, #40 589262e, #41
+784a94a), one `tools/build/build.sh examples TemplateTimed DriversShowcase` run. "Before" is section 11;
+the R11 column is the last measurement against 15defc1 (design/core-requests.md "P1 R11 wired").
+
+| Sketch | Flash R11 | Flash now | vs R11 | vs section 11 | Static RAM now | vs R11 / section 11 |
+|---|---:|---:|---:|---:|---:|---:|
+| TemplateTimed | 1,796,884 | 1,797,756 | +872 | +3,936 | 72,308 | 0 / +16 |
+| DriversShowcase | - | 1,924,612 | - | +3,936 | 73,900 | - / 0 |
+| HAL link test | 1,708,993 | 1,709,877 | +884 | - | 75,996 | 0 / - |
+
+- The growth since R11 is core's: the 'E' frame in the dashboard store (refusal fields in each slot,
+  one more pass in the frame builder), `files::busy()` and the regenerated DS page. prosdk's code did
+  not change. Not attributed further.

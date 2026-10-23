@@ -219,6 +219,9 @@ limit) and the WebSocket receive buffer for DS writes (limit + 4 B): about 5.6 K
 `PROBOT_DASH_WRITE_QUEUE` (2048 B, 85 poses) and is refused with `QueueFull` above it. Persistent topics
 are stored only up to 2048 bytes whatever the limit.
 
+Status: delivered as draft PR #42 (`feat/dash-set-refused` 62e5dbf) and documented (no prosdk API), see
+"P1 R16 and R17 delivered" below.
+
 ### R17. `unshare()` that reports whether the file task let go (low priority)
 
 `probot::files::unshare()` (and `share()` replacing a name) waits for the DS file task to release the
@@ -233,6 +236,9 @@ prosdk never unmounts (`MountSdCard` lasts until the program ends), so nothing b
 docs (DataLogManager, `UnshareFiles()`, design/API-DIFFERENCES.md) tell a sketch that unmounts after
 `DataLogManager::Stop()` to wait a few seconds first. Once core reports it, `UnshareFiles()` can pass the
 result on.
+
+Status: delivered in draft PR #38 (`feat/ds-files` ba2500b, `probot::files::busy()`) and documented, see
+"P1 R16 and R17 delivered" below.
 
 ## Status
 
@@ -824,3 +830,42 @@ Wired:
   (same size and probes) and against `feat/dashboard-store` 9217ae4 (links, no probe), QEMU smoke 8/8 on
   both boots with the recording FakeCore (`share_task=datalogmgr unshare_task=user`).
 
+
+### P1 R16 and R17 delivered, repinned to #42 62e5dbf (2026-10-23)
+
+Core rebased its stack again and added draft PR #42 on top: #38 `feat/ds-files` ba2500b, #39
+`feat/dash-persist` 29c282a, #40 `feat/dash-widgets` 589262e, #41 `feat/loop-grid-restarts` 784a94a, #42
+`feat/dash-set-refused` 62e5dbf. `.upstream/probot-core` `sdk-target` is at 62e5dbf (`git reset --keep`);
+CI's `PROBOT_CORE_REF` names `feat/dash-set-refused` (`PROBOT_CORE_OLDEST_REF` stays
+`feat/dashboard-store`). 15defc1 -> 62e5dbf changes `dashboard.hpp` and `files.hpp` only by the two
+items below; the signatures the bridge probes (`limits()`, `clearPersisted()`, `loopGridRestarts()`,
+`files::share()`/`unshare()`) are unchanged.
+
+R16 (#42): a refused `set()` (longer than `PROBOT_DASH_MAX_VALUE`: reason 1 TooLarge; no room in the pool
+or heap: 2 NoMemory, now also counted in `stats().dropped`) is sent to the DS in a new robot -> DS frame
+`'E'` 0x45 (repeated `{u16 id, u8 reason, u32 last refused length}`, LE) after the topic's remaining value:
+at once when the reason changes, then after every resend of that value (resync, re-announce, write
+echo). The next stored `set()` clears it and sends `'V'` even for an unchanged value. The DS shows "Güncel
+değil: <sebep>" on the row (widget topics without a row are listed under the widget) and logs it once;
+older pages ignore the frame. Core also added prosdk's sizing note to `API.md`. The robot side gets only
+the public enum `probot::dashboard::SetRefusal`; `set()` still returns `bool` and there is no accessor
+of a topic's reason, so prosdk adds no CoreOps field: the console report (`Limit::kValue`, once) stays
+as it is. Documented in design/API-DIFFERENCES.md section 3 (the `Field2d` advice: the DS now marks the
+topic not current with #42; an older core still shows the old value as current) and the
+`DashboardStore.hpp` store notes.
+
+R17 (folded into #38, same `PROBOT_HAS_FILES_SHARE`): `probot::files::busy()` is true while a DS listing
+or download holds a folder or file of any share; `unshare()` waits at most 1 s (core's comment and
+`API.md` now call it a cap). Before unmounting: unshare, then wait until `busy()` is false. prosdk never
+unmounts, so no CoreOps field: a sketch that unmounts already calls ESP-IDF (prosdk has no unmount) and
+sees core's `<probot.h>`, so `probot::files::busy()` does not make it mix layers more than it does.
+DataLogManager.hpp, `UnshareFiles()` in CoreOps.hpp and design/API-DIFFERENCES.md now say: after
+`Stop()`/`UnshareFiles()`, poll `probot::files::busy()` until false (older core: wait a few seconds).
+
+- DS widget check (`node tools/build/ds_widget_check.js .upstream/probot-core/ui/index.html`): all golden
+  layouts decode as before (core's #42 page changes add the `'E'` handler and stale marks; no decoder
+  renamed).
+- Checked against 62e5dbf: host tests (`build.sh host all header_check --test`, all 25 binaries pass),
+  the incremental archive, the HAL link test (1,709,877 B flash / 75,996 B RAM), examples TemplateTimed
+  1,797,756 / 72,308 and DriversShowcase 1,924,612 / 73,900 (design/size.md section 12). The bridge did
+  not change, so neither the oldest-core link test nor QEMU was re-run.
