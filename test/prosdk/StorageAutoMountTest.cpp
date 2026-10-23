@@ -2,8 +2,9 @@
 //
 // The LittleFS auto-mount decision behind prosdk::platform::GetLogDirectory()
 // (prosdk/platform/StorageAutoMount.hpp) against a fake partition: an existing mount is used, the
-// opt-out and a sketch with Arduino's LittleFS library are left alone, only a blank partition is
-// formatted, and a partition holding other data is never formatted.
+// opt-out, a sketch with Arduino's LittleFS library and a program that links SPIFFS are left
+// alone, only a blank partition is formatted, and a partition holding other data is never
+// formatted.
 
 #include <string>
 
@@ -24,6 +25,7 @@ class FakeDevice final : public prosdk::platform::detail::LittleFsDevice {
  public:
   bool mounted = false;
   bool arduinoLibrary = false;
+  bool spiffs = false;
   bool partition = true;
   Content content = Content::kBlank;
   bool formatFails = false;
@@ -35,6 +37,7 @@ class FakeDevice final : public prosdk::platform::detail::LittleFsDevice {
 
   bool IsMounted() override { return mounted; }
   bool ArduinoLibraryLinked() override { return arduinoLibrary; }
+  bool SpiffsLinked() override { return spiffs; }
   bool HasPartition() override { return partition; }
   bool IsBlank() override {
     ++blankChecks;
@@ -91,6 +94,39 @@ TEST_CASE("LittleFS auto-mount leaves a sketch with the Arduino library alone",
   CHECK(AutoMountLittleFs(dev, true) == LittleFsAutoMount::kArduinoLibrary);
   CHECK(dev.formats == 0);
   CHECK(dev.mounts == 0);
+}
+
+TEST_CASE("LittleFS auto-mount leaves a program that links SPIFFS alone",
+          "[prosdk][platform][storage]") {
+  SECTION("blank partition: not formatted (SPIFFS.begin(true) would format it again)") {
+    FakeDevice dev;
+    dev.spiffs = true;
+    CHECK(AutoMountLittleFs(dev, true) == LittleFsAutoMount::kSpiffs);
+    CHECK(dev.blankChecks == 0);
+    CHECK(dev.formats == 0);
+    CHECK(dev.mounts == 0);
+    CHECK(dev.content == Content::kBlank);
+  }
+  SECTION("an existing LittleFS: not mounted either") {
+    FakeDevice dev;
+    dev.spiffs = true;
+    dev.content = Content::kLittleFs;
+    CHECK(AutoMountLittleFs(dev, true) == LittleFsAutoMount::kSpiffs);
+    CHECK(dev.mounts == 0);
+    CHECK_FALSE(dev.mounted);
+  }
+  SECTION("a mount the sketch made, the opt-out and the Arduino LittleFS library come first") {
+    FakeDevice dev;
+    dev.spiffs = true;
+    dev.mounted = true;
+    CHECK(AutoMountLittleFs(dev, true) == LittleFsAutoMount::kAlreadyMounted);
+    dev.mounted = false;
+    CHECK(AutoMountLittleFs(dev, false) == LittleFsAutoMount::kDisabled);
+    dev.arduinoLibrary = true;
+    CHECK(AutoMountLittleFs(dev, true) == LittleFsAutoMount::kArduinoLibrary);
+    CHECK(dev.formats == 0);
+    CHECK(dev.mounts == 0);
+  }
 }
 
 TEST_CASE("LittleFS auto-mount without a data partition", "[prosdk][platform][storage]") {

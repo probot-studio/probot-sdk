@@ -706,7 +706,10 @@ Status as of 2026-10-23. Items 1-8 need a board and stay **open**: none is attac
     an existing LittleFS as it is, and never formats a partition holding other data (one console
     line naming `LittleFS.begin(true)`, nothing logged). Opt-out
     `prosdk::platform::SetLogAutoMount(false)`; a sketch that links Arduino's LittleFS library
-    mounts it itself. Details: `src/prosdk/platform/Storage.hpp`, API-DIFFERENCES.md `DataLogManager` row,
+    mounts it itself, and a program that links SPIFFS is left alone (it may own the partition). Details: `src/prosdk/platform/Storage.hpp`, API-DIFFERENCES.md `DataLogManager` row,
     user-docs-handoff.md section 6. Evidence: `test/prosdk/StorageAutoMountTest.cpp` (decision
-    logic), QEMU case f (boot 1 formats the blank partition, boot 2 mounts without formatting).
+    logic), QEMU case f (boot 1 formats the blank partition, boot 2 mounts without formatting;
+    `run.sh --seed-spiffs`: a non-blank partition is refused and left unchanged), and
+    `hal_link_test.py --compile` (the weak `LittleFS` and `esp_vfs_spiffs_register` references
+    resolve when the libraries are linked).
     To override: revert to "the sketch mounts" by making `SetLogAutoMount(false)` the default.

@@ -185,7 +185,9 @@ hardware validation is done.
     so. Later boots mount the existing file system without formatting.
   - It never erases data: a partition holding anything else (SPIFFS files, another program's data,
     a damaged file system) is left alone, nothing is logged, and one console line says how to erase
-    it on purpose: `LittleFS.begin(true)` (`#include <LittleFS.h>`) before `Start()`.
+    it on purpose: `LittleFS.begin(true)` (`#include <LittleFS.h>`) before `Start()`. This includes
+    a first-boot format cut off by a power loss (the partition is then no longer blank but holds no
+    valid LittleFS): logging stays off until the sketch erases it that way.
   - Opt-out: `prosdk::platform::SetLogAutoMount(false)` before the first DataLogManager call; then
     only a directory the sketch mounted or set is used (else nothing is written, console line).
   - A sketch that uses Arduino's LittleFS library (includes `<LittleFS.h>`) mounts it itself, before
@@ -195,6 +197,10 @@ hardware validation is done.
     not mounted at `Start()`): after a mount by prosdk, Arduino-ESP32 3.3.10's `LittleFS.begin()`
     returns true but the `LittleFS` object cannot open files. `begin(true)` formats any partition
     it cannot mount, not only a blank one.
+  - A sketch that uses SPIFFS (includes `<SPIFFS.h>`, or calls `esp_vfs_spiffs_register`) is left
+    alone too (one console line, nothing logged to flash): SPIFFS uses the same `spiffs` partition
+    by default, and its `SPIFFS.begin(true)` would format it under a LittleFS mount. Such a sketch
+    logs to an SD card (below).
   - `examples/SysIdRoutine` calls `DataLogManager::Start()` in the Robot constructor so the "logs"
     share exists after every boot (without `Start()` the folder appears only at the first
     DataLogManager call, e.g. the first SysId test, which opens a new log).

@@ -12,12 +12,16 @@
 //     - a blank partition (every byte 0xFF: never written since it was erased, the first boot) is
 //       formatted first;
 //     - a partition that holds anything else (SPIFFS, data written by another program, a
-//       damaged file system) is never formatted: nothing is mounted, one console line says how to
-//       erase it (LittleFS.begin(true)), and DataLogManager discards its data;
+//       damaged file system, including a first format cut off by a power loss) is never
+//       formatted: nothing is mounted, one console line says how to erase it
+//       (LittleFS.begin(true)), and DataLogManager discards its data;
 //     - a sketch that includes <LittleFS.h> (Arduino's LittleFS library linked) and has not
 //       mounted it is left to mount it itself (one console line): after a mount by prosdk,
 //       Arduino-ESP32 3.3.10's LittleFS.begin() returns true without giving the LittleFS object
-//       its mount point, so LittleFS.open() would fail.
+//       its mount point, so LittleFS.open() would fail;
+//     - a program that links SPIFFS (a sketch that includes <SPIFFS.h>, or calls
+//       esp_vfs_spiffs_register) is left alone (one console line): SPIFFS may own the same
+//       partition, and its SPIFFS.begin(true) would format it under a LittleFS mount.
 //     operating directory  /littlefs
 //     deploy directory     /littlefs/deploy  (the sketch's data/deploy folder after a LittleFS upload)
 //     log directory        /littlefs/logs if LittleFS is mounted (by the sketch or the auto-mount),

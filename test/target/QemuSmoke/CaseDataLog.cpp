@@ -3,8 +3,11 @@
 // (f) DataLogManager on LittleFS (the huge_app "spiffs" data partition). Nothing mounts it before
 // this case: the first default-directory lookup (prosdk::platform::GetLogDirectory) auto-mounts
 // it. Boot 1 starts from a freshly merged flash image whose partition is blank (0xFF), so it is
-// formatted; every later boot finds the file system and mounts it without formatting (the
-// non-blank refusal is covered by test/prosdk/StorageAutoMountTest.cpp). Start() picks
+// formatted; every later boot finds the file system and mounts it without formatting. After
+// tools/qemu/run.sh --seed-spiffs the partition starts with a sector of other data instead: the
+// auto-mount must refuse it (kNotBlank, nothing mounted, no log directory) and leave its first
+// three sectors unchanged (a format would rewrite sectors 0 and 1), and the case ends there; the
+// decision logic itself is covered by test/prosdk/StorageAutoMountTest.cpp. Start() picks
 // /littlefs/logs, the writer thread writes a .wpilog, Stop() flushes it; the file is then read
 // back with stdio. Boot 2 checks that boot 1's log survived the restart. With the fake core's file
 // sharing (FakeCore.hpp, CoreOps ABI 8) the manager's own task offers /littlefs/logs as "logs" and
@@ -16,8 +19,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include <esp_partition.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -61,6 +66,42 @@ std::vector<std::string> ListLogs(const std::string& dir) {
   return names;
 }
 
+constexpr std::string_view kSeed = "QEMU-SEED-NOT-LITTLEFS\n";  // tools/qemu/run.sh --seed-spiffs
+constexpr size_t kSeedCheckBytes = 3 * 4096;
+
+// The first sectors of the "spiffs" partition, or "" when it cannot be read.
+std::string ReadPartitionStart() {
+  const esp_partition_t* part = esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,
+      prosdk::platform::detail::kLittleFsPartitionLabel);
+  std::string data(kSeedCheckBytes, '\0');
+  if (part == nullptr || esp_partition_read(part, 0, data.data(), data.size()) != ESP_OK) {
+    return {};
+  }
+  return data;
+}
+
+// --seed-spiffs: the partition holds other data, which the auto-mount must leave alone.
+void CheckSeededRefusal(Ctx& ctx, const std::string& before) {
+  using prosdk::platform::detail::LittleFsAutoMount;
+  const std::string dir = prosdk::platform::GetLogDirectory();
+  const auto mount = prosdk::platform::detail::GetLittleFsAutoMountResult();
+  QCHECK_MSG(ctx, mount == LittleFsAutoMount::kNotBlank, "auto-mount result {} (expected {})",
+             static_cast<int>(mount), static_cast<int>(LittleFsAutoMount::kNotBlank));
+  QCHECK_MSG(ctx, dir.empty(), "log dir '{}'", dir);
+  QCHECK(ctx, !prosdk::platform::IsLittleFsMounted());
+  QCHECK_MSG(ctx, ReadPartitionStart() == before, "the first {} partition bytes changed",
+             kSeedCheckBytes);
+  // DataLogManager keeps a log that discards its data; still nothing written to the partition
+  prosdk::DataLogManager::Start();
+  prosdk::DataLogManager::Log("qemu-smoke seeded");
+  QCHECK(ctx, prosdk::DataLogManager::GetLogDir().empty());
+  prosdk::DataLogManager::Stop();
+  fakecore::TakeFileCalls();
+  QCHECK(ctx, ReadPartitionStart() == before);
+  ctx.Note("automount=notblank seeded=1");
+}
+
 }  // namespace
 
 void CaseDataLog(Ctx& ctx) {
@@ -70,6 +111,10 @@ void CaseDataLog(Ctx& ctx) {
              prosdk::platform::kLittleFsBasePath);
   QCHECK(ctx, prosdk::platform::detail::GetLittleFsAutoMountResult() ==
                   LittleFsAutoMount::kNotTried);
+  if (const std::string start = ReadPartitionStart(); start.starts_with(kSeed)) {
+    CheckSeededRefusal(ctx, start);
+    return;
+  }
   const int64_t t0 = esp_timer_get_time();
   const std::string dir = prosdk::platform::GetLogDirectory();
   const int64_t mountMs = (esp_timer_get_time() - t0) / 1000;

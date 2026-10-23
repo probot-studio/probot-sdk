@@ -4,7 +4,7 @@
 # prosdk on-target smoke test in Espressif's QEMU (machine esp32s3); design/PORT.md section 11,
 # test/target/README.md. With --bench, the speed benchmark instead (design/qemu-bench.md).
 #
-#   tools/qemu/run.sh [--no-build] [--boots N] [--timeout S]
+#   tools/qemu/run.sh [--no-build] [--boots N] [--timeout S] [--seed-spiffs]
 #   tools/qemu/run.sh --bench [--no-build] [--boots N] [--timeout S] [--check] [--threshold PCT]
 #                     [--save-baseline]
 #
@@ -25,6 +25,11 @@
 #    instruction-count time (-icount, see below), independent of the host's load
 # 5. parses the CASE lines: exit 0 only if every boot printed BEGIN/END with the expected boot
 #    number and every case passed.
+#
+# --seed-spiffs (smoke test only): after the merge, writes one 4 KiB sector of non-LittleFS bytes
+# (a "QEMU-SEED-NOT-LITTLEFS" text, as another program's data would be) at the start of the
+# huge_app "spiffs" partition. Case f then expects prosdk's auto-mount to refuse the partition
+# (kNotBlank, nothing mounted or logged) and to leave its bytes unchanged.
 #
 # --bench: the same for test/target/QemuBench (build folder .build/qemu/QemuBench, files
 # bench-compile.log, bench-flash.bin, bench-uart-<n>.log; default 1 boot). Every boot starts from
@@ -54,8 +59,9 @@ bench=0
 check=0
 threshold=
 save_baseline=0
+seed=0
 usage() {
-  echo "usage: $0 [--no-build] [--boots N] [--timeout S]" >&2
+  echo "usage: $0 [--no-build] [--boots N] [--timeout S] [--seed-spiffs]" >&2
   echo "       $0 --bench [--no-build] [--boots N] [--timeout S] [--check] [--threshold PCT]" \
        "[--save-baseline]" >&2
   exit 2
@@ -70,6 +76,7 @@ while [ $# -gt 0 ]; do
     --check) check=1 ;;
     --threshold) threshold="$2"; shift ;;
     --save-baseline) save_baseline=1 ;;
+    --seed-spiffs) seed=1 ;;
     *) usage ;;
   esac
   shift
@@ -78,6 +85,7 @@ done
 if [ "$bench" = 0 ] && { [ "$check" = 1 ] || [ -n "$threshold" ] || [ "$save_baseline" = 1 ]; }; then
   usage
 fi
+if [ "$bench" = 1 ] && [ "$seed" = 1 ]; then usage; fi
 threshold="${threshold:-10}"
 
 if [ "$bench" = 1 ]; then
@@ -125,6 +133,20 @@ merge_flash() {
 }
 echo "== flash image"
 merge_flash
+if [ "$seed" = 1 ]; then
+  # offset of the "spiffs" partition from the scheme's CSV (the FQBN's PartitionScheme=huge_app)
+  python3 -I - "$ESP32_HW/tools/partitions/huge_app.csv" "$FLASH" <<'PY'
+import sys
+rows = [[f.strip() for f in ln.split(",")] for ln in open(sys.argv[1])
+        if ln.strip() and not ln.startswith("#")]
+offset = next(int(r[3], 0) for r in rows if r[0] == "spiffs")
+seed = (b"QEMU-SEED-NOT-LITTLEFS\n" * 200)[:4096]
+with open(sys.argv[2], "r+b") as f:
+    f.seek(offset)
+    f.write(seed)
+print(f"seeded 4096 non-LittleFS bytes at spiffs offset {offset:#x}")
+PY
+fi
 
 # eFuse image (QEMU only). QEMU's default eFuses are all zero; ESP-IDF's esp_adc constructor
 # then finds no factory ADC calibration (BLK_VERSION_MAJOR 0) and self-calibrates on the SAR ADC,

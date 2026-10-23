@@ -16,14 +16,16 @@ inline constexpr const char* kLittleFsPartitionLabel = "spiffs";
 
 /** Outcome of an auto-mount attempt. */
 enum class LittleFsAutoMount : std::uint8_t {
-  kNotTried,        // no attempt yet (no DataLogManager default directory asked for, or opted out)
+  kNotTried,        // no attempt yet (no DataLogManager default directory asked for)
   kAlreadyMounted,  // something is mounted at /littlefs (the sketch's LittleFS.begin(), ...)
   kDisabled,        // SetLogAutoMount(false)
   kArduinoLibrary,  // the sketch links Arduino's LittleFS library and has not mounted it
+  kSpiffs,          // the program links SPIFFS (Arduino's SPIFFS library or esp_vfs_spiffs)
   kNoPartition,     // no data partition labelled kLittleFsPartitionLabel
   kMounted,         // a LittleFS file system on the partition, mounted without formatting
   kFormatted,       // the partition was blank (all 0xFF): formatted, then mounted
-  kNotBlank,        // the partition holds data that is not LittleFS: left alone, not mounted
+  kNotBlank,        // not blank and not a mountable LittleFS (other data, or a damaged LittleFS
+                    // such as a first format cut off by a power loss): left alone, not mounted
   kFailed,          // mount or format error (out of memory, partition in use elsewhere, ...)
 };
 
@@ -42,6 +44,12 @@ class LittleFsDevice {
   virtual bool IsMounted() = 0;
   /** Whether the program links Arduino's LittleFS library (the sketch includes <LittleFS.h>). */
   virtual bool ArduinoLibraryLinked() = 0;
+  /**
+   * Whether the program links SPIFFS (esp_vfs_spiffs_register; Arduino's SPIFFS library calls
+   * it), whose SPIFFS.begin(true) would format the same default partition under a LittleFS
+   * mount.
+   */
+  virtual bool SpiffsLinked() = 0;
   /** Whether the data partition exists. */
   virtual bool HasPartition() = 0;
   /** Whether every byte of the partition is 0xFF (never written since the last erase). */
@@ -60,6 +68,8 @@ class LittleFsDevice {
  *   Arduino library linked   -> kArduinoLibrary (the sketch mounts it with LittleFS.begin(): a
  *                               LittleFS.begin() after a mount by prosdk returns true but leaves
  *                               the Arduino LittleFS object without its mount point)
+ *   SPIFFS linked            -> kSpiffs (SPIFFS may own the partition; its SPIFFS.begin(true)
+ *                               formats a partition it cannot mount, LittleFS included)
  *   no partition             -> kNoPartition
  *   blank                    -> Format() and Mount(): kFormatted, or kFailed
  *   Mount() kOk              -> kMounted

@@ -23,6 +23,13 @@ sketch FQBN sets and the archive recipe does not (USB CDC on boot, PSRAM): no un
 libprosdk.a names an Arduino Serial object or String, and no archive source under src/prosdk
 uses BOARD_HAS_PSRAM, ARDUINO_USB_* or the Arduino PSRAM API (prosdk.h and
 prosdk/probot/CoreBridge.hpp compile in the sketch and may).
+
+The sketch also includes <LittleFS.h> and <SPIFFS.h> and calls GetLogDirectory() behind a false
+condition, so the link holds both Arduino libraries next to prosdk's LittleFS auto-mount. --compile
+then checks the ELF's symbol table: the names the auto-mount's weak references bind to (the
+`LittleFS` object, `esp_vfs_spiffs_register`) must be defined globals. If an Arduino-ESP32 update
+renames, mangles or drops one of them, the weak reference stays null, prosdk would auto-mount the
+partition under such a sketch, and this check fails.
 """
 from __future__ import annotations
 
@@ -43,6 +50,8 @@ FQBN = arduino_recipe.SKETCH_FQBN
 ARCHIVE = ROOT / "src" / "esp32s3" / "libprosdk.a"
 # Undefined symbols that would tie the archive to the sketch's CDCOnBoot/USBMode choice
 BOARD_SYMBOLS = re.compile(r"Serial0|HWCDCSerial|USBSerial|_ZN6String")
+# Names that src/prosdk/platform/Storage.cpp references weakly to see a sketch's file system library
+FS_WEAK_SYMBOLS = ("LittleFS", "esp_vfs_spiffs_register")
 BOARD_MACROS = (r"BOARD_HAS_PSRAM|ARDUINO_USB_(MODE|CDC_ON_BOOT|MSC_ON_BOOT|DFU_ON_BOOT)"
                 r"|psramFound|ps_malloc")
 # Headers that compile in the sketch (with the user's board options), not into the archive
@@ -103,6 +112,10 @@ def sketch_source(headers: list[str], names: list[tuple[str, str | None]]) -> st
         '#define PROBOT_WIFI_AP_PASSWORD "linktest1"',
         "#define PROBOT_WIFI_AP_CHANNEL 6",
         "#include <prosdk.h>",
+        "// Arduino's file system libraries, for the auto-mount's weak references (FS check)",
+        "#include <LittleFS.h>",
+        "#include <SPIFFS.h>",
+        "#include <prosdk/platform/Storage.hpp>",
         "",
     ]
     out += [f"#include <{h}>" for h in sorted(set(headers) | set(all_hal_headers()))]
@@ -133,6 +146,9 @@ def sketch_source(headers: list[str], names: list[tuple[str, str | None]]) -> st
         "    prosdk::hal::SimDevice a{\"link\", 0};",
         "    prosdk::hal::SimDevice b{\"link\", 0, 1};",
         "    sum ^= reinterpret_cast<uintptr_t>(prosdk::hal::GetDefaultDriverStationImpl());",
+        "    sum ^= prosdk::platform::GetLogDirectory().size();",
+        "    sum ^= static_cast<uintptr_t>(LittleFS.begin(true)) ^",
+        "           static_cast<uintptr_t>(SPIFFS.begin(true));",
         "    sum ^= static_cast<uintptr_t>(static_cast<HAL_SimDeviceHandle>(a)) ^",
         "           static_cast<uintptr_t>(static_cast<HAL_SimDeviceHandle>(b));",
         "  }",
@@ -173,6 +189,30 @@ def check_archive_abi() -> int:
     return bad
 
 
+def check_fs_symbols(elf: Path) -> int:
+    """Fails (1) when a weak reference of the LittleFS auto-mount would stay null."""
+    nm = arduino_recipe.paths()["toolchain"] / "xtensa-esp32s3-elf-nm"
+    res = subprocess.run([str(nm), str(elf)], capture_output=True, text=True)
+    if res.returncode != 0:
+        print(f"FS check: {nm.name} failed: {res.stderr.strip()}")
+        return 1
+    kinds: dict[str, list[str]] = {}
+    for ln in res.stdout.splitlines():
+        f = ln.split()
+        if len(f) >= 2 and f[-1] in FS_WEAK_SYMBOLS:
+            kinds.setdefault(f[-1], []).append(f[-2])
+    bad = 0
+    for sym in FS_WEAK_SYMBOLS:
+        # a defined global: B/D/T/R (or a weak definition V/W); 'w', 'U' or absent = unresolved
+        if not any(k in "BDTRGSVW" for k in kinds.get(sym, [])):
+            print(f"FS check: {sym} is not defined in the link ({kinds.get(sym, 'absent')}); "
+                  "prosdk's auto-mount would not see the sketch's file system library")
+            bad = 1
+    print("FS check: " + ("FAILED" if bad else
+                          f"{', '.join(FS_WEAK_SYMBOLS)} defined (weak references resolve)"))
+    return bad
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", required=True, type=Path, help="work folder (sketch, libraries, build)")
@@ -207,7 +247,10 @@ def main() -> int:
     print(" ".join(cmd), flush=True)
     rc = subprocess.run(cmd).returncode
     print(f"arduino-cli exit {rc}")
-    return rc or check_archive_abi()
+    if rc:
+        return rc
+    abi = check_archive_abi()
+    return check_fs_symbols(out / "build" / f"{SKETCH}.ino.elf") or abi
 
 
 if __name__ == "__main__":

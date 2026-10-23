@@ -20,6 +20,7 @@
 #include <esp_err.h>
 #include <esp_littlefs.h>
 #include <esp_partition.h>
+#include <esp_spiffs.h>
 #include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -30,6 +31,11 @@
 // an unmangled name). It is linked only when a sketch file includes <LittleFS.h>; otherwise this
 // weak reference is null. Only its address is used (no dependency on the library).
 extern "C" char LittleFS __attribute__((weak));  // NOLINT(readability-identifier-naming)
+// ESP-IDF's SPIFFS mount (component spiffs, in the link only when something calls it: Arduino's
+// SPIFFS library, linked when a sketch file includes <SPIFFS.h>, or the sketch itself). Weak, so
+// prosdk does not pull SPIFFS in; null when nothing else does.
+extern "C" esp_err_t esp_vfs_spiffs_register(const esp_vfs_spiffs_conf_t* conf)
+    __attribute__((weak));
 #endif
 
 namespace prosdk::platform {
@@ -69,6 +75,8 @@ class Esp32LittleFsDevice final : public detail::LittleFsDevice {
   bool IsMounted() override { return IsLittleFsMounted(); }
 
   bool ArduinoLibraryLinked() override { return &LittleFS != nullptr; }
+
+  bool SpiffsLinked() override { return &esp_vfs_spiffs_register != nullptr; }
 
   bool HasPartition() override {
     m_part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,
@@ -149,15 +157,24 @@ void ReportAutoMount(detail::LittleFsAutoMount result, const Esp32LittleFsDevice
       break;
     case kNotBlank:
       ConsolePrint(ConsoleLevel::kWarning,
-                   "[prosdk] LittleFS: the \"{}\" partition holds data that is not LittleFS; "
-                   "prosdk does not format it and logs nothing. To erase it for the logs, call "
-                   "LittleFS.begin(true) (#include <LittleFS.h>) before DataLogManager::Start()\n",
+                   "[prosdk] LittleFS: the \"{}\" partition is not blank and holds no mountable "
+                   "LittleFS (other data, or a damaged file system); prosdk does not format it and "
+                   "logs nothing. To erase it for the logs, call LittleFS.begin(true) "
+                   "(#include <LittleFS.h>) before DataLogManager::Start()\n",
                    label);
       break;
     case kArduinoLibrary:
       ConsolePrint(ConsoleLevel::kWarning,
                    "[prosdk] LittleFS: the sketch uses the Arduino LittleFS library, so prosdk "
-                   "does not mount it; call LittleFS.begin() before DataLogManager::Start()\n");
+                   "does not mount it; call LittleFS.begin(true) before DataLogManager::Start() "
+                   "(it formats the partition when it holds no LittleFS)\n");
+      break;
+    case kSpiffs:
+      ConsolePrint(ConsoleLevel::kWarning,
+                   "[prosdk] LittleFS: the program uses SPIFFS, which may own the \"{}\" "
+                   "partition, so prosdk does not mount LittleFS there and logs nothing; "
+                   "SetLogDirectory() names another log storage (an SD card)\n",
+                   label);
       break;
     case kNoPartition:
       ConsolePrint(ConsoleLevel::kWarning,
@@ -282,6 +299,9 @@ LittleFsAutoMount AutoMountLittleFs(LittleFsDevice& device, bool enabled) {
   }
   if (device.ArduinoLibraryLinked()) {
     return LittleFsAutoMount::kArduinoLibrary;
+  }
+  if (device.SpiffsLinked()) {
+    return LittleFsAutoMount::kSpiffs;
   }
   if (!device.HasPartition()) {
     return LittleFsAutoMount::kNoPartition;

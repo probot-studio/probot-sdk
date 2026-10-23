@@ -542,8 +542,12 @@ sdkconfig, not the configuration the archive is compiled against.
   0xFF, read in 4 KiB chunks; a used one is usually told apart by its first sector) after
   `esp_littlefs_format_partition` (core 0's idle task is taken off the task watchdog meanwhile, as
   Arduino's `LittleFS.format()` does), anything else never (console line, no log). Skipped after
-  `SetLogAutoMount(false)` and when the sketch links Arduino's LittleFS library (weak reference to
-  its `LittleFS` object). Default applied 2026-10-23, Tuna can override.
+  `SetLogAutoMount(false)`, when the sketch links Arduino's LittleFS library (weak reference to
+  its `LittleFS` object) and when the program links SPIFFS (weak reference to
+  `esp_vfs_spiffs_register`: Arduino's `SPIFFS.begin(true)` would format the same partition under
+  the LittleFS mount). `tools/build/hal_link_test.py --compile` checks that both references resolve
+  when a sketch includes `<LittleFS.h>` and `<SPIFFS.h>`. Default applied 2026-10-23, Tuna can
+  override.
 - Framework install: `<prosdk.h>` installs prosdk's hooks into probot-core at static
   initialization. If another framework already holds core's hooks (`probot::framework::install`
   returns false), prosdk prints an error to the console at once and again from `HAL_Initialize`,

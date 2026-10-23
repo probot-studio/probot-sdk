@@ -186,6 +186,11 @@ jobs:
       - name: On-target smoke test (two boots)
         run: tools/qemu/run.sh --boots 2 --timeout 600
 
+      # case f on a partition holding other data: the LittleFS auto-mount must leave it alone
+      # (the UART logs uploaded below are then this run's)
+      - name: On-target smoke test, non-blank data partition
+        run: tools/qemu/run.sh --no-build --boots 1 --seed-spiffs --timeout 600
+
       - name: UART logs
         if: always()
         uses: actions/upload-artifact@v4
