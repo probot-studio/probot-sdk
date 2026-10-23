@@ -89,12 +89,22 @@ Board settings: ESP32S3 Dev Module, `esp32:esp32:esp32s3:FlashSize=4M,PartitionS
 PSRAM=enabled,CDCOnBoot=cdc` (`tools/build/arduino_recipe.py --fqbn`; README.md "Board"). The
 precompiled archive is built with the generic esp32s3 defaults and does not depend on these
 options (`tools/build/arduino_recipe.py` docstring, checked by `tools/build/hal_link_test.py`).
-With USB CDC On Boot Enabled, Arduino's `Serial` is HWCDC on USB-C. Its write waits up to 20
-times its TX timeout per call (100 ms by default, so about 2 s) while the CDC link counts as
-connected but the host does not read (a serial monitor opened, then closed, cable still in), and
-probot-core prints from its sysloop, the DS timeout line before it stops the robot. The bridge
-(`CoreBridge.hpp`, core's boot hook) therefore sets `HWCDCSerial.setTxTimeoutMs(1)`: at most about
-20 ms per write, and text that does not fit is dropped (core-requests.md R21-b).
+With USB CDC On Boot Enabled, Arduino's `Serial` is HWCDC on USB-C. From Arduino-ESP32 3.3.9 a
+write that finds the TX ring full waits up to 20 times its TX timeout (100 ms by default, so about
+2 s per write) while the host keeps the port open without reading (a serial monitor opened, then
+closed, cable still in), and probot-core logs from its sysloop, which also runs the emergency stop.
+probot-core #46 sets `HWCDCSerial.setTxTimeoutMs(5)` in `runtime_setup()` under
+`ARDUINO_USB_MODE && ARDUINO_USB_CDC_ON_BOOT && ESP_ARDUINO_VERSION >= 3.3.9` (about 100 ms per
+write; text that does not fit is dropped) and stops the robot before it logs a DS timeout. The
+bridge (`CoreBridge.hpp`, core's boot hook, which runs after `runtime_setup()`) applies the same
+rule, so a core before #46 gets the bound too; on #46 it repeats core's value. Not lower (the
+bridge used 1 ms before #46): in 3.3.10's `cores/esp32/HWCDC.cpp` the TX lock take in `write()`,
+`availableForWrite()` and `flush()` waits `tx_timeout_ms` ticks (`CONFIG_FREERTOS_HZ` 1000), so at
+1 ms a second task printing while the first waits loses its whole line (`write()` returns 0), and
+`flush()` counts `tries = tx_timeout_ms` 1 ms waits without progress before it sets
+`connected = false` and drops the ring, even with a reading host. Before 3.3.9 the write loop
+gives up after one timeout by itself (core's review of 3.0.0 and 3.2.0-3.3.8; only 3.3.10 is
+installed here), so the rule leaves those cores at 100 ms (core-requests.md R21-b).
 
 ### Other ESP32-S3 boards
 
@@ -254,7 +264,8 @@ sdkconfig, not the configuration the archive is compiled against.
 - Port 0 is controller 0, the bus `Wire` uses. If `Wire` already started it, the HAL shares it
   as is (pins and clock unchanged). With probot-core's INA battery sensor (`PROBOT_BATTERY_INA`)
   the HAL starts it through core's own `Wire.begin` on core's pins (`PROBOT_BATTERY_INA_SDA` /
-  `SCL`, else the variant's 8/9), registered by the bridge (`prosdk::platform::SetCoreI2CStart`):
+  `SCL`: SDA 1 / SCL 2 by default since probot-core #46; a core before #46 without them uses
+  `Wire.begin()`, the variant's 8/9), registered by the bridge (`prosdk::platform::SetCoreI2CStart`):
   core starts `Wire` from its battery task, which races the robot's construction, so either side
   may come first and both end on the same bus at core's 100 kHz. Otherwise the HAL starts it on
   `prosdk::platform::SetI2CPins(0, ...)` pins (default SDA 1, SCL 2, 400 kHz: the Pulse J3).
@@ -262,6 +273,22 @@ sdkconfig, not the configuration the archive is compiled against.
 - Transfers go through Arduino's I2C HAL (serialized per bus, 50 ms timeout) and return 0 on
   success, -1 on failure (NACK, timeout, short read), like systemcore. Combined write-read uses a
   repeated start.
+- Sharing port 0 with core's INA task: prosdk is not affected by core's note that `Wire.read()`
+  reads a shared receive buffer without a lock. Checked in Arduino-ESP32 3.3.10 (ESP-IDF 5.5, so
+  `cores/esp32/esp32-hal-i2c-ng.c` is the I2C HAL): `i2cWrite`, `i2cRead` and
+  `i2cWriteReadNonStop` each take the bus's own mutex (`bus[i2c_num].lock`, `portMAX_DELAY`) for
+  the whole transfer and read into the caller's buffer. `libraries/Wire/src/Wire.cpp` calls the
+  same functions (`endTransmission` -> `i2cWrite`, `requestFrom` -> `i2cRead` /
+  `i2cWriteReadNonStop` into `Wire`'s `rxBuffer`) after taking `Wire`'s separate `lock`, and
+  `Wire.read()` then reads `rxBuffer` with no lock. The HAL calls `i2cWrite` / `i2cRead` /
+  `i2cWriteReadNonStop` directly with the WPILib caller's buffers and never uses `Wire`'s buffers,
+  so a prosdk transfer and a core INA transfer are serialized by the bus mutex and cannot overwrite
+  each other's data. Core's register read (`endTransmission(false)` + `requestFrom`) is one
+  `i2cWriteReadNonStop`, so a prosdk transfer cannot fall between its register pointer write and
+  its read. The race remains only between two `Wire` users, such as core's INA task and sketch
+  code that also calls `Wire` directly; put such a device on `Wire1` or use prosdk's
+  `I2C` class. Shared settings still apply: core's `Wire.setClock(100000)` sets the bus clock for
+  both, and a device at the INA's address on port 0 clashes (design/drivers.md, ProHub).
 - The HAL deinitializes a controller on the last close only if it started it.
 
 ### SPI (SPI.cpp)

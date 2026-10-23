@@ -4,8 +4,9 @@ For probot-docs (probotstudio.com/docs). Release checklist item 18 (`design/audi
 6.4). Written 2026-10-23 at prosdk `79cdeb7` (branch `dev`) against probot-core's draft stack up to
 #42 (`feat/dash-set-refused` 940d300, `library.properties` version 0.4.0); the match info item (R18)
 needs #43 on top of it (`feat/ds-match-info` 73c7e10), the display panel (R19) #44 and the
-Home/Guide button (R20) #45 (`feat/gamepad-guide` e0cb17f, which CI now pins). Today the docs mention
-probot-sdk only as a future library (`docs/ornekler.md:917`).
+Home/Guide button (R20) #45 (`feat/gamepad-guide` e0cb17f), and the Pulse board defaults (R21: INA
+pins SDA 1 / SCL 2, USB serial timeout) #46 (`feat/pulse-board` 3792357, which CI now pins). Today
+the docs mention probot-sdk only as a future library (`docs/ornekler.md:917`).
 
 Every item below names the source in this repository. The source is the reference; this file only
 lists what users need and what to warn them about. Nothing in prosdk has run on an ESP32-S3 board
@@ -27,10 +28,13 @@ hardware validation is done.
 - Board settings: ESP32S3 Dev Module, **Flash Size 4MB, Partition Scheme Huge APP (3MB No OTA/1MB
   SPIFFS), PSRAM QSPI PSRAM, USB Mode Hardware CDC and JTAG, USB CDC On Boot Enabled, Upload Mode
   UART0 / Hardware CDC** (FQBN
-  `esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc`). With
-  USB CDC On Boot Enabled, `Serial` (core's boot banner and WiFi name) reaches the Pulse's USB-C
-  port. probot-core alone is about 1.08 MB; prosdk sketches are 1.6-2.3 MB
-  (`design/PORT.md` 7.1, `design/examples.md` "Sizes").
+  `esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc`). With USB
+  CDC On Boot Enabled, `Serial` (core's boot banner and WiFi name) reaches the Pulse's USB-C port;
+  with Arduino-ESP32 3.3.9 or later a `Serial` write waits at most about 100 ms while a host keeps
+  the port open without reading, and text that does not fit is dropped (core #46; prosdk's bridge
+  applies the same 5 ms TX timeout on older cores, `design/hal-esp32.md` "Boards"). probot-core
+  alone is about 1.08 MB; prosdk sketches are 1.6-2.3 MB (`design/PORT.md` 7.1, `design/examples.md`
+  "Sizes").
 - Other ESP32-S3 boards: the robot's first member calls `prosdk::platform::SetI2CPins(0, 8, 9)`,
   `SetSerialPins(0, 15, 16)` and `SetSPIPins(0, 12, 11, 13)` (or the board's pins), as
   `prosdk::prohub::ConfigurePins()` does; USB CDC On Boot Disabled when a USB-UART bridge port
@@ -91,6 +95,11 @@ hardware validation is done.
   F1/F2), `kPort0` SCK 17 / MOSI 15 / MISO 16 (J5, chip select 7 in the examples). A wiring page
   needs the Pulse header table (`design/hal-esp32.md` "Boards"): only GPIO 1, 2, 7, 10, 11, 15-17,
   35-42 and 45-48 reach a header; analog (ADC1) on 1, 2, 7, 10.
+- probot-core's INA battery sensor (`PROBOT_BATTERY_INA`) shares `PORT_0`: since core #46 it starts
+  it on SDA 1 / SCL 2 (J3) unless `PROBOT_BATTERY_INA_SDA`/`_SCL` are defined; an older core uses
+  GPIO 8/9 and needs both defined as 1 / 2 (the sketch gets a `#warning`). Keep port 0 devices off
+  the INA's address (0x40 by default, the first PCA9685's) and expect 100 kHz on the shared bus
+  (`design/drivers.md` "PCA9685 and ProHub").
 - Capacities: 12 PWM outputs, 4 counters/encoders, 6 duty-cycle inputs, 10 analog inputs (ADC1),
   3 LED/pulse outputs, 2 I2C, 2 serial, 1 CAN (external transceiver), 2 SPI buses.
 - Output safety: outputs are gated while disabled; a lost Driver Station link disables the robot

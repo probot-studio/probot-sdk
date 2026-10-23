@@ -326,9 +326,10 @@ headers and its sketch FQBN is
   read (a serial monitor opened, then closed, cable still in), each write waits up to 20 times its
   TX timeout (100 ms), about 2 s (Arduino-ESP32 3.3.10 `HWCDC.cpp` `write`). The sysloop prints
   the DS timeout line (`runtime.hpp:348`) before it sets STOP, so the stop comes that much later.
-  prosdk's bridge sets `HWCDCSerial.setTxTimeoutMs(1)` in core's boot hook (about 20 ms at most
+  prosdk's bridge set `HWCDCSerial.setTxTimeoutMs(1)` in core's boot hook (about 20 ms at most
   per write; text that does not fit is dropped). Wanted: core does the same for sketches without
-  prosdk, or prints that line after `setStatus(STOP)`.
+  prosdk, or prints that line after `setStatus(STOP)`. (Superseded by core's answer: 1 ms is
+  harmful, the bridge now uses core's 5 ms rule; see the R21 status entry below.)
 - **R21-c, confirm only.** `NEOPIXEL_PIN` default 3 (`builtin.hpp:9`) is the Pulse's on-board
   addressable RGB LED ("RGB @ IO3" on the silkscreen). Keep it, and note it in core docs as a Pulse
   fact.
@@ -340,7 +341,8 @@ headers and its sketch FQBN is
   by default. Core docs could suggest a free Pulse header pin (J8 47/48, or J6 35-38 when not used
   for motors) and warn against 0, 45, 46 (strapping) and 43/44 (console).
 
-Status: sent to probot-core 2026-10-23 (bp msg), waiting for an answer.
+Status: sent to probot-core 2026-10-23 (bp msg); delivered as draft PR #46 (`feat/pulse-board`
+3792357, stacked on #45 e0cb17f) and wired the same day ("P1 R21 delivered and wired" below).
 
 ## Status
 
@@ -1151,3 +1153,70 @@ of two-byte characters was clipped at 80 columns and the 1024-byte cut could spl
     `feat/dashboard-store` 9217ae4 (1,762,549 / 69,788; +24 B flash each), `prosdk_gamepad_tests`
     against 9217ae4 (fails as expected without `PROBOT_CORE_BEFORE_R20=1`, passes with it), QEMU
     smoke 8/8 on both boots, `ds_widget_check.js`.
+
+### P1 R21 delivered and wired (Boardoza Pulse), 2026-10-23
+
+Core's R21: draft PR #46 `feat/pulse-board` 3792357, stacked on #45 (e0cb17f, unchanged), three
+commits:
+
+- dad1d24 `fix(core): keep a stalled USB serial port from delaying a stop` (R21-b). `runtime_setup()`
+  calls `HWCDCSerial.setTxTimeoutMs(5)` only under `ARDUINO_USB_MODE && ARDUINO_USB_CDC_ON_BOOT &&
+  ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 3, 9)` (a stalled write about 100 ms). The DS
+  timeout path sets STOP (and counts the comms disable) before its log lines, and
+  `forceDisconnect()` releases the owner and closes the WebSocket connections before any `Serial`
+  write.
+- f2f8aed `feat(battery)!: default the INA I2C pins to SDA 1 / SCL 2` (R21-a). `battery.hpp` defines
+  `PROBOT_BATTERY_INA_SDA 1` / `_SCL 2` when neither is given and always calls
+  `Wire.begin(SDA, SCL)`, then 100 kHz and `setTimeOut(20)`. PB-E105 now also checks the default
+  pins against `PROBOT_ESTOP_ENABLE_PIN` / `PROBOT_RSL_PIN`, and the INA pins against
+  `NEOPIXEL_PIN` (default 3).
+- 3792357 `docs(board)` (R21-c/d/e): README / README.tr "Board settings" (the prosdk Tools settings
+  and FQBN, CDC On Boot explained) and a Pulse pin table (IO3 LED = `NEOPIXEL_PIN` 3 kept; J3 INA
+  default; ADC1 IO7/IO10, IO1/IO2 if J3 is unused, no default; RSL/e-stop on J8 47/48 or J6 35-38;
+  avoid 0/3/45/46, 43/44, 19/20). `make build` defaults to the Pulse FQBN; core CI also builds one
+  example for the generic `esp32:esp32:esp32s3`. Core's README also notes that `Wire.read()` reads a
+  shared receive buffer without a lock, so two `Wire` users reading at once can get a wrong reading.
+
+`.upstream/probot-core` `sdk-target` is at 3792357 (`git reset --keep`); CI's `PROBOT_CORE_REF` names
+`feat/pulse-board` (`PROBOT_CORE_OLDEST_REF` stays `feat/dashboard-store`). prosdk side:
+
+- R21-a, INA pins: no code change needed. `<probot.h>` includes `battery.hpp` (through
+  `runtime.hpp`) before the bridge, so on #46 `PROBOT_BATTERY_INA_SDA`/`SCL` are always defined
+  with `PROBOT_BATTERY_INA`: `ReservePinsOfThisUnit()` reserves 1/2, `StartCoreI2C()` calls
+  `Wire.begin(1, 2)` like core, and the "GPIO 8/9" `#warning` (guarded by
+  `!defined(PROBOT_BATTERY_INA_SDA)`) stays silent. A core before #46 still leaves them undefined,
+  so the bridge keeps reserving 8/9, calling `Wire.begin()` and warning. Comments in
+  `CoreBridge.hpp`, `ProHub.hpp`, design/drivers.md, design/hal-esp32.md and
+  design/boardoza/P14-existing.md now say which core does what.
+- R21-b, USB serial: the bridge's boot hook used `setTxTimeoutMs(1)` (03fde7e). Core's review is
+  right for 3.3.10, the only Arduino-ESP32 installed here (`cores/esp32/HWCDC.cpp`): `write()`
+  (line 544), `availableForWrite()` (532) and `flush()` (633) take `tx_lock` with
+  `tx_timeout_ms / portTICK_PERIOD_MS` ticks (`CONFIG_FREERTOS_HZ` 1000, so 1 tick at 1 ms), so a
+  second task that prints while the first waits returns 0 and loses its whole line; `flush()` sets
+  `tries = tx_timeout_ms` (646) and, after that many 1 ms waits without progress, sets
+  `connected = false` and empties the ring (656-658), even with a reading host; the write loop
+  gives up after 20 consecutive `xRingbufferSend` timeouts of `tx_timeout_ms` (582-600; about 100 ms
+  at 5 ms). Core's claim about cores before 3.3.9 (the write loop counts `tries = tx_timeout_ms`)
+  is not checked here (no older core installed). The hook now applies core's exact rule (5 ms,
+  same three conditions): on #46 it repeats core's value, and on a core before #46, which prosdk
+  still supports down to `feat/dashboard-store`, it keeps the ~100 ms bound. Dropping it would
+  leave those cores at about 2 s per stalled write on 3.3.9 or later.
+- R21 (d), `Wire.read()`: prosdk's I2C port 0 is not affected. Its HAL (`hal/esp32/I2C.cpp`) calls
+  `i2cWrite` / `i2cRead` / `i2cWriteReadNonStop` with the caller's buffers; in 3.3.10
+  (`esp32-hal-i2c-ng.c`, ESP-IDF 5.5) each takes the bus mutex for the whole transfer, the same
+  mutex `Wire`'s transfers take, and core's register read is one `i2cWriteReadNonStop`. The
+  unlocked `rxBuffer` matters only between two `Wire` users (core's INA task and sketch code
+  calling `Wire`). No code change; design/hal-esp32.md (I2C) and design/drivers.md (ProHub) say so.
+- Docs: design/hal-esp32.md ("Boards", I2C), design/drivers.md, design/boardoza/P14-existing.md 3.1,
+  this request's R21-b note, and the current-pin references (README.md, design/audit-final.md 6.2
+  item 9, design/examples.md, design/user-docs-handoff.md).
+- Checked against 3792357: `build.sh host all header_check --test` (28 binaries, every one passes),
+  `build.sh esp32s3 prosdk header_check` (no warnings), the HAL link test (1,738,683 / 77,256;
+  against e0cb17f 1,738,699 / 77,256; against `feat/dashboard-store` 9217ae4 1,767,319 / 70,056).
+  TemplateTimed with `PROBOT_BATTERY_INA 226` and no pins (a scratch copy that also asserts the
+  macros): on 3792357 no `#warning`, `PROBOT_BATTERY_INA_SDA`/`SCL` are 1/2 after `<prosdk.h>`, it
+  links (1,838,286 / 74,840), and the ELF calls `HWCDC::setTxTimeoutMs(5)` from both core's
+  `runtime_setup()` and the bridge's `Boot()`; on e0cb17f the "GPIO 8/9" `#warning` fires, the
+  macros are undefined (reservation 8/9), and only `Boot()` calls `setTxTimeoutMs(5)`. QEMU smoke
+  8/8 on both boots, `ds_widget_check.js` on core's page, `wpilib.py --check`, `examples.py
+  --check`, `tools/release/package.sh` with its smoke test. Not run on a Pulse.

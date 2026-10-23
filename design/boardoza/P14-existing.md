@@ -480,7 +480,9 @@ source. Tones are only an option on a robot with no LEDC motor drivers.
   should show Espressif 303a:1001 (USB-Serial-JTAG). Also to check on the first board: core's
   `Serial` and prosdk's stderr both reach USB-C without interleaving or loss, and core keeps
   running (DS timeout stop included) with a serial monitor opened and then closed while the cable
-  stays in (design/hal-esp32.md "Boards").
+  stays in: with the 5 ms TX timeout (core #46 and the bridge, Arduino-ESP32 3.3.9 or later) a
+  stalled write should return within about 100 ms, and with a reading host no text should be lost
+  (design/hal-esp32.md "Boards").
 - Source: the repo README and the board silkscreen (Pulse_S32-S3_Front/Back.png). There is no
   schematic in the repo.
 
@@ -497,10 +499,11 @@ source. Tones are only an option on a robot with no LEDC motor drivers.
 
 - ADC1 pins on the headers: IO1, IO2, IO7 and IO10.
 - Using IO1/IO2 for I2C leaves IO7 and IO10 for analog.
-- probot-core's INA battery sensor (`PROBOT_BATTERY_INA`) starts `Wire` on the variant pins 8/9
-  unless `PROBOT_BATTERY_INA_SDA`/`SCL` are set; 8/9 are not on a header and prosdk I2C port 0
-  then shares that bus. On the Pulse define `PROBOT_BATTERY_INA_SDA 1` and
-  `PROBOT_BATTERY_INA_SCL 2` (prosdk's `CoreBridge.hpp` warns otherwise; core request R21-a).
+- probot-core's INA battery sensor (`PROBOT_BATTERY_INA`) starts `Wire` on SDA 1 / SCL 2 (J3) by
+  default since core #46 (core request R21-a), and prosdk I2C port 0 shares that bus. A core
+  before #46 starts it on the variant pins 8/9 unless `PROBOT_BATTERY_INA_SDA`/`SCL` are set; 8/9
+  are not on a header, so with such a core define `PROBOT_BATTERY_INA_SDA 1` and
+  `PROBOT_BATTERY_INA_SCL 2` (prosdk's `CoreBridge.hpp` warns otherwise).
 
 ### 3.2 Coprocessors and closed boards
 

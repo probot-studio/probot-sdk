@@ -317,16 +317,19 @@ ESP32-S3 with the sketch FQBN of the Probot main board, the Boardoza ESP32-S3 Pu
 "Sketch uses", RAM is "Global variables use" (static RAM; the robot also allocates heap at run time,
 and on the Pulse malloc > 4 KiB goes to the 2 MB PSRAM).
 
-Measured locally on 2026-10-23 (all 79 sketches in one run, prosdk `ceaa8c4`: the Pulse pin defaults,
-CoreOps ABI 10) against probot-core `feat/gamepad-guide` e0cb17f (#45). The numbers move with the
-archive and core; design/size.md keeps the history. The huge_app partition gives the sketch 3,145,728
-bytes of flash; static RAM is out of 327,680 bytes. The largest sketch is
-SimpleDifferentialDriveSimulation at 2,229,814 bytes (71 %). Four sketches share the most static
-RAM, 78,128 bytes: DifferentialDrivePoseEstimator, MecanumDrivePoseEstimator,
-SimpleDifferentialDriveSimulation and SwerveDrivePoseEstimator. Every sketch also gets
-probot-core's WiFi AP and Driver Station. CI builds all examples on pushes to `dev` and `stable`, on
-pull requests and on manual runs; to refresh this table, take the "Sketch uses" / "Global variables
-use" lines after each "== <name>" line of the examples log.
+Measured locally on 2026-10-23 (all 79 sketches in one run, prosdk `ceaa8c4`: the Pulse pin
+defaults, CoreOps ABI 10) against probot-core `feat/gamepad-guide` e0cb17f (#45); not re-measured
+against `feat/pulse-board` 3792357 (#46, CI's pin now), whose code changes are a few bytes (the USB
+serial timeout call, the DS timeout log order, the INA pins; the HAL link test is 1,738,699 bytes on
+e0cb17f and 1,738,683 on 3792357). The numbers move with the archive and
+core; design/size.md keeps the history. The huge_app partition gives the sketch 3,145,728 bytes of
+flash; static RAM is out of 327,680 bytes. The largest sketch is SimpleDifferentialDriveSimulation
+at 2,229,814 bytes (71 %). Four sketches share the most static RAM, 78,128 bytes:
+DifferentialDrivePoseEstimator, MecanumDrivePoseEstimator, SimpleDifferentialDriveSimulation and
+SwerveDrivePoseEstimator. Every sketch also gets probot-core's WiFi AP and Driver Station. CI builds
+all examples on pushes to `dev` and `stable`, on pull requests and on manual runs; to refresh this
+table, take the "Sketch uses" / "Global variables use" lines after each "== <name>" line of the
+examples log.
 
 | Example | Flash (bytes) | RAM (bytes) |
 |---|---|---|
