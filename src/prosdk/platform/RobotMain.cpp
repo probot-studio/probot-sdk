@@ -37,6 +37,7 @@
 #include <exception>
 #include <numeric>
 
+#include "prosdk/driverstation/RobotState.hpp"
 #include "prosdk/framework/RobotBase.hpp"
 #include "prosdk/hal/DriverStation.hpp"
 #include "prosdk/internal/PeriodicPriorityQueue.hpp"
@@ -58,6 +59,7 @@ constexpr int64_t kNsPerMs = 1000000;
 
 constinit std::atomic<RobotFactory> gFactory{nullptr};
 constinit std::atomic<const char*> gName{""};
+constinit std::atomic<bool> gOfferUtility{false};
 constinit std::atomic<RobotProgramState> gState{RobotProgramState::kNone};
 
 // Everything below is only touched on core's user task (boot and pre-cycle callbacks).
@@ -362,6 +364,15 @@ void BootRobot(void*) {
     Halt("its loop period is outside 1 ms..1000 ms");
     return;
   }
+  // core offers Utility only when a UTILITY option is listed (R7); upstream's Driver Station always
+  // offers it to an IterativeRobotBase. After the constructor: its own options are published too.
+  if (gOfferUtility.load(std::memory_order_relaxed) && !Guard([] {
+        prosdk::RobotState::AddOpMode(prosdk::RobotMode::UTILITY, "Utility");
+        prosdk::RobotState::PublishOpModes();
+      })) {
+    Halt("publishing its utility mode threw an exception");
+    return;
+  }
   gHost.callbacks = loop.callbacks;
   gHost.startTime = loop.startTime;
   gHost.passes = 0;
@@ -382,7 +393,7 @@ void BootRobot(void*) {
 
 }  // namespace
 
-bool SetRobotMain(RobotFactory factory, const char* name) noexcept {
+bool SetRobotMain(RobotFactory factory, const char* name, bool offerUtility) noexcept {
   if (factory == nullptr) {
     return false;
   }
@@ -391,6 +402,7 @@ bool SetRobotMain(RobotFactory factory, const char* name) noexcept {
     return false;
   }
   gName.store(name != nullptr ? name : "", std::memory_order_relaxed);
+  gOfferUtility.store(offerUtility, std::memory_order_relaxed);
   gState.store(RobotProgramState::kRegistered, std::memory_order_release);
   if (!AddBootCallback(BootRobot, nullptr)) {
     gState.store(RobotProgramState::kHalted, std::memory_order_release);
@@ -424,6 +436,7 @@ void ResetRobotMainForTest() {
   gHost = Host{};
   gFactory.store(nullptr, std::memory_order_release);
   gName.store("", std::memory_order_relaxed);
+  gOfferUtility.store(false, std::memory_order_relaxed);
   gState.store(RobotProgramState::kNone, std::memory_order_release);
 }
 

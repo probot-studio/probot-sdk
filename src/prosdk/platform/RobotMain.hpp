@@ -22,6 +22,10 @@
 // RobotClass must derive from TimedRobot, TimesliceRobot or OpModeRobot<RobotClass> on the robot
 // (a class that derives from RobotBase directly needs a blocking StartCompetition(), which cannot
 // run inside core's loop; the robot host reports it and halts).
+//
+// For a TimedRobot or TimesliceRobot the robot host publishes one UTILITY opmode option, "Utility",
+// after the constructor (with any options the constructor added), so that the Driver Station
+// offers Utility mode and UtilityInit/UtilityPeriodic/UtilityExit run, as upstream.
 
 #pragma once
 
@@ -30,6 +34,10 @@
 #include "prosdk/framework/RobotBase.hpp"
 #include "prosdk/platform/RobotHost.hpp"
 #include "prosdk/platform/config.hpp"
+
+namespace prosdk {
+class IterativeRobotBase;
+}  // namespace prosdk
 
 namespace prosdk::platform::detail {
 
@@ -50,8 +58,9 @@ prosdk::RobotBase* NewRobot() {
   [[maybe_unused]] char prosdk_robot_main_defined_twice = 0;                              \
   }                                                                                       \
   [[maybe_unused]] static const bool prosdk_robot_main_registered =                       \
-      ::prosdk::platform::SetRobotMain(&::prosdk::platform::detail::NewRobot<RobotClass>, \
-                                       #RobotClass);
+      ::prosdk::platform::SetRobotMain(                                                  \
+          &::prosdk::platform::detail::NewRobot<RobotClass>, #RobotClass,                 \
+          std::is_base_of_v<::prosdk::IterativeRobotBase, RobotClass>);
 #else
 #define PROSDK_ROBOT_MAIN(RobotClass)                                                   \
   static_assert(std::is_base_of_v<::prosdk::RobotBase, RobotClass>,                    \

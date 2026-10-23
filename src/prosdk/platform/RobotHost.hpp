@@ -84,10 +84,15 @@ enum class RobotProgramState : uint8_t {
  * stores the factory and registers core boot callback; the robot is constructed at core's boot,
  * never here. Only the first registration is taken; a second one returns false.
  *
- * @param factory Creates the robot.
- * @param name    The robot class name (for messages); a string literal.
+ * @param factory      Creates the robot.
+ * @param name         The robot class name (for messages); a string literal.
+ * @param offerUtility After the robot is constructed, add a UTILITY opmode option "Utility" and
+ *                     publish the opmode options, so that probot-core offers Utility mode (it
+ *                     does only when one is listed). PROSDK_ROBOT_MAIN sets it for an
+ *                     IterativeRobotBase (TimedRobot, TimesliceRobot): upstream's Driver Station
+ *                     always offers Utility to those; an OpModeRobot publishes its own options.
  */
-bool SetRobotMain(RobotFactory factory, const char* name) noexcept;
+bool SetRobotMain(RobotFactory factory, const char* name, bool offerUtility = false) noexcept;
 
 /** The state of the hosted robot program. */
 RobotProgramState GetRobotProgramState() noexcept;

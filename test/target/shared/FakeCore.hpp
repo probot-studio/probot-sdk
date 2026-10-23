@@ -19,6 +19,7 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -40,6 +41,9 @@ struct State {
   std::atomic<uint32_t> periodRequests{0};
   std::atomic<uint32_t> lastPeriodRequest{0};
   std::atomic<uint32_t> overruns{0};
+  // opmode list (setOpModeOptions): the last list's size and its UTILITY options named "Utility"
+  std::atomic<uint32_t> opModeOptions{0};
+  std::atomic<uint32_t> utilityOptions{0};
   // dashboard store
   std::atomic<uint32_t> topics{0};
   std::atomic<uint32_t> sets{0};
@@ -115,7 +119,17 @@ inline bool SetLoopPeriod(uint32_t ms) {
 }
 inline uint32_t LoopPeriod() { return gState.periodMs.load(); }
 inline uint32_t Overruns() { return gState.overruns.load(); }
-inline bool SetOpModeOptions(const pf::CoreOpModeOption*, size_t) { return true; }
+inline bool SetOpModeOptions(const pf::CoreOpModeOption* options, size_t count) {
+  uint32_t utility = 0;
+  for (size_t i = 0; i < count; ++i) {
+    if (options[i].mode == pf::kCoreModeUtility && std::string_view{options[i].name} == "Utility") {
+      ++utility;
+    }
+  }
+  gState.opModeOptions.store(static_cast<uint32_t>(count));
+  gState.utilityOptions.store(utility);
+  return true;
+}
 inline uint64_t NoOpMode() { return 0; }
 inline bool NoUtility() { return false; }
 

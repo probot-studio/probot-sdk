@@ -147,6 +147,10 @@ void CaseRobot(Ctx& ctx) {
   if (robot == nullptr) {
     return;
   }
+  // a TimedRobot is offered Utility: the robot host lists one UTILITY option (core R7)
+  QCHECK_MSG(ctx, core.opModeOptions.load() == 1 && core.utilityOptions.load() == 1,
+             "opmode options {} (utility {})", core.opModeOptions.load(),
+             core.utilityOptions.load());
   // 20 ms loop + 10 ms AddPeriodic -> core passes every 10 ms (gcd)
   QCHECK_MSG(ctx, core.periodMs.load() == 10, "core period {} ms", core.periodMs.load());
   {

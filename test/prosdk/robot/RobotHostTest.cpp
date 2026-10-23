@@ -19,10 +19,12 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "prosdk/driverstation/RobotState.hpp"
 #include "prosdk/framework/OpModeRobot.hpp"
 #include "prosdk/framework/TimedRobot.hpp"
 #include "prosdk/framework/TimesliceRobot.hpp"
@@ -198,6 +200,7 @@ void StartProgram() {
   pf::detail::ResetRobotMainForTest();
   prosdk::sim::PauseTiming();
   prosdk::sim::DriverStationSim::ResetData();
+  prosdk::RobotState::ClearOpModes();  // the previous program's options (one program per robot)
   gCore = FakeCore{};
   gPreWorkNs.clear();
   gPreWorkIndex = 0;
@@ -205,7 +208,9 @@ void StartProgram() {
     std::scoped_lock lock{gConsoleMutex};
     gConsole.clear();
   }
-  REQUIRE(pf::SetRobotMain([]() -> prosdk::RobotBase* { return new Robot(); }, "TestRobot"));
+  // what PROSDK_ROBOT_MAIN passes: a TimedRobot/TimesliceRobot is offered Utility
+  REQUIRE(pf::SetRobotMain([]() -> prosdk::RobotBase* { return new Robot(); }, "TestRobot",
+                           std::is_base_of_v<prosdk::IterativeRobotBase, Robot>));
   REQUIRE_FALSE(pf::SetRobotMain([]() -> prosdk::RobotBase* { return new Robot(); }, "Twice"));
   if (!gBooted) {
     gBooted = true;
@@ -253,6 +258,16 @@ struct EventLog {
     }
   }
 };
+
+// The opmode options the robot published (HAL sim), as "<mode>:<name>".
+std::vector<std::string> PublishedOpModes() {
+  std::vector<std::string> out;
+  for (const auto& option : prosdk::sim::DriverStationSim::GetOpModeOptions()) {
+    out.push_back(std::to_string(HAL_OpMode_GetRobotMode(option.id)) + ":" +
+                  std::string{prosdk::util::to_string_view(&option.name)});
+  }
+  return out;
+}
 
 // ---- TimedRobot ----
 
@@ -303,6 +318,9 @@ TEST_CASE("RobotHost TimedRobot lifecycle and AddPeriodic timing", "[robothost]"
   auto* robot = EventRobot::instance;
   REQUIRE(robot != nullptr);
   CHECK(pf::GetRobotProgramState() == pf::RobotProgramState::kRunning);
+  // the robot host lists one UTILITY option, so that probot-core offers Utility mode (R7)
+  CHECK(PublishedOpModes() ==
+        std::vector<std::string>{std::to_string(HAL_ROBOT_MODE_UTILITY) + ":Utility"});
   // 20 ms loop + 10 ms AddPeriodic -> 10 ms core passes
   REQUIRE_FALSE(gCore.periodRequests.empty());
   CHECK(gCore.periodRequests.back() == 10u);
@@ -590,6 +608,8 @@ TEST_CASE("RobotHost TimesliceRobot keeps its time slices", "[robothost]") {
   Pass();
   auto* robot = SliceRobot::instance;
   REQUIRE(robot != nullptr);
+  CHECK(PublishedOpModes() ==
+        std::vector<std::string>{std::to_string(HAL_ROBOT_MODE_UTILITY) + ":Utility"});
   // main loop 20 ms (TimedRobot default), slices at offsets 2 and 5 ms in a 10 ms period -> 1 ms
   // core passes
   CHECK(gCore.period == 1u);
@@ -716,6 +736,9 @@ TEST_CASE("RobotHost OpModeRobot selection and dispatch", "[robothost]") {
   REQUIRE(autoB != 0);
   REQUIRE(drive != 0);
   REQUIRE(calibrate != 0);
+  // an OpModeRobot publishes its own options only (no robot host "Utility")
+  CHECK(PublishedOpModes().size() == 4u);
+  CHECK(OpModeId("Utility") == 0u);
   // stable ids: the same name and mode gives the same id
   CHECK(OpModeId("Auto A") == autoA);
 
