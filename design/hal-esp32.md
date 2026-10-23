@@ -56,6 +56,53 @@ Driver Station (design/PORT.md section 8).
   including the ones that do not exist); the other counts in Ports.cpp are hardware units that
   the pins share (table below).
 
+## Boards
+
+### Main board: Boardoza ESP32-S3 Pulse
+
+The Probot main board is the Boardoza ESP32-S3 Pulse (decision of 2026-10-23, "for now"; board
+profile in design/boardoza/P14-existing.md section 3.1). Module ESP32-S3-WROOM-1-N4R2: 4 MB quad
+flash, 2 MB quad PSRAM, so GPIO 33-37 are free. The bus defaults of `prosdk::platform`
+(`HalConfig.cpp`) are its J3, J4 and J5 headers.
+
+| Header | Pins | prosdk use |
+|---|---|---|
+| J3 I2C | IO1 SDA, IO2 SCL | I2C port 0 default (SDA 1, SCL 2); ADC1 when not I2C |
+| J4 UART | IO43 TX, IO44 RX, IO11 (F2), IO10 (F1) | 43/44 are UART0, the console (refused); serial `ONBOARD` default RX 10 / TX 11; IO10 is ADC1 |
+| J5 SPI | IO17 CLK, IO7 CS, IO16 MISO, IO15 MOSI | SPI bus 0 default (SCK 17, MOSI 15, MISO 16; CS 7 is the device's); IO7 is ADC1 |
+| J6 | IO38, IO37, IO36, IO35 | GPIO (35-37 free on quad PSRAM) |
+| J7 | IO42, IO41, IO40, IO39 | GPIO; also the JTAG pins |
+| J8 | IO45, IO46, IO47, IO48 | GPIO; 45 and 46 are strapping pins |
+| On board | IO0 BOOT button, IO3 RGB LED, USB-C on IO19/IO20 | 0 is a strapping pin; 3 is core's `NEOPIXEL_PIN` (refused); 19/20 are refused |
+
+No other GPIO reaches a header (4-6, 8, 9, 12-14, 18, 21, 33, 34). ADC1 pins on the headers: 1,
+2, 7 and 10.
+
+PSRAM: the quad PSRAM is detected at boot and malloc > 4 KiB goes to it. The Arduino-ESP32 3.3.10
+qio_qspi sdkconfig has `CONFIG_SPIRAM`, `CONFIG_SPIRAM_USE_MALLOC` and
+`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL` 4096, whatever the board's PSRAM menu says; DMA buffers ask
+for `MALLOC_CAP_DMA` and stay internal.
+
+Board settings: ESP32S3 Dev Module, `esp32:esp32:esp32s3:FlashSize=4M,PartitionScheme=huge_app,
+PSRAM=enabled,CDCOnBoot=cdc` (`tools/build/arduino_recipe.py --fqbn`; README.md "Board"). The
+precompiled archive is built with the generic esp32s3 defaults and does not depend on these
+options (`tools/build/arduino_recipe.py` docstring, checked by `tools/build/hal_link_test.py`).
+
+### Other ESP32-S3 boards
+
+Generic ESP32-S3 devkits work without a board macro: the robot's first member moves the buses
+before any device is constructed, the same pattern as `prosdk::prohub::ConfigurePins()`:
+
+```cpp
+bool m_pinsConfigured = prosdk::platform::SetI2CPins(0, /*sda=*/8, /*scl=*/9) &&
+                        prosdk::platform::SetSerialPins(0, /*rx=*/15, /*tx=*/16) &&
+                        prosdk::platform::SetSPIPins(0, /*sck=*/12, /*mosi=*/11, /*miso=*/13);
+```
+
+Set USB CDC On Boot for the USB port in use (Disabled when a USB-UART bridge port carries
+`Serial`). On octal-PSRAM modules (N8R8, N16R8) the HAL refuses GPIO 33-37, so the examples' J6
+motor pins 35-37 must move (for example to 4, 5, 12).
+
 ## Capacities
 
 | Resource | Count | Hardware | Notes |
@@ -190,7 +237,7 @@ Driver Station (design/PORT.md section 8).
 ### I2C (I2C.cpp)
 - Port 0 is controller 0, the bus `Wire` uses. If `Wire` (or probot-core's INA battery sensor)
   already started it, the HAL shares it as is (pins and clock unchanged); otherwise the HAL starts
-  it on `prosdk::platform::SetI2CPins(0, ...)` pins (default SDA 8, SCL 9, 400 kHz).
+  it on `prosdk::platform::SetI2CPins(0, ...)` pins (default SDA 1, SCL 2, 400 kHz: the Pulse J3).
 - Port 1 needs `prosdk::platform::SetI2CPins(1, sda, scl[, hz])` first.
 - Transfers go through Arduino's I2C HAL (serialized per bus, 50 ms timeout) and return 0 on
   success, -1 on failure (NACK, timeout, short read), like systemcore. Combined write-read uses a
@@ -201,7 +248,8 @@ Driver Station (design/PORT.md section 8).
 - `prosdk::platform::hal` C++ API (`prosdk/platform/hal/SPI.hpp`: `OpenSpiDevice`,
   `ConfigureSpiDevice`, `SpiTransfer`, `CloseSpiDevice`) behind `prosdk::SPI`; WPILib 2027 has
   no SPI HAL. Bus 0 = SPI2, bus 1 = SPI3; pins from `prosdk::platform::SetSPIPins(bus, sck,
-  mosi, miso)` (no defaults; `miso` -1 for a transmit-only bus).
+  mosi, miso)` (bus 0 defaults to SCK 17 / MOSI 15 / MISO 16, the Pulse J5; bus 1 has no default;
+  `miso` -1 for a transmit-only bus).
 - The bus starts lazily on its first device (no `Initialize*` hook): `spi_bus_initialize` with
   `SPI_DMA_CH_AUTO` and `max_transfer_sz` 4092, then one `spi_bus_add_device` per device
   (`queue_size` 1). The bus is freed when its last user leaves.
@@ -223,7 +271,7 @@ Driver Station (design/PORT.md section 8).
   device without chip select. Details: `design/boardoza/P9-storage.md`.
 
 ### Serial (SerialPort.cpp)
-- `ONBOARD` = UART1 (default RX 15 / TX 16), `MXP` = UART2 (no default pins:
+- `ONBOARD` = UART1 (default RX 10 / TX 11, the Pulse J4 F1/F2), `MXP` = UART2 (no default pins:
   `prosdk::platform::SetSerialPins(1, rx, tx)`). `USB_1`/`USB_2`: `HAL_SERIAL_PORT_NOT_FOUND`
   (UART0/USB are the console). A UART that `Serial1`/`Serial2` already opened is refused. The RX
   and TX pins are claimed like DIO pins while the port is open (DIO/PWM on them is refused).

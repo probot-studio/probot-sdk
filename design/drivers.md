@@ -27,9 +27,11 @@ Example: `examples/DriversShowcase` (one of each driver in a TimedRobot).
 ## Pins and output safety
 
 - Motor and servo pins are GPIO numbers (any free GPIO, `design/hal-esp32.md`). The ProHub pins
-  (I2C SDA 1 / SCL 2, encoder UART RX 10 / TX 11) are set with `prosdk::prohub::ConfigurePins()`
-  before the first PCA9685, MPU6050 or ProHubEncoders is constructed (for example as the first
-  member of the robot class).
+  (I2C SDA 1 / SCL 2, encoder UART RX 10 / TX 11) are the platform defaults on the Probot main
+  board, the Boardoza ESP32-S3 Pulse (J3, J4 F1/F2). On another board, set them with
+  `prosdk::prohub::ConfigurePins()` before the first PCA9685, MPU6050 or ProHubEncoders is
+  constructed (for example as the first member of the robot class); on the Pulse the call changes
+  nothing.
 - GPIO outputs (PWM, DIO, digital PWM) follow the HAL output gate: no pulses / duty 0 while the robot
   is not enabled, every pin driven low by the lock-free emergency-stop callback.
 - I2C devices are not gated by the HAL (I2C is never gated). The PCA9685 driver gates itself
@@ -134,15 +136,18 @@ drives the forward channel, negative the reverse channel, the other one fully of
 old SDK; brake behaviour is therefore not offered.
 
 `prosdk/drivers/ProHub.hpp` holds the board constants (pins, addresses, frequencies, channel map)
-and `ConfigurePins()`. It must run before any ProHub device is constructed; robot members are
-built before the constructor body, so call it from the first member
+and `ConfigurePins()`. On the Boardoza ESP32-S3 Pulse its pins are the platform defaults and the
+call changes nothing; on another board it must run before any ProHub device is constructed; robot
+members are built before the constructor body, so call it from the first member
 (`bool m_pinsConfigured = prosdk::prohub::ConfigurePins();`, examples/DriversShowcase).
 
 Address clash: probot-core's optional INA219/INA226 battery sensor (`PROBOT_BATTERY_INA`) runs on
 Arduino's `Wire`, which is I2C controller 0 (prosdk port 0, the ProHub port), at 0x40 by default
 (`PROBOT_BATTERY_INA_ADDR`), the first PCA9685's address. When core has started `Wire` on its own
-pins (GPIO 8/9 unless `PROBOT_BATTERY_INA_SDA`/`SCL`), port 0 shares that bus as is
-(design/hal-esp32.md, I2C), so `ConfigurePins()`' pins 1/2 do not apply. To use both, wire the INA
+pins (GPIO 8/9, the generic esp32s3 variant's `Wire` pins, unless `PROBOT_BATTERY_INA_SDA`/`SCL`),
+port 0 shares that bus as is (design/hal-esp32.md, I2C), so the pins 1/2 do not apply. GPIO 8/9 are
+not on a Pulse header, so on the Pulse the INA needs `PROBOT_BATTERY_INA_SDA 1` /
+`PROBOT_BATTERY_INA_SCL 2` (`CoreBridge.hpp` warns when the INA is enabled without them). To use both, wire the INA
 to the ProHub bus (`PROBOT_BATTERY_INA_SDA 1`, `PROBOT_BATTERY_INA_SCL 2`) at an address other
 than 0x40/0x41 (its A0/A1 pins, `PROBOT_BATTERY_INA_ADDR`). The shared bus then runs at
 100 kHz instead of `ConfigurePins()`' 400 kHz: core's battery init calls `Wire.setClock(100000)`

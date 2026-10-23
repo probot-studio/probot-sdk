@@ -4,14 +4,16 @@
 // WPILib names buses by port (I2C PORT_0/PORT_1, SerialPort ONBOARD/MXP, CAN bus 0); the GPIO
 // matrix lets any pin carry them, so the sketch says which pins before it opens the bus:
 //
-//   prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/18);  // before I2C(I2C::Port::PORT_1, ...)
-//   prosdk::platform::SetCanConfig(/*tx=*/4, /*rx=*/5, 1'000'000);
-//   prosdk::platform::SetSPIPins(0, /*sck=*/12, /*mosi=*/11, /*miso=*/13);  // before SPI(...)
+//   prosdk::platform::SetI2CPins(1, /*sda=*/17, /*scl=*/16);  // before I2C(I2C::Port::PORT_1, ...)
+//   prosdk::platform::SetCanConfig(/*tx=*/39, /*rx=*/40, 1'000'000);
+//   prosdk::platform::SetSPIPins(0, /*sck=*/12, /*mosi=*/11, /*miso=*/13);  // another board
 //
-// A change applies the next time the bus is opened. Defaults: I2C port 0 on GPIO 8/9 (the board's
-// Wire pins, shared with Wire when Wire already runs) at 400 kHz; serial onboard (UART1) on
-// RX 15 / TX 16; I2C port 1, serial MXP (UART2), CAN and both SPI buses unset (opening them fails
-// with a message).
+// A change applies the next time the bus is opened. The defaults are the headers of the Probot
+// main board, the Boardoza ESP32-S3 Pulse: I2C port 0 on SDA 1 / SCL 2 (J3; shared with Wire when
+// Wire already runs) at 400 kHz; serial onboard (UART1) on RX 10 / TX 11 (J4 F1/F2); SPI bus 0 on
+// SCK 17 / MOSI 15 / MISO 16 (J5, chip select 7). I2C port 1, serial MXP (UART2), CAN and SPI
+// bus 1 are unset (opening them fails with a message). On another board, call the Set*Pins
+// functions first (from the robot's first member, before any device is constructed).
 
 #pragma once
 

@@ -4,9 +4,10 @@
 // ESP32-S3 HAL backend: I2C masters (design/hal-esp32.md, "I2C").
 // Port 0 (kPort0) is controller 0, the bus Arduino's Wire uses: if Wire (or probot-core's INA
 // battery sensor) already started it, the HAL shares it as is; otherwise the HAL starts it on
-// the pins from prosdk::platform::SetI2CPins (default SDA 8, SCL 9, 400 kHz). Port 1 is controller
-// 1 and needs SetI2CPins(1, ...) first. Transfers go through Arduino's I2C HAL, which serializes
-// users of a bus. Transfers return 0 on success and -1 on failure, like systemcore's ioctl.
+// the pins from prosdk::platform::SetI2CPins (default SDA 1, SCL 2, 400 kHz: the Boardoza Pulse
+// J3). Port 1 is controller 1 and needs SetI2CPins(1, ...) first. Transfers go through
+// Arduino's I2C HAL, which serializes users of a bus. Transfers return 0 on success and -1 on
+// failure, like systemcore's ioctl.
 
 #include "prosdk/hal/I2C.h"
 

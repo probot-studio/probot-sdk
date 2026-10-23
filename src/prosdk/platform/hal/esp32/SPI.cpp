@@ -3,7 +3,8 @@
 // ESP32-S3 HAL backend: SPI buses on the ESP-IDF spi_master driver (prosdk/platform/hal/SPI.hpp,
 // design/boardoza/F1-spi.md). Bus 0 is SPI2 (FSPI) and bus 1 is SPI3; SPI0/SPI1 (flash and PSRAM)
 // are never touched. A bus starts on its first user with the pins from
-// prosdk::platform::SetSPIPins (no defaults), DMA (SPI_DMA_CH_AUTO) and 4092-byte transfers, and
+// prosdk::platform::SetSPIPins (bus 0 defaults to SCK 17 / MOSI 15 / MISO 16, the Boardoza
+// Pulse J5; bus 1 has no default), DMA (SPI_DMA_CH_AUTO) and 4092-byte transfers, and
 // stops when its last user leaves (no Initialize hook: lazy, like the serial ports). SCK, MOSI,
 // MISO and every chip select are claimed in the HAL pin table (ClaimPin) while in use, as the
 // serial ports do, and return to gpio_reset_pin state afterwards. Chip selects are the

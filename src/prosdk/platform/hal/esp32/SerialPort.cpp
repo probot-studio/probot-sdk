@@ -2,11 +2,12 @@
 //
 // ESP32-S3 HAL backend: serial ports on the ESP-IDF UART driver (design/hal-esp32.md, "Serial").
 // ONBOARD is UART1 and MXP is UART2, on the pins from prosdk::platform::SetSerialPins (onboard
-// default RX 15 / TX 16; MXP has no default). UART0 is the console and USB is not a serial port
-// here: USB_1/USB_2 report HAL_SERIAL_PORT_NOT_FOUND. A UART that Arduino's Serial1/Serial2
-// already opened is refused. The RX/TX GPIOs are claimed in the HAL pin table while the port is
-// open, so DIO/PWM/... on them fail (and work again after HAL_CloseSerial). Defaults: 9600 8N1, no flow control, read timeout 0 (a read returns
-// what is buffered; WPILib's SerialPort sets its own timeout).
+// default RX 10 / TX 11, the Boardoza Pulse J4 F1/F2; MXP has no default). UART0 is the
+// console and USB is not a serial port here: USB_1/USB_2 report HAL_SERIAL_PORT_NOT_FOUND. A
+// UART that Arduino's Serial1/Serial2 already opened is refused. The RX/TX GPIOs are claimed in
+// the HAL pin table while the port is open, so DIO/PWM/... on them fail (and work again after
+// HAL_CloseSerial). Defaults: 9600 8N1, no flow control, read timeout 0 (a read returns what is
+// buffered; WPILib's SerialPort sets its own timeout).
 // Software flow control and DTR/DSR are not supported; RTS/CTS needs pins and is not offered.
 
 #include "prosdk/hal/SerialPort.h"

@@ -713,6 +713,10 @@ inline bool Install() {
  */
 inline const bool kInstalled = Install();
 
+#if defined(PROBOT_BATTERY_INA) && !defined(PROBOT_BATTERY_INA_SDA)
+#warning "probot-core starts the INA battery sensor's I2C bus on GPIO 8/9, which are not on a Pulse header, and prosdk I2C port 0 then shares that bus. Define PROBOT_BATTERY_INA_SDA 1 and PROBOT_BATTERY_INA_SCL 2 (J3), or 8/9 on another board."
+#endif
+
 namespace {
 // Per translation unit: the core pins this TU's configuration macros name.
 inline bool ReservePinsOfThisUnit() {
@@ -732,7 +736,8 @@ inline bool ReservePinsOfThisUnit() {
 #if defined(PROBOT_BATTERY_INA_SDA) && defined(PROBOT_BATTERY_INA_SCL)
       PROBOT_BATTERY_INA_SDA, PROBOT_BATTERY_INA_SCL,
 #elif defined(PROBOT_BATTERY_INA)
-      8, 9,  // the board's default I2C pins (Wire), used by core's INA sensor
+      8, 9,  // core's INA sensor calls Wire.begin() without pins: the esp32s3 variant's SDA 8 /
+             // SCL 9 (not on a Boardoza Pulse header; see the #warning above)
 #endif
       -1,
   };
